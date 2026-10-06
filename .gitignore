@@ -1,0 +1,15 @@
+node_modules/
+dist/
+screenshots/
+videos/
+*.log
+*.zip
+*-receipt*.json
+*-xattrs*.json
+ARCHITECTURE-V2.md
+tests/*-report.json
+tests/*-results.json
+test-results/
+playwright-report/
+.npm-cache/
+.DS_Store

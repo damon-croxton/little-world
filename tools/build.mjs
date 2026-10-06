@@ -1,0 +1,18 @@
+import {cp, mkdir, readFile, writeFile, rm} from 'node:fs/promises';
+import {fileURLToPath} from 'node:url';
+import path from 'node:path';
+
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const out = path.join(root, 'dist');
+if (path.dirname(out) !== root || path.basename(out) !== 'dist') throw new Error('Unsafe build destination');
+await rm(out, {recursive:true, force:true});
+await mkdir(path.join(out, 'vendor', 'three'), {recursive:true});
+await cp(path.join(root, 'src'), path.join(out, 'src'), {recursive:true});
+await cp(path.join(root, 'node_modules/three/build'), path.join(out, 'vendor/three/build'), {recursive:true});
+await cp(path.join(root, 'node_modules/three/examples/jsm'), path.join(out, 'vendor/three/examples/jsm'), {recursive:true});
+await cp(path.join(root, 'node_modules/three/LICENSE'), path.join(out, 'vendor/three/LICENSE'));
+const html = (await readFile(path.join(root, 'index.html'), 'utf8')).replaceAll('./node_modules/three/', './vendor/three/');
+await writeFile(path.join(out, 'index.html'), html);
+await writeFile(path.join(out, '.nojekyll'), '');
+await writeFile(path.join(out, 'build.json'), JSON.stringify({version:'0.2.0', commit:process.env.GITHUB_SHA || 'local'}, null, 2));
+console.log('Built self-contained static site in dist/ (relative URLs support GitHub Pages project paths).');
