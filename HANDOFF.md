@@ -1,3 +1,37 @@
+# Cloud ownership — 2026-10-06
+
+Development now belongs exclusively to the user-selected saved cloud environment,
+at `/workspace/little-world`. The desktop source and workers are frozen. Continue
+here unless the user explicitly requests a different environment; no user PC is
+required. Direct `main` pushes and the existing automatic Pages deployment are
+authorised. Use ordinary repository Git access; do not retry the previously
+rejected generic connector writes or create credentials.
+
+The cloud adopted exact checkpoint `f54a67fd9604fcd8191674490359a95a39f2d31b`:
+all 96 tracked files were present and all 15 committed simulation-manifest hashes
+matched. A clean lockfile install, all 218 Node tests (zero failed/skipped), build,
+and 39-module asset verification passed. Chromium 151 with SwiftShader booted the
+actual app with no runtime errors and exact weighted population accounting.
+Ordinary Git publishing was proven by source commit
+`31c9db8885d62b2c01a0b6b20c82912b199a5966`, fixing the evidence harness's forced
+Chrome channel. This does not certify completion of the remaining acceptance work.
+
+Use `npm ci --cache /workspace/.cache/littleworld-npm` in this environment.
+Its installed browser is selected with `BROWSER_EXECUTABLE_PATH=/usr/bin/chromium`;
+use `QA_SOFTWARE_RENDERING=1` and label all cloud timing evidence accordingly.
+Serialize browser suites and run active performance without competing audits.
+The workspace network currently returns 403 for public Pages and Playwright's
+download hosts. Ordinary Git push succeeds. Postdeployment `live-qa` verifies the
+exact public build marker, actual WebGL boot, controls and weighted census from
+the Actions runner, preserving screenshot and report artifacts.
+
+The planned public bulk evidence release was not approved for upload. Do not
+depend on or fetch it. The desktop is preserving that optional project evidence
+privately in Library. Every required application asset is already in Git. The
+historical manifest and reports below remain useful, with their provenance limits.
+
+## Original frozen desktop handoff
+
 # WIP cloud handoff — 2026-10-06
 
 **Frozen at the user's immediate request to move all ongoing development to the cloud. This is a work-in-progress checkpoint, not a completed or fully verified release. Do not resume development on the Windows PC.**

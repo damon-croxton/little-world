@@ -72,7 +72,7 @@ node tests/ai-readability-browser.mjs
 
 Browser tests default to bundled Chromium. `BASE_URL` accepts a local server or hosted project subpath; `QA_CIVS` selects the start count. `QA_TIER=full` includes the 3,000-cycle/high-quality tier. `QA_QUALITY=low` selects performance rendering, `BROWSER_CHANNEL=chrome` selects installed Chrome, and `QA_VIDEO=0` explicitly skips recording. Software-WebGL CI is labelled as such.
 
-The Pages workflow gates every push to `main` on Node tests, seeded simulation audits, controls and visual evidence. Failed verification keeps the previous deployment. Screenshots, measurements and harvesting video are retained as Actions artifacts for 14 days. See `DESKTOP-VALIDATION.md` for actual Windows browser verification and its limits.
+The Pages workflow gates every push to `main` on Node tests, seeded simulation audits, controls and visual evidence. Failed predeployment verification keeps the previous deployment. After deployment, a separate live browser check verifies the exact public `build.json` commit, WebGL boot, working pause/resume controls and weighted census. Screenshots, measurements and harvesting video are retained as Actions artifacts for 14 days. See `HANDOFF.md` for current cloud ownership and `DESKTOP-VALIDATION.md` for historical Windows browser verification and its limits.
 
 ## Measurement and model boundaries
 

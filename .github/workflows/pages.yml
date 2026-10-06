@@ -101,6 +101,8 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     needs: [build, browser-qa, simulation-qa]
+    outputs:
+      page_url: ${{ steps.deployment.outputs.page_url }}
     permissions:
       pages: write
       id-token: write
@@ -111,3 +113,31 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
+  live-qa:
+    runs-on: ubuntu-latest
+    needs: deploy
+    timeout-minutes: 10
+    env:
+      BASE_URL: ${{ needs.deploy.outputs.page_url }}
+      EXPECTED_COMMIT: ${{ github.sha }}
+      QA_SOFTWARE_RENDERING: '1'
+      QA_QUALITY: low
+      QA_OUTPUT_DIR: screenshots/live
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Verify exact public build and actual browser boot
+        run: node tests/live-browser.mjs
+      - name: Preserve public browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: littleworld-live-browser-evidence
+          path: screenshots/live/
+          retention-days: 14
+          if-no-files-found: error
