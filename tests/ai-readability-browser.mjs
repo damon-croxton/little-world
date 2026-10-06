@@ -7,8 +7,8 @@ import { configuration, launch, boot, environment, observeErrors, save, output, 
 const phase = process.env.QA_PHASE || 'after';
 assert.ok(['before', 'after'].includes(phase), 'QA_PHASE must be before or after');
 const baselineSha = '1ce023fe0214ccb97e6935d64e7684084b33dc55';
-const config = configuration({ ...process.env, BASE_URL: process.env.BASE_URL || (phase === 'before' ? 'https://damon-croxton.github.io/little-world/' : 'http://127.0.0.1:4174/'), BROWSER_CHANNEL: process.env.BROWSER_CHANNEL || 'chrome', QA_QUALITY: process.env.QA_QUALITY || 'high', QA_OUTPUT_DIR: process.env.QA_OUTPUT_DIR || `screenshots/ai-readability-${phase}` });
-const report = { phase, status: 'running', startedAt: new Date().toISOString(), scope: 'Natural first-light four-civilization Chrome run; only observer controls, deterministic paused advancement and ordinary real-time 1x simulation. No injected troops, buildings, resources, paths or RNG.', errors: [], warnings: [], screenshots: [], videos: [], checkpoints: [], search: [] };
+const config = configuration({ ...process.env, BASE_URL: process.env.BASE_URL || (phase === 'before' ? 'https://damon-croxton.github.io/little-world/' : 'http://127.0.0.1:4174/'), QA_QUALITY: process.env.QA_QUALITY || 'high', QA_OUTPUT_DIR: process.env.QA_OUTPUT_DIR || `screenshots/ai-readability-${phase}` });
+const report = { phase, status: 'running', startedAt: new Date().toISOString(), scope: 'Natural first-light four-civilization browser run; only observer controls, deterministic paused advancement and ordinary real-time 1x simulation. No injected troops, buildings, resources, paths or RNG.', errors: [], warnings: [], screenshots: [], videos: [], checkpoints: [], search: [] };
 const videoSeconds = Math.min(30, Math.max(4, Number(process.env.QA_VIDEO_SECONDS || 12)));
 const searchLimit = Math.min(1500, Math.max(200, Number(process.env.QA_BATTLE_LIMIT || 700)));
 const overviewCycle = Math.min(3000, Math.max(300, Number(process.env.QA_OVERVIEW_CYCLE || 600)));
