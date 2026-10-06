@@ -1,15 +1,15 @@
 import assert from 'node:assert/strict';
 import {mkdir} from 'node:fs/promises';
-import {configuration,launch,boot,environment,observeErrors,output,save,sampleFrames,frameSummary} from './browser-v2.mjs';
+import {configuration,launch,boot,environment,observeErrors,output,save,sampleFrames,frameSummary,waitForRenderedFrames} from './browser-v2.mjs';
 const config=configuration(),report={at:new Date().toISOString(),scope:'Actual advancing WebGL browser performance. No other QA browser should run concurrently. Headless RAF/display cadence may limit measured frame rate.',errors:[],warnings:[],samples:[],screenshots:[]};
 await mkdir(config.outputDir,{recursive:true});const browser=await launch(config),page=await browser.newPage({viewport:{width:1600,height:1000},deviceScaleFactor:1});observeErrors(page,report);
 const persist=()=>save(config,'desktop-active-performance.json',report);
 try{
  await boot(page,config);report.environment=await environment(page,browser,config);await page.evaluate(seed=>littleworld.reset(seed),config.seed);
  for(const target of [1200,3000,5000]){
-  const started=Date.now();await page.evaluate(async target=>{const w=littleworld;if(!w.view.paused)w.actions.togglePause();await w.advance(Math.max(0,target-w.state.tick));w.actions.overview(true);},target);await page.waitForTimeout(600);
+  const started=Date.now();await page.evaluate(async target=>{const w=littleworld;if(!w.view.paused)w.actions.togglePause();await w.advance(Math.max(0,target-w.state.tick));w.actions.overview(true);},target);await waitForRenderedFrames(page);
   const outcome=await page.evaluate(()=>littleworld.state.outcome);
-  if(outcome?.status==='victory'&&!report.victory){const path=output(config,'natural-victory.png');await page.screenshot({path});report.screenshots.push(path);const data=await page.evaluate(()=>({outcome:littleworld.state.outcome,paused:littleworld.view.paused,visible:!littleworld.view.outcomeDismissed,step:littleworld.state.step}));assert.ok(data.paused);await page.locator('[data-action="keep-watching"]').click();await page.waitForTimeout(300);const after=await page.evaluate(()=>({step:littleworld.state.step,paused:littleworld.view.paused}));assert.equal(after.paused,false);assert.ok(after.step>data.step);report.victory={...data,continueAfter:after};}
+  if(outcome?.status==='victory'&&!report.victory){const path=output(config,'natural-victory.png');await page.screenshot({path});report.screenshots.push(path);const data=await page.evaluate(()=>({outcome:littleworld.state.outcome,paused:littleworld.view.paused,visible:!littleworld.view.outcomeDismissed,step:littleworld.state.step}));assert.ok(data.paused);await page.locator('[data-action="keep-watching"]').click();await page.waitForFunction(step=>littleworld.state.step>step&&!littleworld.view.paused,data.step,{timeout:60000});const after=await page.evaluate(()=>({step:littleworld.state.step,paused:littleworld.view.paused}));assert.equal(after.paused,false);assert.ok(after.step>data.step);report.victory={...data,continueAfter:after};}
   for(const quality of ['high','low']){
    await page.evaluate(quality=>{littleworld.actions.setQuality(quality);littleworld.actions.setSpeed(2);},quality);await page.waitForTimeout(1500);
    const frames=await sampleFrames(page,{durationMs:5000,minimumFrames:30}),summary=frameSummary(frames);assert.ok(frames.at(-1).step>frames[0].step+50);assert.ok(frames.every(f=>!f.paused&&f.speed===2));
