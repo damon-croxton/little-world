@@ -66,7 +66,7 @@ const byId=id=>findObserved(shownState,id);
 function reconcileSelection(){view.selectedId=selectionMemory.reconcile(shownState,view.selectedId,view.perspective);}
 function visualPosition(o,alpha=simClock.alpha){return {x:Number.isFinite(o.prevX)?THREE.MathUtils.lerp(o.prevX,o.x,alpha):o.x,z:Number.isFinite(o.prevZ)?THREE.MathUtils.lerp(o.prevZ,o.z,alpha):o.z};}
 function select(id){syncShownState();if(!byId(id)){const s=shownState.settlements.find(s=>s.factionId===id);if(s)id=s.id;else return;}view.selectedId=id;selectionMemory.record(shownState,id);overlayKey='';refreshUI();ui?.revealSelection?.();}
-function focus(id,close=true){const o=byId(id);if(!o)return;overviewLocked=false;select(id);view.followId=id;const p=visualPosition(o),y=heightAt(p.x,p.z,state.seed),radius=o.radius||Math.max(7,Math.sqrt(o.population||0)*.5);const d=close?Math.max(18,radius*1.7):Math.max(40,radius*3);cameraGoal={target:new THREE.Vector3(p.x,y+1,p.z),position:new THREE.Vector3(p.x+d*.75,y+d*.65,p.z+d)};}
+function focus(id,close=true){const o=byId(id);if(!o)return;overviewLocked=false;view.followId=id;select(id);const p=visualPosition(o),y=heightAt(p.x,p.z,state.seed),radius=o.radius||Math.max(7,Math.sqrt(o.population||0)*.5);const d=close?Math.max(18,radius*1.7):Math.max(40,radius*3);cameraGoal={target:new THREE.Vector3(p.x,y+1,p.z),position:new THREE.Vector3(p.x+d*.75,y+d*.65,p.z+d)};}
 function reset(seed,options=state.config){
   advanceGeneration++;selectionMemory.clear();view.worldGeneration++;view.advancing=null;view.victoryObserved=null;view.outcomeDismissed=false;renderedPerspective=null;
   const next=String(seed||'first-light').trim().slice(0,80)||'first-light';
@@ -102,7 +102,7 @@ const actions={
   setSpeed(n){cancelAdvance();view.speed=Number(n);view.paused=n===0;refreshUI();},
   togglePause(){if(cancelAdvance())return;view.paused=!view.paused;refreshUI();},cancelAdvance,reset,select,selectResource:select,advance,
   overview(immediate=false){view.followId=null;view.cinematic=false;overviewLocked=true;fitOverview();controls.maxDistance=Math.max(700,overviewPosition.distanceTo(overviewTarget)*1.05);if(immediate){camera.position.copy(overviewPosition);controls.target.copy(overviewTarget);controls.update();cameraGoal=null;}else cameraGoal={target:overviewTarget.clone(),position:overviewPosition.clone()};refreshUI();},
-  follow(id){if(id===null){view.followId=null;cameraGoal=null;overviewLocked=false;}else focus(id||view.selectedId,true);},
+  follow(id){if(id===null){view.followId=null;cameraGoal=null;overviewLocked=false;refreshUI();}else focus(id||view.selectedId,true);},
   setPerspective(id){view.perspective=id==='omniscient'||state.factions.some(f=>f.id===id)?id:'omniscient';syncShownState();view.followId=null;view.cinematic=false;cameraGoal=null;reconcileSelection();overlayKey='';for(const el of labels.values())el.remove();labels.clear();refreshUI();},
   setOverlay(mode){view.overlay=mode;overlayKey='';refreshUI();},
   setCinematic(value){view.cinematic=Boolean(value);if(view.cinematic)focus(view.selectedId||state.settlements[0].id,true);else actions.overview();refreshUI();},

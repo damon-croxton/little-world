@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { mkdir, stat } from 'node:fs/promises';
-import { configuration, launch, boot, environment, observeErrors, output, save, sampleFrames, frameSummary, selectedCrewEvidence, TOUCH_VIEWPORTS, touchContextOptions } from './browser-v2.mjs';
+import { configuration, launch, boot, environment, observeErrors, output, save, waitForRenderedFrames, sampleFrames, frameSummary, observeSelectedCrewReturn, selectedCrewEvidence, TOUCH_VIEWPORTS, touchContextOptions } from './browser-v2.mjs';
 
 // Only the public deterministic harness operations reset()/advance()/step() and
 // observer camera/actions are used. No showcase population, node or cargo edits.
@@ -21,7 +21,7 @@ async function check(name, fn) {
 async function camera() { return page.evaluate(() => ({ position: littleworld.camera.position.toArray(), target: littleworld.controls.target.toArray(), fov: littleworld.camera.fov, viewport: { width: innerWidth, height: innerHeight } })); }
 async function pin(spec, id) {
   await page.evaluate(({ spec, id }) => { const w = littleworld; w.actions.setCinematic(false); w.actions.follow(null); if (id) w.select(id); w.camera.position.fromArray(spec.position); w.controls.target.fromArray(spec.target); w.controls.update(); }, { spec, id });
-  await settle();
+  await waitForRenderedFrames(page);
 }
 async function pause() { if (!await page.evaluate(() => littleworld.view.paused)) await button('pause').click(); await settle(); }
 async function shot(name) {
@@ -75,7 +75,7 @@ async function harvestingVideo() {
   const context = await browser.newContext({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1, recordVideo: { dir: output(config, 'videos'), size: { width: 1440, height: 900 } } });
   const film = await context.newPage(); film.setDefaultTimeout(30000); observeErrors(film, report);
   const started = Date.now(), video = film.video();
-  const evidence = { status: 'recording', provenance: 'Fresh seeded simulation, deterministic natural setup, live 1x work, 16x acceleration, then live 1x selected-crew return. Only ordinary observer speed/follow actions change during filming. No inserted state or showcase fixtures.', chapters: [], observations: [] };
+  const evidence = { status: 'recording', provenance: 'Fresh seeded simulation, deterministic natural setup, live 1x work, paused worksite, then live 1x selected-crew return. The observer pauses immediately after the selected crew finishes to retain its own delivery receipt. Only ordinary observer speed/pause/follow actions change during filming. No inserted state or showcase fixtures.', returnObservationLimitMs: 120000, chapters: [], observations: [] };
   report.video = evidence;
   const chapter = async (label) => { evidence.chapters.push({ label, wallMsSincePage: Date.now() - started, ...await film.evaluate(() => ({ tick: littleworld.state.tick, step: littleworld.state.step, speed: littleworld.view.speed, paused: littleworld.view.paused })) }); };
   const observation = async (nodeId, groupId, originId) => film.evaluate(({ nodeId, groupId, originId }) => {
@@ -87,38 +87,29 @@ async function harvestingVideo() {
     const target = await film.evaluate(() => { const w = littleworld; for (let cycle = 0; cycle < 240; cycle++) { w.step(1); const groups = w.state.groups.filter(g => g.kind === 'worker' && g.phase === 'working' && g.workProgress < .55 && w.state.nodes.find(n => n.id === g.targetId)?.amount > 40); if (groups.length) { const g = groups[0], node = w.state.nodes.find(n => n.id === g.targetId); return { groupId: g.id, originId: g.originId, nodeId: node.id, x: node.x, z: node.z, cycle: w.state.tick }; } } return null; });
     assert.ok(target, 'No naturally working party found during first 240 cycles'); evidence.target = target;
     await film.evaluate(t => { const w = littleworld; w.select(t.groupId); w.actions.setCinematic(false); w.actions.follow(null); w.camera.position.set(t.x + 17, 22, t.z + 22); w.controls.target.set(t.x, 2, t.z); w.controls.update(); }, target);
-    await film.waitForTimeout(800); evidence.observations.push(await observation(target.nodeId, target.groupId, target.originId));
+    await waitForRenderedFrames(film); evidence.observations.push(await observation(target.nodeId, target.groupId, target.originId));
     await film.locator('[data-action="speed"][data-value="1"]').click(); await chapter('Working team, live 1x');
     for (let i = 0; i < 6; i++) { await film.waitForTimeout(1000); evidence.observations.push(await observation(target.nodeId, target.groupId, target.originId)); }
-    await film.locator('[data-action="pause"]').click(); await film.waitForTimeout(350); const frozenA = await observation(target.nodeId, target.groupId, target.originId); await chapter('Paused worksite, frozen people and resource state'); await film.waitForTimeout(1200); const frozenB = await observation(target.nodeId, target.groupId, target.originId);
+    await film.locator('[data-action="pause"]').click(); await waitForRenderedFrames(film); const frozenA = await observation(target.nodeId, target.groupId, target.originId); await chapter('Paused worksite, frozen people and resource state'); await film.waitForTimeout(1200); const frozenB = await observation(target.nodeId, target.groupId, target.originId);
     assert.equal(frozenA.step, frozenB.step); assert.deepEqual(frozenA.samples, frozenB.samples);
-    // Follow the actual selected crew before accelerating; keep every rendered
+    // Follow the actual selected crew before resuming; keep every rendered
     // return frame so another crew's global delivery cannot satisfy this check.
-    await film.locator('[data-action="follow"]').click(); await film.waitForTimeout(1800);
+    await film.locator('[data-action="follow"]').click(); await film.waitForTimeout(1800); await waitForRenderedFrames(film);
     assert.equal(await film.evaluate(() => littleworld.view.followId), target.groupId);
     const initial = evidence.observations[0];
-    // Arm observation while paused, before the speed click, so protocol latency
-    // cannot skip a short real return journey. It changes only the ordinary
-    // observer speed to 1x once the actual returning phase is visible.
-    const returning = film.evaluate(async target => {
-      const frames = [], started = performance.now(); let slowedForReturn = false;
-      while (performance.now() - started < 12000) {
-        await new Promise(requestAnimationFrame);
-        const w = littleworld, group = w.state.groups.find(g => g.id === target.groupId), home = w.state.settlements.find(s => s.id === target.originId);
-        const speedChange = group?.phase === 'returning' && !slowedForReturn ? { from: w.view.speed, to: 1, reason: 'Show the selected crew physically returning and its own delivery receipt' } : null;
-        if (speedChange) { w.actions.setSpeed(1); slowedForReturn = true; }
-        frames.push({ wallMs: performance.now(), wallMsSincePage: Date.now() - target.videoStarted, speed: w.view.speed, speedChange, tick: w.state.tick, step: w.state.step, followId: w.view.followId, camera: w.camera.position.toArray(), target: w.controls.target.toArray(), group: group ? { id: group.id, phase: group.phase, x: group.x, z: group.z, carrying: { ...group.carrying } } : null, deliveryDetails: home.deliveryDetails ? { ...home.deliveryDetails } : null, samples: w.getMotionSamples().filter(s => s.groupId === target.groupId) });
-        if (!group) break;
-      }
-      return frames;
-    }, { ...target, videoStarted: started });
-    await film.locator('[data-action="speed"][data-value="16"]').click(); await chapter('Accelerated work, then followed selected-crew return at 1x');
+    // At 16x one slow software-rendered frame can skip the whole return and
+    // overwrite its receipt. Film all remaining work and travel at ordinary 1x.
+    // The in-page observer pauses on completion before any protocol round trip.
+    const returning = film.evaluate(observeSelectedCrewReturn, { ...target, videoStarted: started, maximumMs: evidence.returnObservationLimitMs });
+    await film.locator('[data-action="speed"][data-value="1"]').click(); await chapter('Followed selected crew, remaining work and return at live 1x');
     evidence.returnFrames = await returning;
-    const returnStart = evidence.returnFrames.find(f => f.speedChange);
+    const returnStart = evidence.returnFrames.find(f => f.group?.phase === 'returning');
     if (returnStart) evidence.chapters.push({ label: 'Selected crew visibly returns at 1x', wallMsSincePage: returnStart.wallMsSincePage, tick: returnStart.tick, step: returnStart.step, speed: 1, paused: false });
     Object.assign(evidence, selectedCrewEvidence(evidence.returnFrames, target.groupId));
     evidence.observations.push(await observation(target.nodeId, target.groupId, target.originId));
-    await film.locator('[data-action="pause"]').click(); await film.waitForTimeout(400);
+    assert.equal(await film.evaluate(() => littleworld.view.paused), true, 'Return observer did not pause immediately on completion or timeout');
+    assert.ok(evidence.returnFrames.every(f => f.speed === 1), 'Selected crew return must remain at live 1x');
+    await waitForRenderedFrames(film);
     await film.evaluate(id => littleworld.select(id), target.nodeId); await film.locator('[data-action="tab"][data-value="record"]').click(); await chapter('Real extraction, delivery and conservation ledger'); await film.waitForTimeout(1800);
     const end = await observation(target.nodeId, target.groupId, target.originId); evidence.observations.push(end);
     evidence.ledgerText = await film.locator('.ledger-list').innerText();

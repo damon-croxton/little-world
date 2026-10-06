@@ -20,6 +20,7 @@ export function configuration(env = process.env) {
   if (!['ci', 'full'].includes(tier)) throw new Error('QA_TIER must be ci or full');
   const quality = env.QA_QUALITY || (tier === 'full' ? 'high' : 'low');
   if (!['low', 'high'].includes(quality)) throw new Error('QA_QUALITY must be low or high');
+  base.searchParams.set('quality', quality);
   const args = env.BROWSER_ARGS ? JSON.parse(env.BROWSER_ARGS) : [];
   if (!Array.isArray(args) || args.some(a => typeof a !== 'string')) throw new Error('BROWSER_ARGS must be a JSON array of strings');
   const software = env.QA_SOFTWARE_RENDERING === '1';
@@ -59,6 +60,24 @@ export async function environment(page, browser, config) {
     measurementLimit: 'Headless browser on this runner only. Frame timings are not foreground hardware performance or a cross-device guarantee.' };
 }
 
+// Count distinct rendered updates, not elapsed wall time or compositor passes.
+// Slow software rendering can leave camera-dependent diagnostics stale for >500ms.
+export async function waitForRenderedFrames(page, { minimumFrames = 2, maximumMs = 30000 } = {}) {
+  if (!Number.isInteger(minimumFrames) || minimumFrames < 1 || !Number.isFinite(maximumMs) || maximumMs <= 0) throw new Error('Rendered-frame wait needs a positive frame count and time limit');
+  return page.evaluate(({ minimumFrames, maximumMs }) => new Promise((resolve, reject) => {
+    const start = performance.now(), firstRenderFrame = window.littleworld.renderer.info.render.frame;
+    let lastRenderFrame = firstRenderFrame, frames = 0, request;
+    const timer = setTimeout(() => { cancelAnimationFrame(request); reject(new Error(`Timed out waiting for ${minimumFrames} rendered frames; observed ${frames}`)); }, maximumMs);
+    const sample = () => {
+      const renderFrame = window.littleworld.renderer.info.render.frame;
+      if (renderFrame > lastRenderFrame) { frames++; lastRenderFrame = renderFrame; }
+      if (frames >= minimumFrames) { clearTimeout(timer); resolve({ frames, firstRenderFrame, lastRenderFrame, wallMs: performance.now() - start }); }
+      else request = requestAnimationFrame(sample);
+    };
+    request = requestAnimationFrame(sample);
+  }), { minimumFrames, maximumMs });
+}
+
 // Executed in page context, after the app requestAnimationFrame has rendered.
 // Motion samples include shader-derived limb displacement. instanceMatrix reads
 // below are separate literal render-buffer evidence, not simulation positions.
@@ -93,6 +112,29 @@ export async function sampleFrames(page, { durationMs = 4000, minimumFrames = 12
     do { await new Promise(requestAnimationFrame); frames.push(read()); } while ((performance.now() - start < durationMs || frames.length < minimumFrames) && performance.now() - start < maximumMs);
     return frames;
   }, { source: renderedFrame.toString(), durationMs, minimumFrames, maximumMs });
+}
+
+// Executed in page context while paused, before the ordinary 1x resume click.
+// Stop on the first rendered disappearance so protocol latency cannot replace
+// the selected crew's genuine receipt with a later delivery from another crew.
+export function observeSelectedCrewReturn({ groupId, originId, videoStarted, maximumMs = 120000 }) {
+  return new Promise(resolve => {
+    const frames = []; let request;
+    const finish = () => {
+      clearTimeout(timer); cancelAnimationFrame(request);
+      const w = window.littleworld;
+      if (!w.view.paused) w.actions.togglePause();
+      resolve(frames);
+    };
+    const timer = setTimeout(finish, maximumMs);
+    const sample = () => {
+      const w = window.littleworld, group = w.state.groups.find(g => g.id === groupId), home = w.state.settlements.find(s => s.id === originId);
+      frames.push({ wallMs: performance.now(), wallMsSincePage: Date.now() - videoStarted, speed: w.view.speed, paused: w.view.paused, tick: w.state.tick, step: w.state.step, followId: w.view.followId, camera: w.camera.position.toArray(), target: w.controls.target.toArray(), group: group ? { id: group.id, phase: group.phase, x: group.x, z: group.z, carrying: { ...group.carrying } } : null, deliveryDetails: home?.deliveryDetails ? { ...home.deliveryDetails } : null, samples: w.getMotionSamples().filter(s => s.groupId === groupId) });
+      if (!group) finish();
+      else request = requestAnimationFrame(sample);
+    };
+    request = requestAnimationFrame(sample);
+  });
 }
 
 export function selectedCrewEvidence(frames, groupId) {
