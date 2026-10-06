@@ -87,7 +87,7 @@ export function createUI(root, actions) {
           <button id="atlas-tab-record" role="tab" aria-selected="false" aria-controls="atlas-inspector-content" data-action="tab" data-value="record">Record</button>
         </div>
         <div id="atlas-inspector-content" data-slot="selection-body" class="selection-body" role="tabpanel" aria-labelledby="atlas-tab-life"></div>
-        <div data-slot="selection-actions" class="selection-actions"></div>
+        <div data-slot="selection-actions" class="selection-actions"><button data-action="follow" data-value="" aria-pressed="false" disabled>${icon('focus')}<span></span></button><span></span></div>
       </aside>
 
       <section class="world-chronicle glass" aria-label="Recent world events">
@@ -127,14 +127,31 @@ export function createUI(root, actions) {
   const qualityInput = root.querySelector('#atlas-quality');
   const civInput = root.querySelector('#atlas-civs');
   const perspectiveInput = root.querySelector('#atlas-perspective');
+  const followButton = slots['selection-actions'].querySelector('button');
+  const followLabel = followButton.querySelector('span');
+  const selectionNote = slots['selection-actions'].lastElementChild;
+  const renderedHTML = new WeakMap();
 
   // Keep keyboard focus stable as the live inspector refreshes.
   function setHTML(element, html) {
-    if (element.innerHTML === html) return;
+    // DOM serialization normalizes SVG tags and attributes; compare the authored
+    // markup so unchanged content does not detach controls on every refresh.
+    if (renderedHTML.get(element) === html) return;
     const focused = document.activeElement;
     const restore = element.contains(focused) && focused?.dataset?.action ? { action: focused.dataset.action, value: focused.dataset.value } : null;
     element.innerHTML = html;
+    renderedHTML.set(element, html);
     if (restore) [...element.querySelectorAll('button[data-action]')].find(button => button.dataset.action === restore.action && button.dataset.value === restore.value)?.focus({ preventScroll: true });
+  }
+
+  function renderSelectionAction(id, label, note) {
+    // Party age changes during a click or keyboard interaction. Keep its control
+    // mounted even when the footer text or follow state changes.
+    followButton.dataset.value = id || '';
+    followButton.disabled = !id;
+    followButton.setAttribute('aria-pressed', String(!!id && view.followId === id));
+    if (followLabel.textContent !== label) followLabel.textContent = label;
+    if (selectionNote.textContent !== note) selectionNote.textContent = note;
   }
 
   function selected() {
@@ -434,7 +451,7 @@ export function createUI(root, actions) {
       slots['selection-body'].setAttribute('aria-labelledby', `atlas-tab-${activeTab}`);
       const estimates = [['Population estimate', object?.populationEstimate], ['Defender estimate', object?.soldiersEstimate], ['Observed group', object?.sizeEstimate ?? group?.size], ['Resource estimate', object?.amountEstimate ?? object?.abundanceEstimate]].filter(([,value]) => Number.isFinite(value));
       setHTML(slots['selection-body'], `<section class="known-place-reading"><span class="knowledge-badge">${remembered ? 'Last known position' : 'Local line of sight'}</span><p>${remembered ? 'This dashed marker records an earlier observation. Hidden changes are not shown.' : 'Only observable details are available. Foreign stores, orders and training queues remain unknown.'}</p><p>Observed on cycle ${num(observedTick)} · ${num(age)} cycles ago.</p>${estimates.length ? `<dl class="ledger-list">${estimates.map(([label,value]) => `<div><dt>${esc(label)}</dt><dd>~${num(value)}</dd></div>`).join('')}</dl>` : ''}<p>${activeTab === 'intelligence' ? 'A scout must return or deliver an earned signal for field discoveries to reach its civilisation’s command knowledge.' : activeTab === 'record' ? 'The whole-world perspective is an observer tool. Switching views does not reveal information to the simulated factions.' : 'Revisit this location to learn what has changed.'}</p></section>`);
-      setHTML(slots['selection-actions'], `<button data-action="follow" data-value="${esc(object?.id || '')}" aria-pressed="${view.followId === object?.id}">${icon('focus')}<span>${remembered ? 'View last location' : 'Follow contact'}</span></button><span>${remembered ? 'Memory, not live state' : 'Visible observation'}</span>`);
+      renderSelectionAction(object?.id, remembered ? 'View last location' : 'Follow contact', remembered ? 'Memory, not live state' : 'Visible observation');
       return;
     }
     root.querySelector('#atlas-tab-life').textContent = resource ? 'Site' : 'Life';
@@ -448,7 +465,7 @@ export function createUI(root, actions) {
       root.querySelectorAll('[data-action="tab"]').forEach(button => { button.setAttribute('aria-selected', String(button.dataset.value === activeTab)); button.tabIndex = button.dataset.value === activeTab ? 0 : -1; });
       slots['selection-body'].setAttribute('aria-labelledby', `atlas-tab-${activeTab}`);
       setHTML(slots['selection-body'], resourceMarkup(resource, activeTab));
-      setHTML(slots['selection-actions'], `<button data-action="follow" data-value="${esc(resource.id)}" aria-pressed="${view.followId === resource.id}">${icon('focus')}<span>${view.followId === resource.id ? 'Following site' : 'View worksite'}</span></button><span>Physical extraction</span>`);
+      renderSelectionAction(resource.id, view.followId === resource.id ? 'Following site' : 'View worksite', 'Physical extraction');
       return;
     }
     const selectionId = group?.id || settlement?.id;
@@ -463,7 +480,7 @@ export function createUI(root, actions) {
     const lifeWithColony = group ? workerJobMarkup(group) + life : !isRuin(settlement) ? life.replace('<section class="inspector-section"><div class="population-summary">', `${workforceMarkup(settlement)}${militaryMarkup(settlement, faction)}<section class="inspector-section"><div class="population-summary">`) : life;
     setHTML(slots['selection-body'], activeTab === 'intelligence' ? intelligenceMarkup(current) : activeTab === 'record' ? recordMarkup(current) : lifeWithColony);
     const followed = !!selectionId && view.followId === selectionId;
-    setHTML(slots['selection-actions'], `<button data-action="follow" data-value="${esc(selectionId || '')}" aria-pressed="${followed}" ${selectionId ? '' : 'disabled'}>${icon('focus')}<span>${followed ? 'Following' : group ? 'Follow party' : isRuin(settlement) ? 'View ruins' : isCamp(settlement) ? 'Follow survivors' : 'Follow settlement'}</span></button><span>${group ? `Cycle ${num(Math.max(0, n(state.tick) - n(group.createdTick)))} afield` : isRuin(settlement) ? 'A place in history' : 'Click the world to explore'}</span>`);
+    renderSelectionAction(selectionId, followed ? 'Following' : group ? 'Follow party' : isRuin(settlement) ? 'View ruins' : isCamp(settlement) ? 'Follow survivors' : 'Follow settlement', group ? `Cycle ${num(Math.max(0, n(state.tick) - n(group.createdTick)))} afield` : isRuin(settlement) ? 'A place in history' : 'Click the world to explore');
   }
 
   function renderEvents(faction) {

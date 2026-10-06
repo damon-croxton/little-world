@@ -2,6 +2,12 @@
 
 Source input: `LittleWorld-final-source.zip`, 511,745 bytes, SHA-256 `b05fa9f033034f368cbd28c63e535f624ce4e538712e2c9dbeaf308b4a6add66`. All 61 source hashes matched the archive's manifest. The cloud patch applied cleanly over `c6cb3902fd557e90ab194af2145841752deb1425`.
 
+## Hosted browser regression correction
+
+The first final-source workflow (`37534052226`) passed build and simulation QA but correctly blocked deployment after browser QA failed. Inspector refresh compared authored SVG markup with browser-serialized HTML, repeatedly replacing the Follow button even when paused. The correction preserves that button across refreshes and compares cached authored markup for other unchanged content. Three new DOM identity regressions reproduce the old failure and verify the correction. All **165 Node tests** and the 37-module build check pass.
+
+Observer tests now wait for actual pulse progress instead of assuming a software-rendered frame arrives within one second. Their progress, pause, cancellation and interaction assertions remain intact; screenshot and label-action timeouts allow slow software WebGL. A Windows Chrome SwiftShader run verified the formerly failing Resume, 16x, world-label, Follow and drag interactions. The complete hosted workflow remains the release gate; no checks were removed or bypassed.
+
 ## Passed
 
 - Clean lockfile install; all **162 Node tests** passed, zero failed/skipped. Static build and **37-module relative asset graph** passed.
