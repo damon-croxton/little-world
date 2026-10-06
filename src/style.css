@@ -312,3 +312,115 @@ button.world-label.selected::after { content: ''; position: absolute; bottom: -5
 @media (max-width: 800px) { .atlas-brand .world-scale { display: block; font-size: 8px; margin-top: 5px; } .world-scale > span { display: none; } .developed-control > p { display: none; } .developed-button { font-size: 9px; padding: 8px; gap: 6px; } .overlay-control button { padding-left: 5px; padding-right: 5px; } }
 @media (max-width: 600px) { .atlas-brand h1 { font-size: 24px; } .atlas-brand h1 sup { font-size: 7px; margin-left: 6px; } .developed-control { position: absolute; left: 0; top: 53px; margin: 0; width: 155px; } .developed-button { font-size: 9px; } .first-light-note { display: none; } .overlay-control button { font-size: 8px; padding-left: 3px; padding-right: 3px; } .observation-tools { gap: 4px; } .cinematic-button { padding-left: 9px; padding-right: 9px; } .atlas-brand .world-scale { font-size: 7px; margin-top: 3px; } }
 @media (max-width: 360px) { .atlas-brand h1 { font-size: 14px; } .atlas-brand h1 sup, .atlas-brand .world-scale { display: none; } .developed-control { width: 150px; } .overlay-control button { font-size: 7px; } }
+
+/* Observer configuration and paid military production. */
+.atlas-settings { max-height: calc(100vh - 142px); overflow-y: auto; scrollbar-width: thin; }
+.civ-setting { border-top: 1px solid var(--line); padding-top: 12px; margin-top: 14px; }
+.civ-setting > label { display: flex; justify-content: space-between; font-size: 11px; align-items: center; }
+.civ-setting output { color: var(--accent); font: 20px Georgia, serif; }
+.civ-setting input { width: 100%; margin: 12px 0 0; accent-color: var(--accent); cursor: pointer; }
+.seed-form .civ-setting p { margin: 4px 0 7px; font-size: 9px; }
+.perspective-setting { border-top: 1px solid var(--line); padding: 12px 0 0; }
+.perspective-setting label { display: block; font-size: 11px; margin-bottom: 8px; }
+.perspective-setting select { width: 100%; background: #172b2e; color: var(--paper); border: 1px solid var(--line); padding: 7px; border-radius: 3px; font-size: 11px; }
+.perspective-setting p { font-size: 9px; line-height: 1.6; color: var(--muted); }
+.military-roster { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 13px; }
+.military-roster > div { display: flex; flex-direction: column; gap: 5px; }
+.military-roster strong { font: 24px Georgia, serif; color: #e3c797; }
+.military-roster span { font-size: 10px; color: var(--paper); }
+.military-roster small { font-size: 8px; color: var(--muted); }
+.producer-list, .production-queue { margin-top: 12px; }
+.producer-list > div, .fortification-reading > div { display: flex; justify-content: space-between; gap: 8px; margin: 6px 0; font-size: 9px; }
+.producer-list small, .fortification-reading small { color: var(--muted); font-size: 8px; }
+.training-job { padding: 8px 0; }
+.training-job > div:first-child { display: flex; justify-content: space-between; gap: 8px; font-size: 9px; margin-bottom: 6px; }
+.training-job strong { color: var(--accent); font-size: 9px; font-weight: 500; }
+.training-job > small { font-size: 8px; display: block; margin-top: 5px; color: var(--muted); }
+.fortification-reading { border-top: 1px solid var(--line); padding-top: 12px; margin-top: 13px; }
+.fortification-reading p { font-size: 10px; margin: 7px 0; }
+.military-composition { color: var(--accent); font-size: 10px; line-height: 1.5; }
+.known-place-reading { font-size: 11px; line-height: 1.7; padding: 16px 0; color: var(--muted); }
+.knowledge-badge { display: inline-block; color: var(--accent); font-size: 8px; text-transform: uppercase; letter-spacing: .1em; margin-bottom: 8px; }
+@media (max-width: 800px) { .atlas-settings { max-height: calc(100vh - 98px); } }
+
+/* Mobile is a canvas-first observer: panels open only when requested. */
+.mobile-toolbar, .mobile-panel-close, .mobile-gesture-hint { display: none; }
+#app, #app > canvas { -webkit-app-region: no-drag; app-region: no-drag; overscroll-behavior: none; }
+#app > canvas { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; touch-action: none; }
+@media (max-width: 800px), (pointer: coarse) and (max-height: 560px) {
+  html, body { width: 100%; height: 100dvh; position: fixed; overflow: hidden; overscroll-behavior: none; }
+  #app, #ui { height: 100dvh; }
+  .atlas-brand { top: max(12px, env(safe-area-inset-top)); left: max(14px, env(safe-area-inset-left)); }
+  .atlas-brand h1 { font-size: 26px; margin: 0; }
+  .atlas-brand .world-scale { display: block; margin-top: 3px; font-size: 9px; }
+  .time-console { top: calc(62px + env(safe-area-inset-top)); left: max(12px, env(safe-area-inset-left)); right: max(12px, env(safe-area-inset-right)); height: 48px; padding: 6px 10px; justify-content: space-between; gap: 10px; }
+  .time-console .world-date { min-width: 42px; }
+  .time-console .world-date strong { font-size: 21px; }
+  .time-actions { flex: 1; justify-content: space-around; gap: 10px; }
+  .pause-button { min-width: 29px; min-height: 34px; padding: 6px; }
+  .speed-switch { gap: 3px; }
+  .speed-switch button { min-width: 33px; min-height: 34px; padding: 7px; font-size: 11px; }
+  .settings-toggle { min-width: 35px; min-height: 35px; padding: 7px; }
+  .faction-index, .inspector, .world-chronicle, .observation-tools, .first-light-note { display: none; }
+  .mobile-toolbar { display: flex; position: absolute; z-index: 12; pointer-events: auto; left: max(10px, env(safe-area-inset-left)); right: max(10px, env(safe-area-inset-right)); bottom: calc(10px + env(safe-area-inset-bottom)); min-height: 54px; padding: 3px 6px; border-radius: 9px; justify-content: space-around; }
+  .mobile-toolbar button { display: flex; align-items: center; justify-content: center; flex: 1; flex-direction: column; gap: 4px; min-height: 46px; font-size: 9px; border-radius: 6px; color: var(--muted); }
+  .mobile-toolbar button[aria-pressed="true"] { color: var(--accent); background: #d6d8b714; }
+  .mobile-toolbar svg { width: 18px; height: 18px; }
+  .mobile-panel-inspector .inspector, .mobile-panel-factions .faction-index { display: flex; position: absolute; z-index: 11; left: max(12px, env(safe-area-inset-left)); right: max(12px, env(safe-area-inset-right)); top: auto; bottom: calc(76px + env(safe-area-inset-bottom)); width: auto; max-height: min(44dvh, 370px); padding: 0; background: #112729f5; border: 1px solid var(--line); border-radius: 9px; overflow: hidden; flex-direction: column; }
+  .mobile-panel-close { display: block; flex-shrink: 0; align-self: flex-end; padding: 9px 13px 5px; font-size: 10px; color: var(--accent); min-height: 30px; }
+  .mobile-panel-factions .faction-index { padding: 0 9px 10px; }
+  .faction-index > .section-heading { display: none; }
+  .faction-list { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; overflow-y: auto; }
+  .faction-entry, .faction-entry.is-selected { width: 100%; min-width: 0; min-height: 44px; padding: 8px; justify-content: flex-start; }
+  .faction-entry-label, .faction-entry.is-selected .faction-entry-label { display: flex; max-width: 100%; }
+  .faction-entry-label strong { font-size: 10px; }
+  .faction-entry-label small { font-size: 8px; }
+  .developed-control { position: static; inset: auto; width: auto; margin: 7px 0 0; flex-shrink: 0; align-self: stretch; }
+  .developed-button { min-height: 39px; justify-content: center; }
+  .selection-header { padding: 3px 15px 10px; }
+  .selection-header h2 { font-size: 21px; }
+  .selection-body { padding: 0 15px; overscroll-behavior: contain; touch-action: pan-y; }
+  .inspector-tabs button { min-height: 36px; padding: 9px 12px; font-size: 10px; }
+  .selection-actions { padding: 10px 15px; }
+  .selection-actions > button { min-height: 28px; font-size: 10px; }
+  .mobile-panel-views .observation-tools { display: flex; z-index: 11; bottom: calc(78px + env(safe-area-inset-bottom)); left: 12px; right: 12px; flex-wrap: wrap; justify-content: center; }
+  .observation-tools .overlay-control { flex: 1; min-height: 42px; }
+  .observation-tools .overlay-control button { min-height: 36px; padding: 8px 6px; font-size: 9px; }
+  .atlas-settings { z-index: 14; top: calc(118px + env(safe-area-inset-top)); left: 12px; right: 12px; width: auto; max-height: calc(100dvh - 200px - env(safe-area-inset-top) - env(safe-area-inset-bottom)); padding: 16px; touch-action: pan-y; overscroll-behavior: contain; }
+  .field-guide { z-index: 16; }
+  .mobile-gesture-hint { display: block; position: absolute; top: calc(117px + env(safe-area-inset-top)); left: 12px; right: 12px; margin: 0; text-align: center; color: #e2e6d5b8; font-size: 9px; letter-spacing: .02em; text-shadow: 0 1px 5px #142329; pointer-events: none; }
+  .has-navigation .mobile-gesture-hint { display: none; }
+  .ui-toast { bottom: calc(81px + env(safe-area-inset-bottom)); max-width: calc(100% - 28px); }
+}
+@media (max-width: 360px) { .time-console { gap: 5px; padding: 5px 6px; } .speed-switch button { min-width: 28px; padding: 6px 4px; } .time-actions { gap: 4px; } .atlas-brand h1 { font-size: 23px; } .faction-list { grid-template-columns: 1fr; } }
+
+.advantage-reading h3 { font: 17px Georgia, serif; color: var(--accent); margin: 8px 0; }
+.advantage-reading p, .occupation-reading p { font-size: 10px; line-height: 1.65; color: var(--muted); }
+.advantage-reading > small { display: block; font-size: 9px; line-height: 1.5; color: #d9b69c; }
+.occupation-reading { padding: 13px 0 0; }
+.world-outcome { pointer-events: auto; position: absolute; z-index: 30; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(470px, calc(100% - 32px)); padding: 26px; border-radius: 9px; box-shadow: 0 20px 80px #0006; background: #142c2ef7; }
+.world-outcome h2 { font: 30px/1.15 Georgia, serif; margin: 10px 0 15px; color: #f0d7aa; }
+.world-outcome > p { color: var(--muted); font-size: 12px; line-height: 1.65; }
+.outcome-metrics { display: flex; gap: 22px; border-block: 1px solid var(--line); padding: 13px 0; margin: 16px 0; }
+.outcome-metrics > span { display: flex; flex-direction: column; gap: 6px; font-size: 9px; color: var(--muted); }
+.outcome-metrics strong { color: var(--paper); font: 20px Georgia, serif; }
+.outcome-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 17px; }
+.outcome-actions button { padding: 11px 13px; border: 1px solid var(--line); background: #dde4c511; border-radius: 5px; font-size: 11px; min-height: 42px; }
+.outcome-actions button:last-child { color: #182b2b; background: var(--accent); }
+@media (max-width: 800px), (pointer: coarse) and (max-height: 560px) { .mobile-panel-inspector .inspector,.mobile-panel-factions .faction-index { opacity: 1; } .world-outcome { padding: 21px; max-height: calc(100dvh - 145px); overflow-y: auto; } .world-outcome h2 { font-size: 26px; } .speed-switch button { min-width: 29px; padding: 6px 5px; } }
+
+.advantage-reading .advantage-strength { color: var(--accent); font-size: 10px; }
+
+@media (pointer: coarse) and (max-height: 560px) and (min-width: 600px) {
+  .atlas-brand { top: max(10px, env(safe-area-inset-top)); }
+  .atlas-brand h1 { font-size: 22px; }
+  .time-console { top: max(10px, env(safe-area-inset-top)); left: auto; width: min(480px, calc(100% - 160px - env(safe-area-inset-left) - env(safe-area-inset-right))); }
+  .mobile-gesture-hint { top: calc(65px + env(safe-area-inset-top)); }
+  .mobile-toolbar { left: 50%; right: auto; width: min(380px, calc(100% - 24px)); transform: translateX(-50%); min-height: 49px; }
+  .mobile-toolbar button { min-height: 41px; }
+  .mobile-panel-inspector .inspector { left: auto; width: min(340px, calc(100% - 24px)); max-height: calc(100dvh - 92px - env(safe-area-inset-bottom)); }
+  .mobile-panel-factions .faction-index { right: auto; width: min(380px, calc(100% - 24px)); max-height: calc(100dvh - 92px - env(safe-area-inset-bottom)); }
+  .atlas-settings { top: calc(65px + env(safe-area-inset-top)); left: auto; width: min(340px, calc(100% - 24px)); max-height: calc(100dvh - 88px - env(safe-area-inset-top) - env(safe-area-inset-bottom)); }
+}
+
+.auxiliary-reading { color: var(--accent); font-size: 9px; line-height: 1.65; }

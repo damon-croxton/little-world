@@ -12,6 +12,7 @@
     "three": "0.160.1"
   },
   "devDependencies": {
-    "@playwright/test": "^1.51.0"
+    "@playwright/test": "^1.51.0",
+    "linkedom": "^0.18.13"
   }
 }

@@ -1,51 +1,94 @@
 # LittleWorld
 
-A browser-based observer simulation of human settlers, scavenger machines and alien hives sharing a procedurally seeded miniature world. Six factions begin with different personalities and constraints. Watch work parties extract and carry resources, settlements build and grow, scouts bring imperfect reports home, and societies trade, research or mobilize.
+An observer-first domination simulation of human settlers, scavenger machines and alien hives. Civilisations gather physical resources, grow settlements, train infantry and ranged forces, build walls and shooting towers, scout through fog of war, and compete to control the world. Every living body represents one actual population member; temporary falling markers depict recorded deaths.
 
-Built with vanilla JavaScript and Three.js 0.160.1. All geometry is procedural. Simulation advances in deterministic 0.1-second pulses, independently of rendering; one neutral simulation cycle is ten pulses. The observer controls time and the camera, not faction orders.
+All architecture, terrain, characters and effects are original procedural geometry. Built with vanilla JavaScript and Three.js 0.160.1; no downloaded artwork is required.
 
-## Run locally
+## Run
 
-Install Node.js 24 or later, then:
+Install Node.js 24 or later:
 
 ```sh
 npm ci
 npm start
 ```
 
-Open **http://127.0.0.1:4174**. On Windows, double-click `Start-LittleWorld.cmd` to install dependencies if needed and open the local demo. It needs a browser with WebGL and hardware acceleration.
+Open http://127.0.0.1:4174 in a WebGL-capable browser. On Windows, `Start-LittleWorld.cmd` installs missing dependencies and opens the app. A browser with hardware acceleration is recommended.
+
+The default world has four civilisations and starts at 2x. Settings provide a seed and a 3-6 civilisation slider; 3-5 is the usual range. Reset applies both together. The same seed and settings reproduce the same simulation within the same JavaScript runtime; different engine versions can diverge through floating-point terrain and formation calculations. URL parameters also work: `?seed=first-light&civs=4`.
 
 ## Observe
 
-- Drag to orbit, right-drag to pan and scroll to zoom.
-- Click a settlement, moving party or resource site to inspect it.
-- Pause with **Space**; **1–4** choose time speeds.
-- **F** follows the selection, **C** toggles a cinematic camera, **H** opens the guide, **Escape** releases follow.
-- Use overlays for territory, intelligence, routes and resources.
-- **Developed world** advances the same simulation by 1,200 cycles. It does not inject a prebuilt population or free stock.
-- Reset with any seed to begin another reproducible world.
+- Desktop: left-drag orbits, right-drag pans, scroll zooms; click a place, party or resource to inspect.
+- Touch: one finger pans; two fingers pinch to zoom and drag to orbit. The canvas contains its gestures; inspector panels scroll vertically.
+- On smaller screens, Societies, Inspect and Views are collapsed until requested. Map returns to the overview.
+- Space pauses; 1–5 select 1x, 2x, 4x, 16x, 32x. F follows, C toggles the cinematic camera, H hides/shows the interface, Escape returns to the overview.
+- Whole world is an observer perspective. A civilisation perspective shows its current sight and remembered places; switching perspective never changes what its AI knows.
+- The Developed world control runs the same simulation forward 1,200 cycles; it does not insert population, stocks or showcase structures.
 
-The live scale display distinguishes actual population, represented individuals and bodies inside the camera frustum. Zooming changes visibility, not population. Resource inspection exposes depletion, visiting teams and the conservation ledger. Colony panels expose construction and the people allocated to work, research and military service.
+One neutral cycle is one simulation second at 1x. The simulation advances in fixed 0.1-second pulses, independently of rendering. Pausing preserves fractional time and animated poses.
 
-## Build and deploy
+## Domination and variation
+
+A civilisation wins when no independent opposing settlements or viable field armies remain. Defeated settlements can be occupied: their native inhabitants and species remain, and captured stores stay at the physical location. Conquest does not delete civilians, transform species or teleport inventory to a capital. A surviving field army can still try to liberate its home before capitulation. If a sovereign loses all native bases but still holds a foreign town, one held producer can recruit paid native auxiliaries under its command. Their species and population identity do not change.
+
+The observer pauses on a newly declared victory and can keep watching, replay the seed or generate another world. The pacing target is roughly 5–10 minutes of playback at 2x, corresponding to 600–1,200 simulation cycles. This is a calibration target, not a timer that chooses a winner; see the validation report for measured seed outcomes and limitations.
+
+Seeded advantages are independent of species. Examples include faster gathering and larger carried loads, quicker training, longer ranged reach, stronger weapons and tougher fortifications, with explicit tradeoffs. These modify actual production or combat calculations. There is no hidden victory deadline or fixed winning species.
+
+## Physical systems
+
+- Workers travel to finite or regenerating deposits, extract within reach, carry cargo and deliver it home. Journey provisions are funded before departure. Trapped or exhausted expeditions can lose real people and cargo.
+- Each species has distinct infantry and ranged producers. Buildings require funded construction, and finite training queues pay their costs and reserve existing civilians. A cancelled or destroyed course cannot complete later.
+- Walls, controlled gates and staffed towers are real building records with health. Towers need two actual ranged operators and paid ammunition. Civilians can contest a paper resource claim until real troops or towers secure it.
+- Terrain includes deep water, rocky barriers, fords and mountain passes. Group routes and body formation offsets respect physical obstacles; friendly/occupier gates preserve access.
+- Infantry strikes and ranged projectiles create real damage and casualty events. Effects read those events and never start a cosmetic battle. Formations, reactions, falling markers and retreat signals remain bounded.
+- Field observations travel with scouts and parties; home reports and earned relays deliver command knowledge. Hidden enemy stores, queues, future routes and fresh deposit quantities are unavailable to AI planners.
+- Technology and trade require resources and people. A resource ledger accounts for production, extraction, cargo, deliveries, consumption, construction, research, training and losses.
+
+## Build and verify
 
 ```sh
 npm test
 npm run build
+node tools/verify-build.mjs
+node tests/domination.mjs
+node tests/balance.mjs
+node tests/render-performance.mjs
 ```
 
-The self-contained static output is `dist/`. Three.js modules are copied there with their license; all application paths are relative, including project subpaths on GitHub Pages. `.github/workflows/pages.yml` tests, builds and deploys every push to `main`. Configure the repository's Pages source as **GitHub Actions**.
+The self-contained static output is `dist/`. Three.js modules and their license are copied there; application URLs are relative and support GitHub Pages project paths. The asset verifier follows the real application module graph and rejects missing or root-relative dependencies.
 
-## Model boundaries
+With `npm start` running separately, browser verification can run in an authorised WebGL-capable test environment:
 
-This is a tech demo, not a historical or economic prediction. Individuals are visible bodies, while strategic decisions and logistics operate through settlements, work parties, scouts and squads. Research follows differentiated trees with paid investment and prerequisites. Combat uses group strength, terrain, morale, supplies and reported intelligence; individual weapon hits are not simulated. Home activity is representative animation, while deployed teams follow simulation positions. Population and group caps keep the browser workload bounded. No save/load or direct faction control is included yet.
+```sh
+npx playwright install --with-deps chromium
+node tests/controls-v2.mjs
+node tests/visual-v2.mjs
+```
+
+Browser tests default to bundled Chromium. `BASE_URL` accepts a local server or hosted project subpath; `QA_CIVS` selects the start count. `QA_TIER=full` includes the 3,000-cycle/high-quality tier. `QA_QUALITY=low` selects performance rendering, `BROWSER_CHANNEL=chrome` selects installed Chrome, and `QA_VIDEO=0` explicitly skips recording. Software-WebGL CI is labelled as such.
+
+The Pages workflow gates every push to `main` on Node tests, seeded simulation audits, controls and visual evidence. Failed verification keeps the previous deployment. Screenshots, measurements and harvesting video are retained as Actions artifacts for 14 days. See `DESKTOP-VALIDATION.md` for actual Windows browser verification and its limits.
+
+## Measurement and model boundaries
+
+This is a simulation-first tech demo, not a historical prediction or a directly controlled multiplayer RTS. Strategic decisions and logistics operate through settlements and groups; individuals are separately rendered bodies. Home civilian activity is representative motion, while deployed teams and battle formations follow physical state.
+
+The live diagnostics distinguish actual/scoped population, represented bodies and camera-visible bodies. In a civilisation perspective, the count covers its own census and observable foreign people, not hidden world population. Paused, active and advancing timing windows are separate.
+
+Node render benchmarks measure CPU simulation/crowd work and geometry only. They do not measure GPU, buildings, landscape, interface or screen refresh. Browser frame measurements describe their recorded runner, viewport and quality, not a guarantee for other hardware. DOM and synthetic pointer tests are not evidence of actual mobile layout or native gestures.
+
+New births and housing stop at 900 people per settlement; each independent faction can maintain up to four active settlements. Limits stop new commitments rather than deleting existing people. Supplies, housing, geography, war and reserves constrain growth earlier. No save/load or direct faction orders are included.
 
 ## Source map
 
-- `src/sim/core.js`, `economy.js`: physical gathering, stores, population, paid construction and founding.
-- `src/sim/strategy.js`: scouts, intelligence, expeditions, logistics and conflict.
-- `src/sim/progression.js`: personalities, technology and trade.
-- `src/world.js`, `src/render/`: terrain, resources, architecture and instanced bodies.
-- `src/main.js`, `clock.js`, `ui.js`: fixed-step integration, camera and observer interface.
+- `src/sim/core.js`, `economy.js`: physical work, settlement growth, paid construction and conservation.
+- `src/sim/military.js`, `defenses.js`: real role census, training and funded defensive planning.
+- `src/sim/strategy.js`, `combat.js`, `conquest.js`, `control.js`: scouting, campaigns, impacts, occupation and sovereignty.
+- `src/sim/knowledge.js`, `progression.js`: visibility, returned intelligence, technology and commerce.
+- `src/world.js`, `config.js`, `sim/navigation.js`: seeded geography, civilisation count and collision-aware routes.
+- `src/render/`: terrain, buildings, individually instanced bodies, fog and combat effects.
+- `src/main.js`, `clock.js`, `input.js`, `ui.js`: observer integration, timing, gestures and interface.
 
-Runtime dependencies: [Three.js](https://threejs.org/) (MIT). Playwright is used only for local browser verification.
+Three.js is MIT licensed. Playwright and Linkedom are development-only verification dependencies.

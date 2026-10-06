@@ -1,10 +1,11 @@
-import { heightAt, biomeAt, generateWorld, WORLD_RADIUS, LAND_SCALE } from '../world.js';
+import { heightAt, biomeAt, terrainAt, generateWorld, WORLD_RADIUS, LAND_SCALE } from '../world.js';
 
 // The renderer owns no simulation state. Detail is aggregated into reusable,
 // vertex-coloured templates and instanced, including undergrowth and wildlife.
-export function createTerrain(THREE, scene, seed = 'littleworld') {
+export function createTerrain(THREE, scene, seed = 'littleworld', options = {}) {
   const root = new THREE.Group(); root.name = 'LittleWorld landscape'; scene.add(root);
-  const { starts, nodes } = generateWorld(seed);
+  const { starts, nodes, obstacles, passes } = generateWorld(seed, options);
+  root.userData.terrainObstacles = obstacles; root.userData.terrainPasses = passes;
   const resourceZones = new Map();
   for (const node of nodes) {
     const key = `${Math.floor(node.x / 12)},${Math.floor(node.z / 12)}`;
@@ -104,25 +105,31 @@ export function createTerrain(THREE, scene, seed = 'littleworld') {
     if (clearance) {
       // Keep original seeded transforms, so expansion only clears existing detail
       // and never shifts or rerandomizes the surrounding landscape.
-      clearingGroups.push({ mesh, placements, original: mesh.instanceMatrix.array.slice(), clearance });
+      clearingGroups.push({ mesh, placements, original: mesh.instanceMatrix.array.slice(), originalColors: mesh.instanceColor?.array.slice(), clearance });
       mesh.userData.clearanceKind = clearance;
     }
     root.add(mesh); return mesh;
   }
   function refreshClearings(settlements) {
-    for (const { mesh, placements, original, clearance } of clearingGroups) {
+    for (const { mesh, placements, original, originalColors, clearance } of clearingGroups) {
       const transforms = mesh.instanceMatrix.array;
+      let visibleCount = 0;
       for (let i = 0; i < placements.length; i++) {
         const p = placements[i];
         let edgeDistance = Infinity;
         for (const settlement of settlements) edgeDistance = Math.min(edgeDistance, Math.hypot(p.x - settlement.x, p.z - settlement.z) - (settlement.radius || 8) - 2);
-        const offset = i * 16;
-        const scale = edgeDistance < 0 ? .000001 : clearance === 'canopy' ? .46 + .54 * smooth(0, 9, edgeDistance) : .7 + .3 * smooth(0, 3, edgeDistance);
-        for (let j = 0; j < 16; j++) transforms[offset + j] = original[offset + j];
+        // A cleared tree/grass clump no longer exists. Do not keep submitting
+        // a full invisible miniature at microscopic scale below the island.
+        if (edgeDistance < 0) continue;
+        const offset = visibleCount * 16, source = i * 16;
+        const scale = clearance === 'canopy' ? .46 + .54 * smooth(0, 9, edgeDistance) : .7 + .3 * smooth(0, 3, edgeDistance);
+        for (let j = 0; j < 16; j++) transforms[offset + j] = original[source + j];
         if (scale < 1) for (const j of [0, 1, 2, 4, 5, 6, 8, 9, 10]) transforms[offset + j] *= scale;
-        if (edgeDistance < 0) transforms[offset + 13] = -8;
+        if (originalColors) for (let j = 0; j < 3; j++) mesh.instanceColor.array[visibleCount * 3 + j] = originalColors[i * 3 + j];
+        visibleCount++;
       }
-      mesh.instanceMatrix.needsUpdate = true;
+      mesh.count = visibleCount; mesh.instanceMatrix.needsUpdate = true;
+      if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
       // Original bounding spheres remain conservative: clearance only shrinks.
     }
     root.userData.settlementClearings = { count: settlements.length, revision: (root.userData.settlementClearings?.revision || 0) + 1 };
@@ -141,7 +148,7 @@ export function createTerrain(THREE, scene, seed = 'littleworld') {
     for (let attempts = 0; result.length < count && attempts < count * 28; attempts++) {
       const angle = rand() * Math.PI * 2, r = Math.sqrt(rand()) * radius;
       const x = Math.cos(angle) * r, z = Math.sin(angle) * r, y = heightAt(x, z, seed);
-      if (y < minHeight || (biome && biomeAt(x, z, seed) !== biome) || !awayFromSettlements(x, z, clear) || !awayFromWorksites(x, z)) continue;
+      if (y < minHeight || !terrainAt(x, z, seed).traversable || (biome && biomeAt(x, z, seed) !== biome) || !awayFromSettlements(x, z, clear) || !awayFromWorksites(x, z)) continue;
       result.push({ x, z, y, scale: .7 + rand() * .7, rotation: rand() * Math.PI * 2 });
     }
     return result;
@@ -205,6 +212,16 @@ export function createTerrain(THREE, scene, seed = 'littleworld') {
   for (let i = 0; i < riverPos.count; i++) { riverPos.setX(i, riverPos.getX(i) - 1.7 * LAND_SCALE); riverPos.setY(i, .31 - smooth(33.5 * LAND_SCALE, 40 * LAND_SCALE, Math.abs(riverPos.getZ(i))) * .85); }
   riverGeometry.computeVertexNormals();
   const river = new THREE.Mesh(riverGeometry, waterMaterial(true)); river.name = 'Winding freshwater'; root.add(river);
+  const fordStones = [];
+  for (const pass of passes.filter(pass => pass.kind === 'ford')) {
+    for (let i = -4; i <= 4; i++) {
+      const x = pass.x + i * 2.1, z = pass.z + (i % 2) * .42;
+      fordStones.push({ x, z, y: Math.max(.26, heightAt(x, z, seed) + .055), sx: .9, sy: .10, sz: .85, rotation: i * .3 });
+    }
+  }
+  const fordMarkers = instances(geom(new THREE.CylinderGeometry(1, 1.04, 1, 7)), standard({ color: 0xa4a38b, roughness: .96 }), fordStones, false);
+  if (fordMarkers) fordMarkers.name = 'Shallow stone-bottomed fords';
+
 
   // Meadow groves: trunks and branches remain visible under loose rounded crowns.
   const treeParts = [part(cylinder(.1, .19, 2.5), 0x69604a, [0, 1.25, 0])];
@@ -325,17 +342,17 @@ export function createTerrain(THREE, scene, seed = 'littleworld') {
     crop: [cropGeometry, windMaterial(.09)], spring: [springGeometry, standard({ vertexColors: true, roughness: .25, metalness: .14 })],
     biomass: [biomassGeometry, windMaterial(.03, 0x335d4e)], solar: [solarGeometry, standard({ vertexColors: true, metalness: .35, roughness: .4, emissive: 0x6c4617, emissiveIntensity: .12 })]
   };
-  const resourceRecords = new Map(), resourceBatches = new Map(), pickableResources = [];
+  const resourceRecords = new Map(), resourceBatches = new Map(), resourceMeshEntries = new Map(), pickableResources = [];
   const stumpPlacements = [], patchPlacements = [], rimPlacements = [];
   const patchColors = { forest: 0x8a7552, ore: 0x665f57, crystal: 0x647779, salvage: 0x7d715c, crop: 0x968051, spring: 0x627a74, biomass: 0x6e7d72, solar: 0xa49269 };
   for (const node of nodes) {
     const subtype = templates[node.subtype] ? node.subtype : ({ food: 'crop', water: 'spring', energy: 'crystal', materials: 'ore' }[node.kind]);
     const count = subtype === 'spring' ? 1 : subtype === 'crop' ? 18 : subtype === 'forest' ? 7 + Math.round(node.richness * 4) : 8 + Math.round(node.richness * 5);
-    const record = { id: node.id, subtype, node, height: heightAt(node.x, node.z, seed), count, pieces: [], lastQuantized: -1, fraction: 1 };
+    const record = { id: node.id, subtype, node, height: heightAt(node.x, node.z, seed), count, pieces: [], lastQuantized: -1, fraction: 1, visible: true };
     resourceRecords.set(node.id, record);
-    patchPlacements.push({ x: node.x, z: node.z, y: record.height + .045, scale: node.radius * .96, color: patchColors[subtype], rotation: rand() * 6.28 });
+    patchPlacements.push({ nodeId: node.id, x: node.x, z: node.z, y: record.height + .045, scale: node.radius * .96, color: patchColors[subtype], rotation: rand() * 6.28 });
     if (subtype === 'ore' || subtype === 'spring' || subtype === 'crystal') {
-      for (let j = 0; j < 10; j++) { const a = j / 10 * Math.PI * 2; const x = node.x + Math.sin(a) * node.radius * .81, z = node.z + Math.cos(a) * node.radius * .81; rimPlacements.push({ x, z, scale: .24 + rand() * .28, sy: .21, color: subtype === 'spring' ? 0x8c9b83 : 0x8b8477 }); }
+      for (let j = 0; j < 10; j++) { const a = j / 10 * Math.PI * 2; const x = node.x + Math.sin(a) * node.radius * .81, z = node.z + Math.cos(a) * node.radius * .81; rimPlacements.push({ nodeId: node.id, x, z, scale: .24 + rand() * .28, sy: .21, color: subtype === 'spring' ? 0x8c9b83 : 0x8b8477 }); }
     }
     for (let i = 0; i < count; i++) {
       const angle = i * 2.399963 + rand() * .32, radius = Math.sqrt((i + .4) / count) * node.radius * .74;
@@ -348,45 +365,90 @@ export function createTerrain(THREE, scene, seed = 'littleworld') {
       const key = `${subtype}:${Math.floor(node.x / 80)},${Math.floor(node.z / 80)}`;
       if (!resourceBatches.has(key)) resourceBatches.set(key, []);
       resourceBatches.get(key).push(entry);
-      if (subtype === 'forest') stumpPlacements.push({ ...p });
+      if (subtype === 'forest') stumpPlacements.push({ ...p, nodeId: node.id });
     }
   }
   const patchGeometry = geom(new THREE.CircleGeometry(1, 17)); patchGeometry.rotateX(-Math.PI / 2);
   const patchPositions = patchGeometry.getAttribute('position');
   for (let i = 1; i < patchPositions.count; i++) { const factor = 1 + Math.sin(i * 2.4) * .09; patchPositions.setX(i, patchPositions.getX(i) * factor); patchPositions.setZ(i, patchPositions.getZ(i) * factor); }
-  instances(patchGeometry, standard({ color: 0xffffff, transparent: true, opacity: .38, depthWrite: false, roughness: 1, polygonOffset: true, polygonOffsetFactor: -1 }), patchPlacements, false);
-  instances(stumpGeometry, vertexMat, stumpPlacements, false);
-  instances(boulder, standard({ color: 0xffffff, roughness: .97 }), rimPlacements, false);
+  const resourceSiteDetails = [];
+  function siteDetail(geometry, material, placements) {
+    const mesh = instances(geometry, material, placements, false);
+    if (!mesh) return;
+    mesh.name = 'Surveyable resource site detail';
+    mesh.userData.resourceSiteDetail = true;
+    resourceSiteDetails.push({ mesh, placements, original: mesh.instanceMatrix.array.slice(), colors: mesh.instanceColor?.array.slice() });
+  }
+  siteDetail(patchGeometry, standard({ color: 0xffffff, transparent: true, opacity: .38, depthWrite: false, roughness: 1, polygonOffset: true, polygonOffsetFactor: -1 }), patchPlacements);
+  siteDetail(stumpGeometry, vertexMat, stumpPlacements);
+  siteDetail(boulder, standard({ color: 0xffffff, roughness: .97 }), rimPlacements);
+  function refreshSiteDetails() {
+    for (const { mesh, placements, original, colors } of resourceSiteDetails) {
+      let count = 0;
+      for (let i = 0; i < placements.length; i++) {
+        if (!resourceRecords.get(placements[i].nodeId)?.visible) continue;
+        mesh.instanceMatrix.array.set(original.subarray(i * 16, i * 16 + 16), count * 16);
+        if (colors) mesh.instanceColor.array.set(colors.subarray(i * 3, i * 3 + 3), count * 3);
+        count++;
+      }
+      mesh.count = count;
+      mesh.instanceMatrix.clearUpdateRanges(); if (count) mesh.instanceMatrix.addUpdateRange(0, count * 16);
+      mesh.instanceMatrix.needsUpdate = true;
+      if (colors) { mesh.instanceColor.clearUpdateRanges(); if (count) mesh.instanceColor.addUpdateRange(0, count * 3); mesh.instanceColor.needsUpdate = true; }
+    }
+  }
   for (const entries of resourceBatches.values()) {
     const subtype = entries[0].record.subtype, [geometry, material] = templates[subtype];
     const mesh = instances(geometry, material, entries.map(e => e.p), subtype !== 'crop' && subtype !== 'spring');
-    mesh.name = `Harvestable ${subtype} patch`; mesh.userData.resourceNodeIds = entries.map(e => e.record.id);
+    mesh.name = `Harvestable ${subtype} patch`; resourceMeshEntries.set(mesh, entries); mesh.userData.resourceNodeIds = entries.map(e => e.record.id);
     mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage); pickableResources.push(mesh);
     entries.forEach((entry, slot) => { entry.mesh = mesh; entry.slot = slot; });
   }
-  let lastResourceStep = -1, resourceRevision = 0, depletedSites = 0;
+  let lastResourceStep = -1, lastViewerSignature = '', resourceRevision = 0, depletedSites = 0;
   function refreshResourceAmounts(state) {
-    const dirty = new Set(); depletedSites = 0;
-    for (const node of state.nodes || []) {
-      const record = resourceRecords.get(node.id); if (!record) continue;
+    const dirty = new Set(), current = new Map((state.nodes || []).map(node => [node.id, node])); depletedSites = 0;
+    const visibleIds = state.visibleNodeIds ? new Set(state.visibleNodeIds) : null;
+    let visibilityChanged = false;
+    for (const record of resourceRecords.values()) {
+      const node = current.get(record.id), visible = !!node && (!visibleIds || visibleIds.has(record.id));
+      if (record.visible !== visible) { record.visible = visible; visibilityChanged = true; record.lastQuantized = -1; }
+      if (!visible) {
+        if (record.lastQuantized !== -2) {
+          record.lastQuantized = -2; record.fraction = 0;
+          for (const piece of record.pieces) dirty.add(piece.mesh);
+        }
+        continue;
+      }
+      // Only the current viewer snapshot enters depletion and picking. Hidden
+      // sites are never updated from their real simulation amount.
       record.node = node;
-      const fraction = clamp(node.amount / Math.max(1, node.maxAmount || record.node.maxAmount));
+      const fraction = clamp(node.amount / Math.max(1, node.maxAmount || 1));
       if (fraction < .01) depletedSites++;
       const quantized = Math.round(fraction * record.count * 30);
       if (record.lastQuantized === quantized) continue;
       record.lastQuantized = quantized; record.fraction = fraction;
-      for (const piece of record.pieces) {
-        const remaining = clamp(fraction * record.count - piece.index);
-        const p = piece.p, spring = record.subtype === 'spring', forest = record.subtype === 'forest';
-        const size = spring ? Math.sqrt(fraction) : forest ? .55 + remaining * .45 : Math.cbrt(remaining);
-        dummy.position.set(p.x, remaining <= 0 && !spring ? -8 : p.y, p.z);
-        dummy.rotation.set(0, p.rotation, forest ? (1 - remaining) * Math.PI * .43 : 0);
-        dummy.scale.setScalar(p.scale * Math.max(.000001, size));
-        if (remaining <= 0 && !spring) dummy.scale.setScalar(.000001);
-        dummy.updateMatrix(); piece.mesh.setMatrixAt(piece.slot, dummy.matrix); dirty.add(piece.mesh);
-      }
+      for (const piece of record.pieces) dirty.add(piece.mesh);
     }
-    for (const mesh of dirty) mesh.instanceMatrix.needsUpdate = true;
+    if (visibilityChanged) refreshSiteDetails();
+    for (const mesh of dirty) {
+      let visibleCount = 0;
+      const ids = [];
+      for (const piece of resourceMeshEntries.get(mesh)) {
+        const { record, p } = piece, fraction = record.fraction, remaining = clamp(fraction * record.count - piece.index);
+        if (remaining <= 0) { piece.slot = -1; continue; }
+        const spring = record.subtype === 'spring', forest = record.subtype === 'forest';
+        const size = spring ? Math.sqrt(fraction) : forest ? .55 + remaining * .45 : Math.cbrt(remaining);
+        dummy.position.set(p.x, p.y, p.z);
+        dummy.rotation.set(0, p.rotation, forest ? (1 - remaining) * Math.PI * .43 : 0);
+        dummy.scale.setScalar(p.scale * size); dummy.updateMatrix();
+        piece.slot = visibleCount; mesh.setMatrixAt(visibleCount++, dummy.matrix); ids.push(record.id);
+      }
+      // Compact only genuinely depleted pieces. Each surviving site fragment
+      // retains its seeded transform and exact instance-to-node picking map.
+      mesh.count = visibleCount; mesh.userData.resourceNodeIds = ids;
+      mesh.instanceMatrix.clearUpdateRanges(); if (visibleCount) mesh.instanceMatrix.addUpdateRange(0, visibleCount * 16);
+      mesh.instanceMatrix.needsUpdate = true;
+    }
     if (dirty.size) resourceRevision++;
   }
   const workCapacity = 1200, workPositions = new Float32Array(workCapacity * 3), workColors = new Float32Array(workCapacity * 3);
@@ -398,7 +460,7 @@ export function createTerrain(THREE, scene, seed = 'littleworld') {
     let count = 0; activeWorksites = 0;
     for (const group of state.groups || []) {
       if (group.kind !== 'worker' || group.phase !== 'working') continue;
-      const record = resourceRecords.get(group.targetId); if (!record || record.node.amount <= 0) continue;
+      const record = resourceRecords.get(group.targetId); if (!record || !record.visible || record.node.amount <= 0) continue;
       if (Math.hypot(group.x - record.node.x, group.z - record.node.z) > record.node.radius + .75) continue;
       activeWorksites++;
       color.set(record.node.kind === 'energy' ? 0xbce6c5 : record.node.kind === 'food' ? 0xb7c280 : 0xc5b594);
@@ -482,12 +544,13 @@ export function createTerrain(THREE, scene, seed = 'littleworld') {
 
   return {
     update(time, state, alpha = 1) {
-      if (state?.settlements && (state.tick ?? 0) !== lastClearingTick) {
-        const signature = state.settlements.map(s => `${s.id}:${Math.round((s.radius || 8) * 2)}`).join('|');
+      const viewerSignature = state?.viewer ? `${state.viewer.mode}:${state.viewer.factionId}:${state.viewer.version}:${(state.visibleNodeIds || []).join(',')}` : 'omniscient';
+      if (state?.settlements && ((state.tick ?? 0) !== lastClearingTick || viewerSignature !== lastViewerSignature)) {
+        const signature = state.settlements.map(s => `${s.id}:${s.x}:${s.z}:${Math.round((s.radius || 8) * 2)}`).join('|');
         if (signature !== lastClearingSignature) { refreshClearings(state.settlements); lastClearingSignature = signature; }
         lastClearingTick = state.tick ?? 0;
       }
-      if (state && (state.step ?? state.tick) !== lastResourceStep) { refreshResourceAmounts(state); lastResourceStep = state.step ?? state.tick; }
+      if (state && ((state.step ?? state.tick) !== lastResourceStep || viewerSignature !== lastViewerSignature)) { refreshResourceAmounts(state); lastResourceStep = state.step ?? state.tick; lastViewerSignature = viewerSignature; }
       if (state) updateWorkDust(time, state, clamp(alpha));
       for (const uniform of animatedMaterials) uniform.value = time;
       for (const uniforms of waterUniforms) uniforms.uTime.value = time;
@@ -506,6 +569,7 @@ export function createTerrain(THREE, scene, seed = 'littleworld') {
     pickResource(raycaster) {
       let nearest = Infinity, result = null;
       for (const record of resourceRecords.values()) {
+        if (!record.visible) continue;
         pickSphere.center.set(record.node.x, record.height + .7, record.node.z); pickSphere.radius = record.node.radius;
         if (raycaster.ray.intersectSphere(pickSphere, pickPoint)) {
           const distance = pickPoint.distanceTo(raycaster.ray.origin);
@@ -515,7 +579,7 @@ export function createTerrain(THREE, scene, seed = 'littleworld') {
       return result;
     },
     get diagnostics() {
-      return { worldRadius: WORLD_RADIUS, resourceSites: resourceRecords.size, resourcePieces: Array.from(resourceRecords.values()).reduce((sum, r) => sum + r.count, 0), depletedSites, activeWorksites, resourceRevision, decorativeChunks: clearingGroups.length, resourceDrawCalls: pickableResources.length, clearingRevision: root.userData.settlementClearings?.revision || 0 };
+      return { worldRadius: WORLD_RADIUS, resourceSites: resourceRecords.size, visibleResourceSites: Array.from(resourceRecords.values()).filter(r => r.visible).length, visibleResourceSiteDetails: resourceSiteDetails.reduce((sum, group) => sum + group.mesh.count, 0), impassableRidges: obstacles.length, tacticalPasses: passes.length, resourcePieces: Array.from(resourceRecords.values()).reduce((sum, r) => sum + r.count, 0), visibleResourcePieces: pickableResources.reduce((sum, mesh) => sum + mesh.count, 0), visibleDecorativePieces: clearingGroups.reduce((sum, group) => sum + group.mesh.count, 0), depletedSites, activeWorksites, resourceRevision, decorativeChunks: clearingGroups.length, resourceBatches: pickableResources.length, resourceDrawCalls: pickableResources.filter(mesh => mesh.count > 0).length, clearingRevision: root.userData.settlementClearings?.revision || 0 };
     },
     dispose() {
       scene.remove(root);

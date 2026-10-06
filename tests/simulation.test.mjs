@@ -2,17 +2,20 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createSimulation, stepSimulation } from '../src/sim/core.js';
 import { SimulationClock, SIM_DT } from '../src/clock.js';
-import { generateWorld, terrainAt, WORLD_RADIUS } from '../src/world.js';
+import { generateWorld, terrainAt, WORLD_RADIUS, WORLD_RESOURCE_SITES } from '../src/world.js';
 import { initializeLedger, RESOURCES } from '../src/sim/economy.js';
+import { normalizeConfig } from '../src/config.js';
 import { auditState, population } from './balance.mjs';
 
 test('world seeds deterministically generate traversable starts and finite resources at V2 scale', () => {
   const a = generateWorld('qa-world'), b = generateWorld('qa-world'), c = generateWorld('qa-other');
   assert.deepEqual(a, b);
   assert.notDeepEqual(a.starts, c.starts);
-  assert.equal(WORLD_RADIUS, 150);
-  assert.equal(a.starts.length, 6);
-  assert.ok(a.nodes.length >= 300 && a.nodes.length <= 500);
+  assert.ok(WORLD_RADIUS >= 150, 'world retains V2 scale or larger');
+  assert.deepEqual(a.bounds, { minX: -WORLD_RADIUS, maxX: WORLD_RADIUS, minZ: -WORLD_RADIUS, maxZ: WORLD_RADIUS });
+  assert.equal(a.starts.length, 4);
+  assert.equal(a.nodes.length, WORLD_RESOURCE_SITES);
+  assert.ok(WORLD_RESOURCE_SITES >= 300, 'resource site budget retains V2 scale or larger');
   assert.equal(new Set(a.nodes.map(n => n.id)).size, a.nodes.length);
   for (const start of a.starts) {
     assert.ok(terrainAt(start.x, start.z, 'qa-world').traversable);
@@ -21,6 +24,21 @@ test('world seeds deterministically generate traversable starts and finite resou
   for (const node of a.nodes) {
     assert.ok(node.amount > 0 && node.amount <= node.maxAmount);
     if (['ore', 'salvage', 'crystal'].includes(node.subtype)) assert.equal(node.regeneration, 0);
+  }
+});
+
+test('civilization count defaults to four and preserves deterministic three-to-five choices plus legacy six', () => {
+  assert.deepEqual(normalizeConfig(), { civCount: 4 });
+  assert.equal(normalizeConfig({ factionCount: 5 }).civCount, 5);
+  assert.equal(normalizeConfig({ civCount: 0 }).civCount, 3);
+  assert.equal(normalizeConfig({ civCount: 99 }).civCount, 6);
+  for (const civCount of [3, 4, 5, 6]) {
+    const a = createSimulation('qa-civilizations', { civCount }), b = createSimulation('qa-civilizations', { civCount });
+    assert.equal(a.factions.length, civCount);
+    assert.equal(a.settlements.length, civCount);
+    assert.deepEqual(a, b);
+    assert.equal(new Set(a.factions.map(f => f.species)).size, 3, 'normal worlds must include all three species');
+    auditState(a);
   }
 });
 
@@ -78,8 +96,8 @@ test('continuous groups move on subcycle pulses and preserve previous positions'
 
 test('initial population consists of hundreds of actual individuals and all commitments fit it', () => {
   const state = createSimulation('first-light');
-  assert.equal(state.settlements.length, 6);
-  assert.ok(population(state) >= 480 && population(state) <= 720);
+  assert.equal(state.settlements.length, 4);
+  assert.ok(population(state) >= 384 && population(state) <= 448);
   for (const home of state.settlements) {
     assert.ok(home.buildings.length >= 8 && home.buildings.length <= 12);
     assert.ok(home.radius >= 7);

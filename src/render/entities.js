@@ -1,4 +1,5 @@
 import { heightAt } from '../world.js';
+import { settlementController } from '../sim/control.js';
 
 // All of the miniatures are original procedural geometry. Rendering reads the
 // simulation, but never consumes its random stream or writes back into it.
@@ -197,8 +198,10 @@ export function createEntities(THREE, scene) {
   // V2 renders the simulation's real building records. No decorative people,
   // fabricated houses, or invisible population multipliers live in this module.
   root.name = 'LittleWorld V2 buildings and infrastructure';
-  const KINDS=['housing','storage','workshop','farm','power','barracks','lab','hub'];
-  const DIMENSIONS={housing:[1.65,1.65,1.65],storage:[1.9,1.5,1.8],workshop:[2.05,1.9,1.9],farm:[2.65,.65,2.8],power:[2.3,1.6,2.4],barracks:[2.25,1.6,2],lab:[2.2,2.4,2.1],hub:[3.2,3.8,3.2]};
+  const MILITARY_KINDS=['barracks','range','fabricator','launcher','brooder','spitter'];
+  const DEFENSE_KINDS=['wall','gate','tower'];
+  const KINDS=['housing','storage','workshop','farm','power','lab','hub',...MILITARY_KINDS,...DEFENSE_KINDS];
+  const DIMENSIONS={housing:[1.65,1.65,1.65],storage:[1.9,1.5,1.8],workshop:[2.05,1.9,1.9],farm:[2.65,.65,2.8],power:[2.3,1.6,2.4],barracks:[2.6,2.6,2.6],lab:[2.2,2.4,2.1],hub:[3.2,3.8,3.2],range:[3.0,2.2,3.4],fabricator:[2.6,2.7,2.7],launcher:[2.6,3.0,2.4],brooder:[3.0,2.3,2.6],spitter:[2.8,3.0,2.5],wall:[7,2.3,1],gate:[9,3.3,1],tower:[3,4.9,3]};
   const pools=new Map();
   const buildingGround=new Map();
   let lastRevision='';
@@ -399,6 +402,141 @@ export function createEntities(THREE, scene) {
     batch.sphere('#ffffff',0,1.43,-.35,.17,.08,.12,'accent');
   }
 
+  function militaryBuilding(batch,species,kind,detailed) {
+    const ranged=['range','launcher','spitter'].includes(kind);
+    if(species==='human') {
+      humanBuilding(batch,'barracks',detailed);
+      if(ranged) {
+        // Open practice lane and circular targets distinguish the Field Range.
+        batch.cube('#82724f',0,.055,-1.25,2.8,.08,.92);
+        for(const x of [-.82,0,.82]) {
+          batch.rod('#6b5039',[x,.02,-1.54],[x,1.06,-1.54],.035);
+          batch.add(cylinder(10), '#c6b28c',[x,.82,-1.57],[.22,.055,.22],[Math.PI/2,0,0]);
+          batch.torus('#a36d4e',x,.82,-1.61,.14,[0,0,0]);
+          if(detailed)batch.sphere('#674e3c',x,.82,-1.65,.04,.04,.018);
+        }
+        batch.rod('#a88e5f',[-1.22,.3,.24],[-1.22,2.02,.24],.035);
+        batch.rod('#a88e5f',[1.22,.3,.24],[1.22,2.02,.24],.035);
+        batch.cube('#ddd1b0',0,1.96,.24,2.58,.08,.94);
+      } else {
+        // Shield racks and a high pennant mark the infantry hall.
+        for(const x of [-.8,.8]) {
+          batch.cube('#695b43',x,.57,-1.03,.12,1.02,.16);
+          batch.add(cylinder(6), '#b9b09b',[x,.7,-1.15],[.25,.07,.29],[Math.PI/2,0,0]);
+          batch.cube('#ffffff',x,.7,-1.20,.07,.4,.02,0,'accent');
+        }
+        pennant(batch,-1.17,0,.51,2.48);
+      }
+    } else if(species==='machine') {
+      batch.cube('#4a625e',0,.11,0,2.58,.22,2.2,0,'metal');
+      batch.cube('#77908a',0,.72,.24,2.12,1.12,1.63,0,'metal');
+      batch.cube('#253d3f',0,.65,-.62,1.47,.9,.07);
+      batch.cube('#c3ab72',0,1.34,.23,2.32,.16,1.8,0,'metal');
+      batch.cube('#ffffff',0,1.17,-.68,.73,.13,.032,0,'accent');
+      if(ranged) {
+        for(const x of [-.64,.64]) {
+          batch.cyl('#657e77',x,1.78,.08,.32,.82,1,'metal');
+          batch.torus('#80d8dc',x,2.08,.08,.34,[Math.PI/2,0,0],'glow');
+          batch.rod('#c0a972',[x,1.9,.08],[x,2.78,-.26],.066,'metal');
+          batch.sphere('#b8eee0',x,2.8,-.26,.11,.14,.11,'glow');
+        }
+        batch.torus('#d0ae72',0,2.0,.14,.59,[Math.PI/2,0,0],'metal');
+      } else {
+        for(const x of [-1.13,1.13])batch.cube('#819583',x,1.3,.32,.16,2.4,.19,0,'metal');
+        batch.cube('#c1a367',0,2.44,.32,2.52,.18,.21,0,'metal');
+        batch.rod('#617d76',[.25,2.34,.32],[.25,1.22,-.15],.046,'metal');
+        batch.cube('#899e90',.25,1.08,-.17,.48,.25,.37,0,'metal');
+        for(let i=0;i<(detailed?6:3);i++)batch.cube('#445d56',0,.16,-.75-i*.15,1.27,.12,.09,0,'metal');
+      }
+      if(detailed)for(const x of [-.82,.82])batch.rod('#ad966b',[x,.2,.96],[x,1.38,.96],.041,'metal');
+    } else {
+      batch.sphere('#726978',0,.15,0,1.39,.23,1.16);
+      batch.sphere('#a596a3',0,.87,.17,1.05,1.03,.9);
+      batch.sphere('#55606b',0,.45,-.72,.44,.54,.21);
+      batch.sphere('#97d4b8',0,.85,-.81,.23,.14,.055,'glow');
+      if(ranged) {
+        for(let i=0;i<(detailed?7:5);i++) {
+          const t=i/(detailed?7:5)*Math.PI*2,x=Math.sin(t)*.8,z=Math.cos(t)*.69;
+          batch.rod('#6e5c76',[x,.27,z],[x*.6,1.94,z*.6],.082);
+          batch.add(cylinder(6,0),'#cabbb0',[x*.6,2.31,z*.6],[.14,.88,.14],[.18*Math.cos(t),0,-.18*Math.sin(t)]);
+        }
+        batch.sphere('#a6e1b3',0,1.83,.07,.32,.27,.3,'glow');
+      } else {
+        for(let i=0;i<(detailed?6:4);i++) {
+          const t=i/(detailed?6:4)*Math.PI*2,x=Math.sin(t)*1.02,z=Math.cos(t)*.92;
+          batch.sphere('#b9ae9e',x,.39,z,.31,.43,.29);
+          batch.rod('#74667b',[x,.19,z],[x*.65,1.42,z*.65],.066);
+        }
+        batch.sphere('#c5dac0',0,1.88,.06,.39,.38,.35);
+      }
+      batch.sphere('#ffffff',0,1.61,-.2,.17,.095,.12,'accent');
+    }
+  }
+
+  function defensiveBuilding(batch,species,kind,detailed) {
+    const gate=kind==='gate',tower=kind==='tower',machine=species==='machine',hive=species==='hive';
+    if(tower) {
+      if(machine) {
+        batch.cyl('#576e68',0,.2,0,1.37,.4,1,'metal');
+        batch.cyl('#80998f',0,1.72,0,.55,2.87,.72,'metal');
+        for(const x of [-.78,.78])for(const z of [-.65,.65])batch.rod('#48625c',[x,.18,z],[x*.39,3.12,z*.39],.105,'metal');
+        batch.cyl('#b5a777',0,3.28,0,.95,.32,1,'metal');
+        batch.torus('#7edacb',0,3.57,0,.7,[Math.PI/2,0,0],'glow');
+        batch.sphere('#829d96',0,3.71,0,.71,.45,.69,'metal');
+        for(const x of [-.24,.24])batch.rod('#c4b085',[x,3.81,0],[x,4.26,-.71],.085,'metal');
+        batch.sphere('#c0f4d7',0,4.15,-.55,.13,.15,.12,'glow');
+      } else if(hive) {
+        batch.sphere('#726579',0,.26,0,1.43,.38,1.32);
+        batch.sphere('#a795a4',0,1.77,0,.64,1.82,.62);
+        batch.sphere('#b9b69b',0,3.15,0,1.02,.64,.87);
+        for(let i=0;i<(detailed?7:5);i++) {
+          const a=i/(detailed?7:5)*Math.PI*2,x=Math.sin(a),z=Math.cos(a);
+          batch.rod('#6e5d79',[x*1.13,.14,z],[x*.46,2.87,z*.42],.105);
+          batch.add(cylinder(6,0),'#cbbbba',[x*.68,3.95,z*.61],[.15,1.2,.15],[.3*z,0,-.3*x]);
+        }
+        batch.sphere('#9de3b6',0,3.79,0,.42,.42,.38,'glow');
+      } else {
+        batch.cyl('#8a8472',0,.16,0,1.26,.32);
+        for(const x of [-.77,.77])for(const z of [-.7,.7])batch.cube('#846445',x,1.78,z,.19,3.28,.19);
+        for(const z of [-.71,.71]){batch.rod('#98774f',[-.77,.44,z],[.77,2.66,z],.07);batch.rod('#98774f',[.77,.44,z],[-.77,2.66,z],.07);}
+        batch.cube('#a98e64',0,3.0,0,2.12,.19,1.94);
+        for(const z of [-.91,.91])batch.cube('#775d3f',0,3.4,z,2.1,.52,.13);
+        for(const x of [-.98,.98])batch.cube('#775d3f',x,3.4,0,.13,.52,1.85);
+        batch.add(roof(),'#8d7754',[0,4.35,0],[2.5,1.2,2.29]);
+        for(const x of [-.88,.88])for(const z of [-.81,.81])batch.rod('#876a44',[x,3.16,z],[x,4.55,z],.048);
+        pennant(batch,1.16,0,.6,4.68);
+        if(detailed)for(let i=0;i<9;i++)batch.rod('#b29b72',[-.29,i*.31,-.91],[.29,i*.31,-.91],.026);
+      }
+      return;
+    }
+    const length=gate?9:7;
+    const gap=gate?5:0;
+    if(machine) {
+      for(const x of gate?[-3.65,3.65]:[-3.05,0,3.05]) {
+        batch.cube('#4e6763',x,.13,0,.74,.26,1.18,0,'metal');
+        batch.cube('#82978b',x,1.16,0,.47,2.1,.68,0,'metal');
+        batch.cube('#96d7c6',x,1.77,-.36,.17,.51,.025,0,'glow');
+      }
+      if(gate)batch.cube('#b9ac7c',0,2.37,0,7.72,.25,.72,0,'metal');
+      else {batch.cube('#596f68',0,.94,0,6.9,1.58,.43,0,'metal');for(const x of [-2.1,2.1])batch.cube('#ad9b6c',x,1.27,-.25,.06,.92,.04,0,'metal');batch.cube('#ffffff',0,1.34,-.25,.67,.2,.026,0,'accent');}
+    } else if(hive) {
+      for(let i=0;i<(gate?8:12);i++) {
+        const x=-length/2+.32+i*(length-.64)/((gate?8:12)-1);if(gate&&Math.abs(x)<gap/2)continue;
+        const h=1.4+.23*Math.sin(i*1.2);batch.sphere('#887789',x,h*.43,0,.54,h*.55,.49);
+        batch.add(cylinder(6,0),'#bbabb3',[x,h+.18,0],[.18,.72,.19],[0,0,.12*Math.sin(i)]);
+      }
+      if(gate){batch.rod('#998299',[-3.48,1.36,0],[-2.6,2.81,0],.18);batch.rod('#998299',[-2.6,2.81,0],[2.6,2.81,0],.19);batch.rod('#998299',[2.6,2.81,0],[3.48,1.36,0],.18);batch.sphere('#b9dcc1',0,2.83,0,.39,.13,.27,'glow');}
+      else batch.rod('#b4a4ad',[-3.35,.76,-.28],[3.35,.76,-.28],.15);
+    } else {
+      for(let i=0;i<(gate?14:12);i++) {
+        const x=-length/2+.28+i*(length-.56)/((gate?14:12)-1);if(gate&&Math.abs(x)<gap/2)continue;
+        batch.cyl('#a28358',x,.89,0,.18,1.72,1,'solid');batch.add(cylinder(6,0),'#b19a71',[x,1.9,0],[.18,.38,.18]);
+      }
+      if(gate){for(const x of [-3.36,3.36])batch.cube('#77593d',x,1.32,0,.34,2.64,.7);batch.cube('#8f704c',0,2.72,0,7.2,.26,.76);pennant(batch,-3.38,0,.35,3.25);}
+      else for(const y of [.52,1.24])batch.cube('#74593d',0,y,-.21,6.85,.15,.15);
+    }
+  }
+
   function ruinTemplate(batch,species,kind) {
     const d=DIMENSIONS[kind],w=d[0]*.8,z=d[2]*.8,machine=species==='machine',hive=species==='hive';
     const material=machine?'metal':'solid';
@@ -440,6 +578,8 @@ export function createEntities(THREE, scene) {
     else if(mode==='scaffold')scaffoldTemplate(batch,species,kind);
     else if(mode==='shelter')shelterTemplate(batch,species);
     else if(mode==='road')batch.cube('#ffffff',0,0,0,1,.035,1);
+    else if(DEFENSE_KINDS.includes(kind))defensiveBuilding(batch,species,kind,lod==='near');
+    else if(MILITARY_KINDS.includes(kind))militaryBuilding(batch,species,kind,lod==='near');
     else if(species==='machine')machineBuilding(batch,kind,lod==='near');
     else if(species==='hive')hiveBuilding(batch,kind,lod==='near');
     else humanBuilding(batch,kind,lod==='near');
@@ -525,7 +665,7 @@ export function createEntities(THREE, scene) {
     const lodKey=camera?`${Math.round(camera.position.x/12)}:${Math.round(camera.position.y/12)}:${Math.round(camera.position.z/12)}`:'default';
     // Building work changes on simulation cycles. The small structural digest
     // also handles reset, refounding and direct inspection fixtures immediately.
-    const revision=`${state.seed}:${state.tick}:${lodKey}|`+state.settlements.map(s=>`${s.id}:${conditionOf(s)}:${s.radius}:${s.factionId}:`+(s.buildings||[]).map(b=>`${b.id}:${b.kind}:${b.x}:${b.z}:${b.rotation}:${b.progress}`).join(',')).join('|');
+    const revision=`${state.seed}:${state.tick}:${lodKey}|`+state.settlements.map(s=>`${s.id}:${conditionOf(s)}:${s.radius}:${s.factionId}:${s.occupiedBy}:${s.controllerId||settlementController(state,s)}:`+(s.buildings||[]).map(b=>`${b.id}:${b.kind}:${b.x}:${b.z}:${b.rotation}:${b.progress}:${b.destroyed||b.hp<=0}:${b.length}:${b.width}`).join(',')).join('|');
     if(revision===lastRevision)return;lastRevision=revision;
     for(const pool of pools.values())pool.count=0;
     for(const key of ['buildingRecords','completedBuildings','constructionSites','renderedBuildings','nearBuildings','farBuildings','ruinedBuildings','temporaryShelters','roadSegments','instances','drawCallsEstimate','camps','ruins'])diagnostics[key]=0;
@@ -533,7 +673,7 @@ export function createEntities(THREE, scene) {
     const factions=new Map(state.factions.map(f=>[f.id,f]));const live=new Set();pickables=[];
     for(const s of state.settlements){
       const faction=factions.get(s.factionId)||factions.get(s.lastFactionId);if(!faction)continue;
-      const species=['human','machine','hive'].includes(faction.species)?faction.species:'human',condition=conditionOf(s),color=new THREE.Color(faction.color||'#b9c09b');
+      const species=['human','machine','hive'].includes(faction.species)?faction.species:'human',condition=conditionOf(s),color=new THREE.Color((factions.get(s.controllerId||settlementController(state,s))?.color)||faction.color||'#b9c09b');
       const radius=Math.max(3,s.radius||8),base=ground(s.x,s.z,`settlement:${s.id}`,state.seed),distance=camera?camera.position.distanceTo(new THREE.Vector3(s.x,base,s.z)):100;
       const lod=distance>175?'far':'near';
       diagnostics.minRadius=Math.min(diagnostics.minRadius,radius);diagnostics.maxRadius=Math.max(diagnostics.maxRadius,radius);if(condition==='camp')diagnostics.camps++;if(condition==='ruin')diagnostics.ruins++;
@@ -544,17 +684,18 @@ export function createEntities(THREE, scene) {
         const kind=KINDS.includes(building.kind)?building.kind:'housing',progress=clamp(Number.isFinite(building.progress)?building.progress:1,0,1),d=DIMENSIONS[kind];
         const y=ground(building.x,building.z,`building:${s.id}:${building.id}`,state.seed)+.025,rotation=building.rotation||0;
         diagnostics.buildingRecords++;diagnostics.byKind[kind]++;diagnostics.bySpecies[species]++;diagnostics.renderedBuildings++;diagnostics[lod==='near'?'nearBuildings':'farBuildings']++;
-        if(condition!=='active'){
-          instance(getTemplate(species,kind,'far','ruin'),building.x,y,building.z,rotation,1,1,1,color);diagnostics.ruinedBuildings++;
+        const broken=building.destroyed||(building.hp!=null&&building.hp<=0),sx=DEFENSE_KINDS.includes(kind)?(building.length||d[0])/d[0]:1,sz=DEFENSE_KINDS.includes(kind)?(building.width||d[2])/d[2]:1;
+        if(condition!=='active'||broken){
+          instance(getTemplate(species,kind,'far','ruin'),building.x,y,building.z,rotation,sx,1,sz,color);diagnostics.ruinedBuildings++;
         }else{
           const pool=getTemplate(species,kind,lod);
-          instance(pool,building.x,y,building.z,rotation,1,1,1,color,progress>=1?100:Math.max(.09,d[1]*progress));
+          instance(pool,building.x,y,building.z,rotation,sx,1,sz,color,progress>=1?100:Math.max(.09,d[1]*progress));
           if(progress<1){instance(getTemplate(species,kind,'near','scaffold'),building.x,y,building.z,rotation,1,.35+progress*.65,1,color);diagnostics.constructionSites++;}
           else diagnostics.completedBuildings++;
         }
         let proxy=view.proxies.get(building.id);if(!proxy){proxy=new THREE.Mesh(pickGeometry,materials.solid);view.proxies.set(building.id,proxy);}
-        const h=condition==='active'?Math.max(.35,d[1]*(progress<1?progress:1)):1;
-        proxy.position.set(building.x,y+h*.5,building.z);proxy.scale.set(Math.max(d[0],d[2])*.53,h,Math.max(d[0],d[2])*.53);proxy.updateMatrixWorld(true);proxy.userData={settlementId:s.id,buildingId:building.id};pickables.push(proxy);liveBuildings.add(building.id);
+        const h=condition==='active'&&!broken?Math.max(.35,d[1]*(progress<1?progress:1)):1;
+        proxy.position.set(building.x,y+h*.5,building.z);proxy.scale.set(Math.max(d[0]*sx,d[2]*sz)*.53,h,Math.max(d[0]*sx,d[2]*sz)*.53);proxy.updateMatrixWorld(true);proxy.userData={settlementId:s.id,buildingId:building.id};pickables.push(proxy);liveBuildings.add(building.id);
       }
       for(const id of view.proxies.keys())if(!liveBuildings.has(id))view.proxies.delete(id);
       if(condition==='active')for(const road of roadNetwork(s,records,state,view)){

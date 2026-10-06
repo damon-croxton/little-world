@@ -9,6 +9,74 @@ concurrency:
   group: pages
   cancel-in-progress: true
 jobs:
+  simulation-qa:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - name: Twenty seeded domination and conservation audits
+        run: DOMINATION_SUMMARY_PATH=domination-summary.json node tests/domination.mjs | tee domination-results.jsonl
+      - name: Two seeded post-victory conservation and workforce audits
+        run: BALANCE_CYCLES=3000 node tests/balance.mjs first-light domination-06 | tee balance-results.jsonl
+      - name: Preserve seeded simulation evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: littleworld-simulation-evidence
+          path: |
+            domination-summary.json
+            domination-results.jsonl
+            balance-results.jsonl
+          retention-days: 14
+  browser-qa:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CI: 'true'
+      BASE_URL: http://127.0.0.1:4174/
+      QA_TIER: ci
+      QA_QUALITY: low
+      QA_SOFTWARE_RENDERING: '1'
+      QA_VIDEO: '1'
+      QA_OUTPUT_DIR: screenshots
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Start the application
+        run: |
+          npm start > server.log 2>&1 &
+          for attempt in {1..30}; do
+            if curl --fail --silent http://127.0.0.1:4174/ > /dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat server.log
+          exit 1
+      - name: Observer controls and interruption regressions
+        run: node tests/controls-v2.mjs
+      - name: Rendered growth, motion, harvesting and cloud performance
+        if: ${{ !cancelled() }}
+        run: node tests/visual-v2.mjs
+      - name: Preserve browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: littleworld-browser-evidence
+          path: |
+            screenshots/
+            videos/
+            server.log
+          retention-days: 14
+          if-no-files-found: warn
   build:
     runs-on: ubuntu-latest
     steps:
@@ -20,13 +88,14 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npm run build
+      - run: node tools/verify-build.mjs
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v4
         with:
           path: dist
   deploy:
     runs-on: ubuntu-latest
-    needs: build
+    needs: [build, browser-qa, simulation-qa]
     permissions:
       pages: write
       id-token: write

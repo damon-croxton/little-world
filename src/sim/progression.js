@@ -1,5 +1,8 @@
 import { random, clamp, distance, emit } from '../shared.js';
 import { terrainAt } from '../world.js';
+import { SURVIVAL_NEEDS } from './economy.js';
+import { knownReports } from './knowledge.js';
+import { settlementController } from './control.js';
 
 // Research is purchased in small, visible installments. Field requirements never
 // consult enemy state: only returned reports and this faction's own experience.
@@ -110,7 +113,7 @@ export function createFactions(state, count = 6) {
 }
 
 function homesOf(state, faction) {
-  return state.settlements.filter(s => s.factionId === faction.id && s.population > 0 && s.health > 0 && s.status !== 'camp' && s.status !== 'ruin' && !s.defeat);
+  return state.settlements.filter(s => s.factionId === faction.id && settlementController(state, s) === faction.id && s.population > 0 && s.health > 0 && s.status !== 'camp' && s.status !== 'ruin' && !s.defeat);
 }
 
 function experienceOf(faction) {
@@ -119,7 +122,7 @@ function experienceOf(faction) {
 }
 
 function freshReports(state, faction, ownerId = null) {
-  return Object.values(faction.knowledge).filter(k => k && Number.isFinite(k.reportedTick) && k.reportedTick <= state.tick && k.reportedTick >= 0 && k.confidence > .15 && (!ownerId || k.ownerId === ownerId));
+  return knownReports(state, faction, { minConfidence: .15 }).filter(k => k.reportedTick >= 0 && (!ownerId || k.ownerId === ownerId));
 }
 
 function reserveFor(settlement, faction, kind) {
@@ -231,6 +234,9 @@ function stepResearch(state, faction, homes) {
     return;
   }
   faction.researchHomeId = home.id;
+  home.availableWorkers = Math.max(0, (home.availableWorkers || 0) - faction.researchWorkers);
+  home.assigned ||= {};
+  home.assigned.researchers = faction.researchWorkers;
   faction.tech.status = `${faction.researchWorkers} specialists at ${home.name}; ${throughput > 1 ? `${throughput.toFixed(1)}x parallel funded trials` : 'funded trials'} every eight cycles`;
   const phase = Number(faction.id.slice(1)) || 0;
   if ((state.tick + phase) % 8 !== 0) return;
@@ -263,44 +269,62 @@ function establishContacts(state, faction) {
   for (const report of contacts) {
     const other = state.factions.find(f => f.id === report.ownerId);
     if (!other || (faction.relations[other.id]?.status !== undefined && faction.relations[other.id].status !== 'unknown')) continue;
-    const trust = clamp(35 + faction.traits.cooperation * 22 + other.traits.cooperation * 12 - faction.traits.aggression * 12 + (other.species === faction.species ? 6 : 0), 20, 75);
+    const trust = clamp(41 + faction.traits.cooperation * 22 - faction.traits.aggression * 12 + (other.species === faction.species ? 6 : 0), 20, 75);
     faction.relations[other.id] = { trust: +trust.toFixed(1), status: 'neutral', lastTrade: -100, contactedTick: state.tick, successfulTrades: 0 };
+    state.stats.contacts = (state.stats.contacts || 0) + 1;
+    faction.contactCount = (faction.contactCount || 0) + 1;
     emit(state, 'contact', `${faction.name} opened a contact ledger for ${other.name} after a report reached home.`, faction.id, { otherFactionId: other.id, observedTick: report.observedTick });
   }
   const known = Object.entries(faction.relations).filter(([, r]) => r.status !== 'unknown');
-  if (known.length) faction.diplomacy = `${known.length} known societ${known.length === 1 ? 'y' : 'ies'}; ${known.filter(([, r]) => r.status === 'allied').length} alliances`;
+  if (known.length) faction.diplomacy = `${known.length} known societ${known.length === 1 ? 'y' : 'ies'}; ${known.filter(([, r]) => r.status === 'trade').length} temporary trade truces`;
 }
 
 function updateAgreements(state) {
   for (let i = 0; i < state.factions.length; i++) {
-    const a = state.factions[i];
+    const a = state.factions[i]; if (a.defeatedBy) continue;
     for (let j = i + 1; j < state.factions.length; j++) {
       const b = state.factions[j], ab = a.relations[b.id], ba = b.relations[a.id];
-      if (!ab || !ba || ab.status === 'hostile' || ba.status === 'hostile') continue;
+      if (b.defeatedBy || !ab || !ba || ab.status === 'hostile' || ba.status === 'hostile') continue;
       const deliveries = Math.min(ab.successfulTrades || 0, ba.successfulTrades || 0);
       const trust = Math.min(ab.trust, ba.trust);
-      const status = deliveries >= 6 && trust >= 80 && (a.traits.cooperation + b.traits.cooperation) / 2 >= .60 ? 'allied'
-        : deliveries >= 2 && trust >= 57 ? 'trade' : 'neutral';
-      if (status === 'neutral' || ab.status === status && ba.status === status) continue;
-      ab.status = status; ba.status = status;
-      emit(state, 'diplomacy', status === 'allied'
-        ? `${a.name} and ${b.name} formed an alliance after ${deliveries} reliable deliveries.`
-        : `${a.name} and ${b.name} agreed to protect their exchange route.`, a.id, { otherFactionId: b.id, agreement: status });
+      // Commerce can buy a short ceasefire, never permanent military immunity.
+      // Both sides retain their conquest ambitions and need new deliveries plus
+      // a cooling-off interval before negotiating another protected exchange.
+      const protectedRoute = ['trade', 'allied'].includes(ab.status) || ['trade', 'allied'].includes(ba.status);
+      if (protectedRoute) {
+        const expiry = Math.min(ab.truceUntil ?? state.tick + 72, ba.truceUntil ?? state.tick + 72);
+        if (expiry > state.tick) { ab.status = ba.status = 'trade'; ab.truceUntil = ba.truceUntil = expiry; continue; }
+        ab.status = ba.status = 'neutral'; ab.lastTruceEnded = ba.lastTruceEnded = state.tick;
+        ab.pactDeliveries = ba.pactDeliveries = deliveries;
+        emit(state, 'diplomacy', `${a.name} and ${b.name}'s temporary exchange truce expired; both now reassess their frontier.`, a.id, { otherFactionId: b.id, agreement: 'neutral', expired: true });
+        continue;
+      }
+      const sinceLast = state.tick - Math.max(ab.lastTruceEnded ?? -1000, ba.lastTruceEnded ?? -1000);
+      const newDeliveries = deliveries - Math.max(ab.pactDeliveries || 0, ba.pactDeliveries || 0);
+      if (newDeliveries < 2 || trust < 57 || sinceLast < 120) continue;
+      ab.status = ba.status = 'trade'; ab.truceUntil = ba.truceUntil = state.tick + 72;
+      ab.pactDeliveries = ba.pactDeliveries = deliveries;
+      emit(state, 'diplomacy', `${a.name} and ${b.name} agreed to protect their exchange route for 72 cycles.`, a.id, { otherFactionId: b.id, agreement: 'trade', truceUntil: state.tick + 72 });
     }
   }
 }
 
+function travelCycles(faction, routeLength) {
+  const speed = (faction.species === 'machine' ? 2.7 : 2.9) * (faction.modifiers.movement || 1);
+  return Math.ceil(routeLength * 2 / (speed * .72) + 20);
+}
+
 function travelRations(faction, crewSize, routeLength) {
-  const journey = 1 + Math.min(1.5, routeLength / 120);
-  const daily = faction.species === 'machine' ? { energy: 1.5, water: .45, materials: .12 } : { food: 1.2, water: .8 };
-  return Object.fromEntries(Object.entries(daily).map(([kind, amount]) => [kind, +(amount * crewSize * journey).toFixed(4)]));
+  const cycles = travelCycles(faction, routeLength), daily = SURVIVAL_NEEDS[faction.species];
+  const efficiency = { water: faction.modifiers.waterEfficiency || 1, energy: faction.modifiers.energyEfficiency || 1, materials: faction.modifiers.materialEfficiency || 1 };
+  return Object.fromEntries(Object.entries(daily).filter(([, amount]) => amount > 0).map(([kind, amount]) => [kind, +(amount * crewSize * cycles / (efficiency[kind] || 1)).toFixed(4)]));
 }
 
 function trader(state, faction, origin, destination, cargo, partner, offer, crewSize) {
   return {
     id: `g${state.nextId++}`, factionId: faction.id, originId: origin.id, kind: 'trader',
     x: origin.x, z: origin.z, prevX: origin.x, prevZ: origin.z, targetX: destination.x, targetZ: destination.z, targetId: destination.id,
-    phase: 'outbound', size: crewSize, initialSize: crewSize, supply: 100, morale: 85, speed: faction.species === 'machine' ? 2.7 : 2.9, v2Speed: true,
+    phase: 'outbound', size: crewSize, initialSize: crewSize, provisionCycles: travelCycles(faction, distance(origin, destination)), supply: 100, morale: 85, speed: faction.species === 'machine' ? 2.7 : 2.9, v2Speed: true,
     capacity: crewSize * 24 * (faction.modifiers.carryCapacity || 1),
     carrying: { food: 0, water: 0, energy: 0, materials: 0, ...cargo }, observations: [], createdTick: state.tick, createdTime: state.time ?? state.tick,
     reason: `Deliver ${Object.entries(cargo).map(([kind, n]) => `${n} ${kind}`).join(', ')} under a negotiated exchange`,
@@ -325,6 +349,7 @@ function resolveOffers(state) {
     for (const [kind, amount] of Object.entries(destinationRations)) destinationCost[kind] = (destinationCost[kind] || 0) + amount;
     let decline = '';
     if (!origin || !destination) decline = 'the settlement route changed';
+    else if (a.defeatedBy || b.defeatedBy || settlementController(state, origin) !== a.id || settlementController(state, destination) !== b.id) decline = 'conquest ended the independent exchange agreement';
     else if (origin.status === 'camp' || origin.status === 'ruin' || origin.defeat || destination.status === 'camp' || destination.status === 'ruin' || destination.defeat) decline = 'permanent shelter must be rebuilt before sending an exchange crew';
     else if (a.relations[b.id]?.status === 'hostile' || b.relations[a.id]?.status === 'hostile') decline = 'hostilities closed the route';
     else if (!canSpend(destination, b, destinationCost)) decline = `${b.name} could not spare ${offer.importKind} and caravan rations`;
@@ -347,7 +372,10 @@ function resolveOffers(state) {
       home.availableWorkers = Math.max(0, (home.availableWorkers || 0) - crewSize);
       if (home.assigned) { home.assigned.traders = (home.assigned.traders || 0) + crewSize; home.assigned.civilianAway = (home.assigned.civilianAway || 0) + crewSize; }
     }
+    a.relations[b.id] ??= { trust: 40, status: 'neutral', lastTrade: -100, successfulTrades: 0 };
+    b.relations[a.id] ??= { trust: 40, status: 'neutral', lastTrade: -100, successfulTrades: 0 };
     a.relations[b.id].lastTrade = state.tick; b.relations[a.id].lastTrade = state.tick;
+    b.lastProposal = state.tick;
     emit(state, 'trade', `${a.name} and ${b.name} each sent ${crewSize} carriers: ${offer.amount} ${offer.exportKind} for ${offer.amount} ${offer.importKind}.`, a.id, { otherFactionId: b.id, offerId: offer.id, crewSize, amount: offer.amount });
   }
 }
@@ -359,10 +387,12 @@ function proposeExchange(state, faction, homes) {
   const contacts = freshReports(state, faction).filter(k => k.kind === 'settlement' && k.ownerId && k.ownerId !== faction.id && k.status !== 'camp' && k.status !== 'ruin' && state.tick - k.observedTick < 320);
   const eligible = contacts.filter(k => {
     const other = state.factions.find(f => f.id === k.ownerId);
-    const relation = faction.relations[k.ownerId], reciprocal = other?.relations[faction.id];
-    return relation && reciprocal && relation.status !== 'hostile' && reciprocal.status !== 'hostile'
-      && Math.min(relation.trust, reciprocal.trust) >= 34 && state.tick - Math.max(relation.lastTrade, reciprocal.lastTrade) >= 80
-      && !state.tradeOffers.some(o => [o.factionId, o.partnerId].includes(faction.id) && [o.factionId, o.partnerId].includes(other.id));
+    const relation = faction.relations[k.ownerId];
+    // The proposer knows its own contact history. The recipient's private
+    // disposition and spare stock are checked only when its delayed reply acts.
+    return other && relation && relation.status !== 'hostile'
+      && relation.trust >= 34 && state.tick - relation.lastTrade >= 80
+      && !state.tradeOffers.some(o => o.factionId === faction.id && o.partnerId === other.id);
   });
   if (!eligible.length) return;
   const origin = availableHomes.slice().sort((a, b) => (a.lastTradeProposal ?? -100) - (b.lastTradeProposal ?? -100) || b.population - a.population || a.id.localeCompare(b.id))[0];
@@ -387,14 +417,20 @@ function proposeExchange(state, faction, homes) {
   debit(state, origin, { [exportKind]: amount });
   state.tradeOffers.push(offer);
   faction.lastProposal = state.tick;
-  partner.lastProposal = state.tick;
   origin.lastTradeProposal = state.tick;
-  emit(state, 'trade', `${faction.name} reserved ${amount} ${exportKind} and sent a barter proposal to ${partner.name}; a reply needs about ${delay} cycles.`, faction.id, { otherFactionId: partner.id, offerId: offer.id });
+  emit(state, 'trade', `${faction.name} reserved ${amount} ${exportKind} and sent a barter proposal to ${partner.name}; a reply needs about ${delay} cycles.`, faction.id, { otherFactionId: partner.id, offerId: offer.id, pending: true, dueTick: offer.dueTick });
 }
 
 export function stepProgression(state) {
   state.tradeOffers ||= [];
+  // Reassign last cycle's research crews before this cycle's grants and trade
+  // commitments. Every paid trial and caravan reserves real local individuals.
+  for (const home of state.settlements) {
+    home.availableWorkers = (home.availableWorkers || 0) + (home.assigned?.researchers || 0);
+    if (home.assigned) home.assigned.researchers = 0;
+  }
   for (const faction of state.factions) {
+    if (faction.defeatedBy) { faction.researchWorkers = 0; faction.researchHomeId = null; faction.tech.status = 'Independent research ended after capitulation'; continue; }
     faction.modifiers ||= { ...BASE_MODIFIERS };
     faction.tech.invested ||= { food: 0, water: 0, energy: 0, materials: 0 };
     faction.tech.breakthroughs ||= [];
@@ -405,5 +441,5 @@ export function stepProgression(state) {
   }
   resolveOffers(state);
   updateAgreements(state);
-  if (state.tick % 8 === 0) for (const faction of state.factions) proposeExchange(state, faction, homesOf(state, faction));
+  if (state.tick % 8 === 0) for (const faction of state.factions) if (!faction.defeatedBy) proposeExchange(state, faction, homesOf(state, faction));
 }
