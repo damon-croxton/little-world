@@ -1,3 +1,94 @@
+# WIP cloud handoff — 2026-10-06
+
+**Frozen at the user's immediate request to move all ongoing development to the cloud. This is a work-in-progress checkpoint, not a completed or fully verified release. Do not resume development on the Windows PC.**
+
+Repository: https://github.com/damon-croxton/little-world . Resolve the exact checkpoint SHA with git rev-parse HEAD or the handover receipt. The preceding verified public revision was 1ce023fe0214ccb97e6935d64e7684084b33dc55. The normal Pages workflow may deploy this checkpoint only if all existing gates pass. Its CI and live deployment were not complete when this handoff was written.
+
+Local project: C:\Users\Damon\Documents\Codex\2026-10-06\task-2\LittleWorld-v2. Deep Desert, Matraville and separate LittleWorld v1 were not modified. All runtime artwork is procedural source geometry; no external art, credentials or desktop-only asset paths are needed. package-lock.json specifies dependencies; do not copy node_modules.
+
+## Materialize and run in the cloud
+
+    git clone https://github.com/damon-croxton/little-world.git
+    cd little-world
+    git checkout <exact checkpoint SHA from handover>
+    npm ci
+    npm start
+
+Node24 was used. Open/forward http://127.0.0.1:4174/ with a WebGL2-capable browser. Start-LittleWorld.cmd is the Windows convenience launcher. All implementation and tests are JavaScript.
+
+Controls: drag/orbit, right-drag/pan, scroll/zoom; click/select; Space/pause; 1–5/speeds; F/follow; C/cinematic; H/interface; Escape/overview. Touch uses one-finger pan and two-finger zoom/orbit. Default: four civilisations at 2x. Settings change seed/start count. No save/load or direct faction orders.
+
+## Current changes
+
+- One animated model per resource crew with its real workforce badge; military/home inhabitants remain individuals. Weighted people and actual model counts are separate. Selected badges take priority; distant/overlapping badges are culled.
+- Connected defensive screens, real gate openings, preserved friendly/resource routes, paid construction and shared navigation/render geometry.
+- Local observable strength decisions; defenders interrupt raids; useful worker/building raids; stable severe-disadvantage retreat; breach versus detour; delayed shots respect late cover.
+- Individually separated melee contact and ranged positions, shared body avoidance and gate following. Squad routing remains authoritative; local congestion can queue soldiers.
+- Fewer decorative obstacles with all deposits and distinct biomes retained.
+- Fog/report privacy corrections including hidden-wall invariance for mobilisation estimates. Physical movement still collides with actual walls.
+- Destroyed storage clamps excess stocks once and records physical ledger losses.
+- Tactical reasons/support estimates, crowd diagnostics, and expanded Node/browser tests.
+
+See AI-READABILITY-CONTRACT.md for current interfaces. evidence/historical preserves superseded handoff/architecture; their old one-model-per-worker and file-ownership rules are historical. Eight Astra/xhigh specialists ran in stages, at most six workers plus lead concurrently.
+
+## Passed checks and exact limits
+
+- Integrated Node suite: 213/213 passed BEFORE final badge LOD, hidden-wall and inspector-copy refinements. Fresh full-suite verification of this exact checkpoint remains required. Later targeted suites passed: civilian/rendering17, strategy/tactical/trade29, UI/privacy17, UI/browser-harness/civilian31, independent accounting/knowledge4. Counts overlap; do not sum them.
+- Build/module verification passed with39 modules before final inspector copy. Rebuild exact commit.
+- Installed Chrome153.0.8010.53: 60/60 controls, zero runtime errors. Includes latest desktop and portrait/landscape mobile emulation, crew picking/count badges and weighted accounting. Not physical-phone testing.
+- Chrome tactical module scenarios: 20/20 twice, zero page errors, identical paired evidence. Covers retreat, raid interruption, hidden information, cargo/workforce, breach/detour, late cover, spacing and gate passage. Controlled fixtures, not rendered showcase videos. Subsequent portable launch/hosted-path wrapper adjustment still needs CI.
+- Natural220-cycle full-state replay matched batched/chunked/irregular rendering through four renderers with828 attacks. SHA256: 5bde81f9e2627f954b997ce457eaace9d091493d7bf8516b27c2f0bdc4235023.
+- Only4 of20 natural2000-cycle runs completed: all conservation checks passed. Winners: first-light machine1599, tidal-garden machine627, iron-valley human988, amber-dawn machine630. Sixteen runs and two3000-cycle extensions remain. Partial sample cannot establish final balance/winner diversity.
+- Long audit stopped during desktop transport recovery; no audit process remained at freeze. Whole-source hash changed because the inspector label copy changed during the run. Simulation files match the captured manifest; it was captured after seed4, not before, so preserve that provenance limit.
+
+## Evidence
+
+Original small reports are committed in evidence/cloud-handoff-20261006. The planned prerelease tag wip-cloud-handoff-20261006 carries LittleWorld-cloud-handoff-evidence-20261006.zip, SHA256 and per-file manifest; use the final upload receipt to confirm availability. The archive contains this project's screenshots, normal-speed WebM videos, reports and rollback archives, including older-stage evidence. Extract at project root to restore screenshots/, videos/ and checkpoints/.
+
+BEFORE: exact public1ce023f, hardware Chrome/RTX3080Ti, high1600x1000, workers100, battle155–167, overview600–612; three12-second actual1x recordings; zero page errors.
+
+Initial AFTER: natural workers100–111, battle143–155, overview600–612; same hardware/configuration; zero page errors. About50 headless RAF frames/sec, p95worker23.4/battle24.7/overview23.2ms. THIS PREDATES FINAL BADGE DECLUTTERING/AUDIT FIXES. It is not exact-checkpoint performance evidence. Initial overview shows overlapping badges; LOD/packing source and latest mobile control checks are newer. Fresh wide-view/gate-quarter/battle capture and isolated active performance remain required. The harness now includes a quarter-facing gate shot.
+
+The attempted final full visual suite returned no process/session during transport failure. Do not claim it ran/passed. DESKTOP-VALIDATION.md is the preceding release's historical certification.
+
+Confirmed Library artifacts:
+- before battle image: libfile_20003c11e8608191a661eef53b9140cd
+- before worker image: libfile_ff4801efbe9481918d427bc8bd749af8
+- before normal1x battle video: libfile_0598f69edabc81919c03802a658a633b
+- before overview image: libfile_409bc72c3dec819192b44e607456507e
+No final AFTER Library upload is claimed.
+
+## Continue in cloud
+
+    npm test
+    npm run build
+    node tools/verify-build.mjs
+    npx playwright install --with-deps chromium
+
+Start npm start separately; serialize browser suites. Linux examples:
+
+    BASE_URL=http://127.0.0.1:4174/ QA_SOFTWARE_RENDERING=1 QA_OUTPUT_DIR=screenshots/cloud-controls node tests/controls-v2.mjs
+    BASE_URL=http://127.0.0.1:4174/ QA_SOFTWARE_RENDERING=1 QA_OUTPUT_DIR=screenshots/cloud-tactical node tests/tactical-browser.mjs
+    BASE_URL=http://127.0.0.1:4174/ QA_SOFTWARE_RENDERING=1 QA_VIDEO=1 QA_OUTPUT_DIR=screenshots/cloud-visual node tests/visual-v2.mjs
+    AI_AUDIT_DIR=screenshots/cloud-audit-remaining node tests/knowledge-accounting-long-audit.mjs winter-circuit moss-and-machine domination-01 domination-02 domination-03 domination-04 domination-05 domination-06 domination-07 domination-08 domination-09 domination-10 domination-11 domination-12 domination-13 domination-14
+    AI_AUDIT_CYCLES=3000 AI_AUDIT_DIR=screenshots/cloud-audit-extensions node tests/knowledge-accounting-long-audit.mjs first-light tidal-garden
+    QA_PHASE=after QA_BASELINE_REPORT=screenshots/ai-readability-before/report.json QA_OUTPUT_DIR=screenshots/cloud-after QA_SOFTWARE_RENDERING=1 node tests/ai-readability-browser.mjs
+    QA_OUTPUT_DIR=screenshots/cloud-active-performance QA_SOFTWARE_RENDERING=1 node tests/desktop-active-performance.mjs
+
+The audit runner truncates results: use NEW output directories when resuming. Preserve unfinished/failed seeds in the denominator. Label cloud software rendering honestly; it cannot establish Windows GPU/foreground performance. On a cloud GPU runner omit QA_SOFTWARE_RENDERING and record actual GPU. Same-runtime replay is supported; cross-engine bit identity is not promised.
+
+Next: inspect exact checkpoint Actions results; fix failures IN CLOUD; inspect new overview/gate/battle images and normal-speed videos; finish multi-seed/post-victory checks; update validation; verify exact public build.json SHA and fresh live browser smoke. Existing workflow retains build/browser/simulation gates and adds tactical browser scenarios. Do not weaken assertions to pass CI.
+
+## Desktop freeze and local leftovers
+
+No local features or audits should resume. At freeze Get-Process node reported no Node process; audit owner verified PID77084 absent. Completed browser suites closed their owned browsers. Disconnected visual launch yielded no process/session, so a surviving browser is unverified; do not close unrelated user browsers. No other apps were stopped.
+
+Ignored node_modules, .npm-cache, dist, browser installations and server logs are regenerable and excluded. All source/tests/lockfiles are committed; procedural assets are in src/. Evidence archive preserves screenshots/videos/checkpoint zips. Original ignored ARCHITECTURE-V2.md is copied into tracked historical evidence. Git internals, credentials and unrelated user files are excluded.
+
+---
+
+# Earlier handoff retained below — historical only
+
 # Cloud handoff — historical snapshot
 
 **Desktop integration update, 2026-10-06:** The source below has now been imported, all 61 hashes verified, and actual Chrome WebGL/control/mobile-emulation checks completed. See `DESKTOP-VALIDATION.md` for current evidence and remaining limits. The original handoff below records the cloud stage before desktop verification; its unpublished/unverified statements describe that earlier stage.

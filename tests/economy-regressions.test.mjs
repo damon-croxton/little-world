@@ -11,6 +11,32 @@ function holdResearchAndScouts(state) {
   }
 }
 
+test('destroying a storehouse records excess supplies as loss exactly once without losing people', () => {
+  const state = createSimulation('destroyed-storage-ledger', { civCount: 3 });
+  holdResearchAndScouts(state);
+  const home = state.settlements[0], faction = state.factions[0];
+  faction.modifiers.capacity = 1;
+  for (const kind of RESOURCES) home.stock[kind] = 1000;
+  initializeLedger(state);
+  const populationBefore = home.population, storage = home.buildings.find(building => building.kind === 'storage');
+  assert.ok(storage); storage.destroyed = true; storage.hp = 0;
+  stepSimulation(state, 0); assert.equal(home.stock.materials, 1000, 'a paused world changed stock');
+  stepSimulation(state, 10);
+  assert.equal(home.capacity, 500);
+  for (const kind of RESOURCES) {
+    assert.equal(home.storageLoss.amounts[kind], 500, kind);
+    assert.equal(state.resourceLedger[kind].lost, 500, kind);
+    assert.ok(home.stock[kind] <= home.capacity, kind);
+    assert.ok(Math.abs(ledgerResidual(state)[kind]) < 1e-7, kind);
+  }
+  assert.equal(home.population, populationBefore); assert.equal(state.stats.storageSpoilage, 2000);
+  assert.equal(state.events.filter(event => event.storageLoss).length, 1);
+  stepSimulation(state, 10);
+  assert.equal(state.stats.storageSpoilage, 2000, 'the same destroyed storage was charged twice');
+  assert.equal(state.events.filter(event => event.storageLoss).length, 1);
+  auditState(state);
+});
+
 test('full housing stops births and surplus residential construction without deleting inhabitants', () => {
   const state = createSimulation('regression-housing-cap');
   const home = state.settlements[0];

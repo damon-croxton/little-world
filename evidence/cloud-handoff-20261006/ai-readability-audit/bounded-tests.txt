@@ -1,0 +1,13 @@
+Γ£ö audit: a sealed visible route may select breach without storing nonfinite authoritative data (118.9322ms)
+Γ£ö audit: visible enemy private reserves, morale and upgrades do not change the observer strength estimate (82.6924ms)
+Γ£ö audit: an unseen enemy wall cannot cancel a reported expedition before any local contact (50.2473ms)
+Γ£ö audit: natural contact replay is identical across chunk sizes and irregular render calls (14011.5793ms)
+Γä╣ 2200 pulses; 60 irregular frames through four renderers; 828 attacks; exact state SHA-256 5bde81f9e2627f954b997ce457eaace9d091493d7bf8516b27c2f0bdc4235023
+Γä╣ tests 4
+Γä╣ suites 0
+Γä╣ pass 4
+Γä╣ fail 0
+Γä╣ cancelled 0
+Γä╣ skipped 0
+Γä╣ todo 0
+Γä╣ duration_ms 14416.3359

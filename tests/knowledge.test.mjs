@@ -33,6 +33,23 @@ test('factions have different current and explored views; omniscient view does n
   assert.deepEqual(s, before, 'render view lookup mutated simulation or reports');
 });
 
+test('observed connected gates retain physical geometry without exposing private building plans', () => {
+  const s = fixture(), [f] = s.factions, [, remote] = s.settlements;
+  const observer = scout(s, 'gate-observer', remote); s.groups.push(observer);
+  const gate = { id: 'observed-gate', kind: 'gate', x: remote.x + 2, z: remote.z, progress: 1, hp: 200,
+    from: { x: remote.x + 2, z: remote.z - 4 }, to: { x: remote.x + 2, z: remote.z + 4 }, length: 8, width: 1,
+    rotation: Math.PI / 2, gateWidth: 5, isGate: true, open: true, gateOpen: true,
+    topologyId: 'screen-test', topologySlot: 0, joins: { from: 'join-0', to: 'join-1' },
+    placementReason: 'PRIVATE_PLANNING_REASON', defensiveObjective: 'PRIVATE_OBJECTIVE', targetReportId: 'PRIVATE_REPORT' };
+  remote.buildings.push(gate);stepKnowledge(s, { force: true });
+  const visible = factionView(s, f.id).settlements.find(home => home.id === remote.id)?.buildings.find(b => b.id === gate.id);
+  assert.ok(visible, 'The observer must actually see the gate');
+  for (const key of ['from','to','length','width','gateWidth','open','gateOpen','topologyId','topologySlot','joins']) assert.deepEqual(visible[key], gate[key], key);
+  for (const key of ['placementReason','defensiveObjective','targetReportId']) assert.equal(visible[key], undefined, key);
+  observer.x = s.settlements[0].x; observer.z = s.settlements[0].z; tick(s);
+  assert.ok(!factionView(s, f.id).settlements.some(home => home.id === remote.id), 'Hidden walls must not remain live render geometry');
+});
+
 test('remote sight stays with a scout until its map and observations are actually reported', () => {
   const s = fixture(), [f] = s.factions, [, remote] = s.settlements;
   // Observe in another starting clearing; the home cannot share this LOS.
@@ -182,6 +199,13 @@ test('already-seen foreign bodies refresh physical slots each pulse without disc
   const now = factionView(s, f.id).groups.find(a => a.id === enemy.id);
   assert.equal(now.x, enemy.x); assert.deepEqual(now.formationSlots, enemy.formationSlots); assert.equal(now.formationRevision, 2);
   assert.deepEqual(f.knowledge, before);
+  Object.assign(enemy.formationSlots.infantry[0], { yaw: .4, prevYaw: .3, contactId: 'private-contact', contactIndex: 4, facingX: 234, facingZ: 345, steerSide: 1 });
+  enemy.combat = { active: true, intent: 'intercept', reason: 'PRIVATE_TACTICAL_REASON', targetId: 'private-contact', localStrength: 100, enemyStrength: 50 };
+  s.step++; s.time += .1;
+  const physical = factionView(s, f.id).groups.find(a => a.id === enemy.id);
+  assert.equal(physical.formationSlots.infantry[0].yaw, .4); assert.equal(physical.formationSlots.infantry[0].prevYaw, .3);
+  for (const key of ['contactId', 'contactIndex', 'facingX', 'facingZ', 'steerSide']) assert.equal(physical.formationSlots.infantry[0][key], undefined, key);
+  assert.equal(physical.combat.intent, undefined); assert.equal(physical.combat.reason, undefined); assert.equal(physical.combat.targetId, undefined);
   s.step++; s.time += .1; g.x = home.x; g.z = home.z;
   assert.ok(!factionView(s, f.id).groups.some(a => a.id === enemy.id), 'contact remained visible after every nearby observer left');
   assert.deepEqual(f.knowledge, before);

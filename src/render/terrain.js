@@ -1,4 +1,5 @@
 import { heightAt, biomeAt, terrainAt, generateWorld, WORLD_RADIUS, LAND_SCALE } from '../world.js';
+import { wallGeometry } from '../sim/navigation.js';
 
 // The renderer owns no simulation state. Detail is aggregated into reusable,
 // vertex-coloured templates and instanced, including undergrowth and wildlife.
@@ -111,13 +112,20 @@ export function createTerrain(THREE, scene, seed = 'littleworld', options = {}) 
     root.add(mesh); return mesh;
   }
   function refreshClearings(settlements) {
+    const defenses = settlements.flatMap(settlement => (settlement.buildings || []).filter(b => ['wall', 'gate', 'tower'].includes(b.kind) && !b.destroyed && !(b.hp <= 0)).map(b => wallGeometry(b.kind === 'tower' ? { ...b, length: b.length || 3 } : b)).filter(Boolean));
     for (const { mesh, placements, original, originalColors, clearance } of clearingGroups) {
       const transforms = mesh.instanceMatrix.array;
       let visibleCount = 0;
       for (let i = 0; i < placements.length; i++) {
         const p = placements[i];
         let edgeDistance = Infinity;
-        for (const settlement of settlements) edgeDistance = Math.min(edgeDistance, Math.hypot(p.x - settlement.x, p.z - settlement.z) - (settlement.radius || 8) - 2);
+        for (const settlement of settlements) edgeDistance = Math.min(edgeDistance, Math.hypot(p.x - settlement.x, p.z - settlement.z) - (settlement.radius || 8) - (clearance === 'canopy' ? 5 : 3));
+        // Infrastructure can extend beyond the nominal settlement radius.
+        // Only buildings present in this observer's view clear the landscape.
+        for (const { from, to } of defenses) {
+          const dx = to.x - from.x, dz = to.z - from.z, t = clamp(((p.x - from.x) * dx + (p.z - from.z) * dz) / Math.max(.001, dx * dx + dz * dz));
+          edgeDistance = Math.min(edgeDistance, Math.hypot(p.x - from.x - t * dx, p.z - from.z - t * dz) - (clearance === 'canopy' ? 3 : 1.5));
+        }
         // A cleared tree/grass clump no longer exists. Do not keep submitting
         // a full invisible miniature at microscopic scale below the island.
         if (edgeDistance < 0) continue;
@@ -138,7 +146,7 @@ export function createTerrain(THREE, scene, seed = 'littleworld', options = {}) 
   function awayFromWorksites(x, z) {
     const cellX = Math.floor(x / 12), cellZ = Math.floor(z / 12);
     for (let dx = -1; dx <= 1; dx++) for (let dz = -1; dz <= 1; dz++) {
-      for (const node of resourceZones.get(`${cellX + dx},${cellZ + dz}`) || []) if (Math.hypot(x - node.x, z - node.z) < node.radius + 1.2) return false;
+      for (const node of resourceZones.get(`${cellX + dx},${cellZ + dz}`) || []) if (Math.hypot(x - node.x, z - node.z) < node.radius + 2.6) return false;
     }
     return true;
   }
@@ -163,7 +171,7 @@ export function createTerrain(THREE, scene, seed = 'littleworld', options = {}) 
   for (let i = 0; i < groundPos.count; i++) {
     const x = groundPos.getX(i), z = groundPos.getZ(i), y = heightAt(x, z, seed), biome = biomeAt(x, z, seed);
     groundPos.setY(i, y);
-    const shade = .92 + .075 * Math.sin(x * .52 + z * .24) + .035 * Math.sin(x * 1.9 - z * 1.3);
+    const shade = .96 + .035 * Math.sin(x * .15 + z * .09) + .012 * Math.sin(x * .47 - z * .31);
     const slope = Math.hypot(heightAt(x + .35, z, seed) - heightAt(x - .35, z, seed), heightAt(x, z + .35, seed) - heightAt(x, z - .35, seed));
     color.set(palette[biome].ground);
     // Feather the ecozone boundaries through neighbouring samples.
@@ -231,15 +239,15 @@ export function createTerrain(THREE, scene, seed = 'littleworld', options = {}) 
     treeParts.push(part(sphere(.82, 9, 7), [0x75804b, 0x89935b, 0x647947, 0x9b9c61][i], [x, 2.5 + (i % 2) * .3, z], [1.1, .86, 1]));
   }
   treeParts.push(part(sphere(.85, 10, 7), 0x8b985b, [0, 3.05, 0], [.95, .84, .95]));
-  const trees = sample(235, 'meadow');
+  const trees = sample(140, 'meadow');
   // Group groves and leave occasional open grassland instead of uniform static.
-  const groves = trees.filter(p => Math.sin(p.x * .23) + Math.cos(p.z * .31) > -.48).map(p => ({ ...p, scale: p.scale * .82 }));
+  const groves = trees.filter(p => Math.sin(p.x * .10) + Math.cos(p.z * .13) > .12).map(p => ({ ...p, scale: p.scale * .73 }));
   const treeGeometry = merge(treeParts), treeMaterial = windMaterial(.075);
   instances(treeGeometry, treeMaterial, groves, true, 'canopy');
 
   const pineParts = [part(cylinder(.065, .14, 2.8), 0x655f50, [0, 1.4, 0])];
   for (let i = 0; i < 4; i++) pineParts.push(part(new THREE.ConeGeometry(.84 - i * .16, 1.4, 9), [0x4f6951, 0x587057, 0x65795c, 0x758961][i], [0, 1.15 + i * .51, 0], [1, 1, .92]));
-  instances(merge(pineParts), windMaterial(.055), sample(60, 'meadow').filter(p => p.y > 3.4).map(p => ({ ...p, scale: p.scale * .7 })), true, 'canopy');
+  instances(merge(pineParts), windMaterial(.055), sample(40, 'meadow').filter(p => p.y > 3.4).map(p => ({ ...p, scale: p.scale * .65 })), true, 'canopy');
 
   // Arid succulents have jointed stems, rounded tips and pale ribbed colours.
   const cactusParts = [part(cylinder(.18, .24, 1.8, 10), 0x758970, [0, .9, 0]), part(sphere(.18), 0x899b7c, [0, 1.82, 0], [1, .6, 1])];
@@ -248,7 +256,7 @@ export function createTerrain(THREE, scene, seed = 'littleworld', options = {}) 
     cactusParts.push(part(cylinder(.105, .13, .78, 8), 0x85977a, [side * .59, 1.17 + side * .15, 0]));
     cactusParts.push(part(sphere(.105), 0xa2ae87, [side * .59, 1.58 + side * .15, 0], [1, .65, 1]));
   }
-  instances(merge(cactusParts), windMaterial(.008), sample(105, 'desert').map(p => ({ ...p, scale: p.scale * .72 })), true, 'canopy');
+  instances(merge(cactusParts), windMaterial(.008), sample(65, 'desert').map(p => ({ ...p, scale: p.scale * .67 })), true, 'canopy');
 
   // Fungal woodland: fluted stems and broad umbrella caps, with a softly luminous rim.
   const fungalParts = [part(cylinder(.1, .23, 2.25, 9), 0x63767f, [0, 1.1, 0], [1, 1, 1], [0, 0, .1])];
@@ -257,9 +265,9 @@ export function createTerrain(THREE, scene, seed = 'littleworld', options = {}) 
   fungalParts.push(part(new THREE.TorusGeometry(.99, .034, 4, 18), 0x99cbc1, [-.11, 2.21, 0], [1, .85, 1], [Math.PI / 2, 0, 0]));
   fungalParts.push(part(cylinder(.06, .105, 1.3), 0x6d7c8c, [.57, .65, .31], [1, 1, 1], [.2, 0, -.25]));
   fungalParts.push(part(new THREE.LatheGeometry(capProfile, 12), 0x9b88a3, [.73, 1.2, .36], [.62, .55, .58]));
-  const fungi = sample(235, 'alien').filter(p => Math.cos(p.x * .24 - p.z * .11) + Math.sin(p.z * .37) > -.3);
+  const fungi = sample(140, 'alien').filter(p => Math.cos(p.x * .12 - p.z * .06) + Math.sin(p.z * .16) > .12);
   const fungalGeometry = merge(fungalParts), fungalMaterial = windMaterial(.06, 0x2d6b67);
-  instances(fungalGeometry, fungalMaterial, fungi.map(p => ({ ...p, scale: p.scale * .96 })), true, 'canopy');
+  instances(fungalGeometry, fungalMaterial, fungi.map(p => ({ ...p, scale: p.scale * .77 })), true, 'canopy');
 
   const reedParts = [];
   for (let i = 0; i < 5; i++) {
@@ -267,10 +275,11 @@ export function createTerrain(THREE, scene, seed = 'littleworld', options = {}) 
     reedParts.push(part(cylinder(.018, .028, .65 + (i % 2) * .23, 4), 0x9aa175, [x, .32, z], [1, 1, 1], [Math.sin(a) * .16, 0, Math.cos(a) * .16]));
     reedParts.push(part(sphere(.055, 5, 4), 0x87705b, [x * 1.4, .64 + (i % 2) * .15, z * 1.4], [1, 2.1, 1]));
   }
-  const shoreReeds = sample(130, null, .32, 38, 4.8).filter(p => p.y < 1.4);
+  const shoreReeds = sample(80, null, .32, 38, 4.8).filter(p => p.y < 1.4);
   instances(merge(reedParts), windMaterial(.17), shoreReeds, false, 'ground');
 
-  // Boulders are irregular once in the template, then scattered with per-biome tints.
+  // Substantial outcrops frame higher ground; tiny scattered pebbles would
+  // compete with people and make open routes resemble resource deposits.
   const boulder = new THREE.DodecahedronGeometry(1, 1), boulderPos = boulder.getAttribute('position');
   for (let i = 0; i < boulderPos.count; i++) {
     const x = boulderPos.getX(i), y = boulderPos.getY(i), z = boulderPos.getZ(i);
@@ -278,7 +287,7 @@ export function createTerrain(THREE, scene, seed = 'littleworld', options = {}) 
     boulderPos.setXYZ(i, x * f, y * f * .69, z * f);
   }
   boulder.computeVertexNormals(); geom(boulder);
-  const stones = sample(440, null, -.25, 43, 4.6).map(p => ({ ...p, scale: .19 + rand() ** 2 * 1.1, color: palette[biomeAt(p.x, p.z, seed)].stone }));
+  const stones = sample(36, null, 3.8, 43, 6).map(p => ({ ...p, scale: .55 + rand() * .4, color: palette[biomeAt(p.x, p.z, seed)].stone }));
   instances(boulder, standard({ color: 0xffffff, roughness: .93 }), stones, true, 'ground');
 
   const crystalParts = [];
@@ -288,24 +297,25 @@ export function createTerrain(THREE, scene, seed = 'littleworld', options = {}) 
     crystalParts.push(part(new THREE.CylinderGeometry(.26, .17, .55, 5), 0x719796, [Math.sin(a) * .42, size * .17, Math.cos(a) * .42], [size, size, size]));
   }
   const crystalGeometry = merge(crystalParts), crystalMaterial = standard({ vertexColors: true, metalness: .22, roughness: .37, emissive: 0x1f5d57, emissiveIntensity: .23 });
-  instances(crystalGeometry, crystalMaterial, sample(43, 'alien').map(p => ({ ...p, scale: .35 + rand() * .8 })), true, 'ground');
+  // Bright crystals below belong only to real, inspectable energy deposits.
 
-  // Low vegetation creates texture and scale without the cost of individual meshes.
+  // Low vegetation stays in quiet patches with broad open lanes between them.
+  const understory = points => points.filter(p => Math.sin(p.x * .13) + Math.cos(p.z * .11) > .15);
   const grassParts = [];
   for (let i = 0; i < 5; i++) {
     const a = i * 2.4;
     grassParts.push(part(new THREE.ConeGeometry(.06, .45 + (i % 2) * .15, 3), i % 2 ? 0xadb079 : 0x8f9a65, [Math.sin(a) * .12, .22, Math.cos(a) * .12], [1, 1, 1], [.17 * Math.sin(a), a, .17 * Math.cos(a)]));
   }
-  instances(merge(grassParts), windMaterial(.2), sample(1250, 'meadow', .9, 39, 4), false, 'ground');
+  instances(merge(grassParts), windMaterial(.2), understory(sample(220, 'meadow', .9, 39, 5)), false, 'ground');
   const scrubParts = [part(sphere(.26, 7, 5), 0xabaa85, [0, .2, 0], [1.1, .63, 1]), part(sphere(.18, 7, 5), 0x9e9f7b, [.2, .13, .1], [1, .7, 1])];
-  instances(merge(scrubParts), windMaterial(.08), sample(360, 'desert', .75, 39, 4.2), false, 'ground');
+  instances(merge(scrubParts), windMaterial(.08), understory(sample(85, 'desert', .75, 39, 5)), false, 'ground');
   const alienUnder = [];
   for (let i = 0; i < 3; i++) {
     const x = (i - 1) * .18;
     alienUnder.push(part(cylinder(.022, .055, .35 + i * .12, 5), 0x63858b, [x, .16 + i * .06, 0]));
     alienUnder.push(part(sphere(.15, 8, 5), i % 2 ? 0xb29fb8 : 0x8abdb4, [x, .35 + i * .12, 0], [1, .65, 1]));
   }
-  instances(merge(alienUnder), windMaterial(.1, 0x264b4e), sample(590, 'alien', .6, 39, 4.2), false, 'ground');
+  instances(merge(alienUnder), windMaterial(.1, 0x264b4e), understory(sample(130, 'alien', .6, 39, 5)), false, 'ground');
 
   const flowerParts = [];
   for (let i = 0; i < 5; i++) {
@@ -313,7 +323,7 @@ export function createTerrain(THREE, scene, seed = 'littleworld', options = {}) 
     flowerParts.push(part(cylinder(.012, .018, .32, 4), 0x859064, [x, .16, z]));
     flowerParts.push(part(sphere(.07, 6, 4), i % 2 ? 0xd9bf80 : 0xe2d9b2, [x, .33, z], [1, .7, 1]));
   }
-  instances(merge(flowerParts), windMaterial(.16), sample(230, 'meadow', 1, 37, 4.2), false, 'ground');
+  instances(merge(flowerParts), windMaterial(.16), understory(sample(65, 'meadow', 1, 37, 5)), false, 'ground');
 
   // Harvestable sites have finite, independently removable pieces. Decorative
   // groves above are sparse framing; these bounded, inspectable patches are the
@@ -351,13 +361,13 @@ export function createTerrain(THREE, scene, seed = 'littleworld', options = {}) 
     const record = { id: node.id, subtype, node, height: heightAt(node.x, node.z, seed), count, pieces: [], lastQuantized: -1, fraction: 1, visible: true };
     resourceRecords.set(node.id, record);
     patchPlacements.push({ nodeId: node.id, x: node.x, z: node.z, y: record.height + .045, scale: node.radius * .96, color: patchColors[subtype], rotation: rand() * 6.28 });
-    if (subtype === 'ore' || subtype === 'spring' || subtype === 'crystal') {
-      for (let j = 0; j < 10; j++) { const a = j / 10 * Math.PI * 2; const x = node.x + Math.sin(a) * node.radius * .81, z = node.z + Math.cos(a) * node.radius * .81; rimPlacements.push({ nodeId: node.id, x, z, scale: .24 + rand() * .28, sy: .21, color: subtype === 'spring' ? 0x8c9b83 : 0x8b8477 }); }
+    if (subtype === 'spring') {
+      for (let j = 0; j < 5; j++) { const a = j / 5 * Math.PI * 2; const x = node.x + Math.sin(a) * node.radius * .81, z = node.z + Math.cos(a) * node.radius * .81; rimPlacements.push({ nodeId: node.id, x, z, scale: .34 + rand() * .17, sy: .17, color: 0x8c9b83 }); }
     }
     for (let i = 0; i < count; i++) {
-      const angle = i * 2.399963 + rand() * .32, radius = Math.sqrt((i + .4) / count) * node.radius * .74;
+      const angle = i * 2.399963 + rand() * .32, radius = (subtype === 'forest' ? .59 + .19 * ((i % 3) / 2) : Math.sqrt((i + .4) / count) * .74) * node.radius;
       const x = node.x + Math.sin(angle) * radius, z = node.z + Math.cos(angle) * radius;
-      const scale = subtype === 'spring' ? node.radius * .70 : subtype === 'forest' ? .64 + rand() * .22 : subtype === 'ore' ? .65 + rand() * .45 : .65 + rand() * .35;
+      const scale = subtype === 'spring' ? node.radius * .70 : subtype === 'forest' ? .49 + rand() * .17 : subtype === 'ore' ? .65 + rand() * .45 : .65 + rand() * .35;
       const p = { x: subtype === 'spring' ? node.x : x, z: subtype === 'spring' ? node.z : z, y: heightAt(x, z, seed) + .03, scale, rotation: rand() * 6.28 };
       if (subtype === 'spring') p.y = record.height + .06;
       const entry = { record, index: i, p, mesh: null, slot: 0 };
@@ -546,7 +556,7 @@ export function createTerrain(THREE, scene, seed = 'littleworld', options = {}) 
     update(time, state, alpha = 1) {
       const viewerSignature = state?.viewer ? `${state.viewer.mode}:${state.viewer.factionId}:${state.viewer.version}:${(state.visibleNodeIds || []).join(',')}` : 'omniscient';
       if (state?.settlements && ((state.tick ?? 0) !== lastClearingTick || viewerSignature !== lastViewerSignature)) {
-        const signature = state.settlements.map(s => `${s.id}:${s.x}:${s.z}:${Math.round((s.radius || 8) * 2)}`).join('|');
+        const signature = state.settlements.map(s => `${s.id}:${s.x}:${s.z}:${Math.round((s.radius || 8) * 2)}:` + (s.buildings || []).filter(b => ['wall', 'gate', 'tower'].includes(b.kind)).map(b => `${b.id}:${b.x}:${b.z}:${b.rotation}:${b.length}:${b.from?.x}:${b.from?.z}:${b.to?.x}:${b.to?.z}:${b.destroyed || b.hp <= 0}`).join(',')).join('|');
         if (signature !== lastClearingSignature) { refreshClearings(state.settlements); lastClearingSignature = signature; }
         lastClearingTick = state.tick ?? 0;
       }

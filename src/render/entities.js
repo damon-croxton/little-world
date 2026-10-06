@@ -1,5 +1,15 @@
 import { heightAt } from '../world.js';
 import { settlementController } from '../sim/control.js';
+import { wallGeometry } from '../sim/navigation.js';
+
+// Match navigation's local +X span and Three.js yaw convention. Explicit
+// endpoints are authoritative, including records with stale legacy midpoints.
+export function defensiveSpan(building) {
+  if (!['wall', 'gate'].includes(building.kind)) return null;
+  const span = wallGeometry(building);
+  if (!span || span.length < .001) return null;
+  return { ...span, width: Math.max(.1, span.width), gap: building.kind === 'gate' ? Math.min(span.length, Math.max(0, building.gateWidth ?? 5)) : 0, open: !!(building.open || building.gateOpen) };
+}
 
 // All of the miniatures are original procedural geometry. Rendering reads the
 // simulation, but never consumes its random stream or writes back into it.
@@ -17,6 +27,7 @@ export function createEntities(THREE, scene) {
     accent: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.75 }),
   };
   const white = new THREE.Color(0xffffff);
+  const damageTint = new THREE.Color();
   const tint = new THREE.Color();
   const temp = new THREE.Object3D();
   const mat = new THREE.Matrix4();
@@ -205,7 +216,7 @@ export function createEntities(THREE, scene) {
   const pools=new Map();
   const buildingGround=new Map();
   let lastRevision='';
-  const diagnostics={buildingRecords:0,completedBuildings:0,constructionSites:0,renderedBuildings:0,nearBuildings:0,farBuildings:0,ruinedBuildings:0,temporaryShelters:0,roadSegments:0,instances:0,drawCallsEstimate:0,settlements:0,camps:0,ruins:0,byKind:{},bySpecies:{},minRadius:0,maxRadius:0};
+  const diagnostics={buildingRecords:0,completedBuildings:0,constructionSites:0,renderedBuildings:0,nearBuildings:0,farBuildings:0,ruinedBuildings:0,temporaryShelters:0,roadSegments:0,instances:0,drawCallsEstimate:0,settlements:0,camps:0,ruins:0,wallSegments:0,wallLength:0,wallJunctions:0,gatePassages:0,damagedBuildings:0,defenseSpans:[],byKind:{},bySpecies:{},minRadius:0,maxRadius:0};
 
   // Construction clips each instanced model at its real completion height.
   // Matching shadow clipping avoids a completed-roof shadow over a foundation.
@@ -473,7 +484,54 @@ export function createEntities(THREE, scene) {
     }
   }
 
-  function defensiveBuilding(batch,species,kind,detailed) {
+  function wallBody(batch,species,length,detailed) {
+    if(length < .001)return;
+    const machine=species==='machine',hive=species==='hive';
+    if(machine) {
+      batch.cube('#596f68',0,.92,0,length,1.78,.7,0,'metal');
+      batch.cube('#a99d78',0,1.87,0,length,.13,.78,0,'metal');
+      const panels=Math.max(1,Math.ceil(length/(detailed?2.3:3.5)));
+      for(let i=0;i<panels;i++) {
+        const x=-length/2+(i+.5)*length/panels;
+        batch.cube('#83998e',x,1.02,-.365,.1,1.8,.06,0,'metal');
+        if(detailed)batch.cube('#90d6c4',x,1.54,-.405,.16,.28,.02,0,'glow');
+      }
+      if(length>2)batch.cube('#ffffff',0,1.26,-.39,.55,.16,.027,0,'accent');
+    } else if(hive) {
+      // A continuous chitin core makes every curved lobe part of one wall.
+      batch.cube('#897889',0,.83,0,length,1.5,.58);
+      const lobes=Math.max(1,Math.ceil(length/.65));
+      for(let i=0;i<lobes;i++) {
+        const x=-length/2+(i+.5)*length/lobes,w=length/lobes*.5,h=1.5+.12*Math.sin(i*1.2);
+        batch.sphere('#9b899c',x,h*.48,0,w,h*.54,.43);
+        batch.add(cylinder(6,0),'#bcaeb3',[x,h+.16,0],[Math.min(.17,w*.6),.52,.16],[0,0,.08*Math.sin(i)]);
+      }
+      batch.cube('#b4a4ad',0,.79,-.37,length,.14,.12);
+    } else {
+      const count=Math.max(1,Math.ceil(length/.38)),spacing=length/count;
+      for(let i=0;i<count;i++) {
+        const x=-length/2+(i+.5)*spacing,r=Math.min(.18,spacing*.49);
+        batch.cyl('#a28358',x,.89,0,r,1.72);
+        batch.add(cylinder(6,0),'#bda378',[x,1.88,0],[r,.34,r]);
+      }
+      // Rails terminate exactly at the topological endpoints, unlike the old
+      // isolated prop's inset rails. Shared posts below close angled corners.
+      for(const y of [.52,1.24])batch.cube('#74593d',0,y,-.22,length,.16,.17);
+    }
+  }
+  function wallJoin(batch,species) {
+    if(species==='machine') {
+      batch.cyl('#526a63',0,1.01,0,.43,2.02,1,'metal');
+      batch.cyl('#b0a57d',0,2.07,0,.47,.12,1,'metal');
+    } else if(species==='hive') {
+      batch.cyl('#87758c',0,.92,0,.46,1.84,.82);
+      batch.add(cylinder(7,0),'#c3b0ba',[0,2.03,0],[.33,.57,.33]);
+    } else {
+      batch.cyl('#896844',0,1.01,0,.29,2.02);
+      batch.add(cylinder(7,0),'#c0a57a',[0,2.12,0],[.29,.22,.29]);
+    }
+  }
+  function defensiveBuilding(batch,species,kind,detailed,shape=null) {
     const gate=kind==='gate',tower=kind==='tower',machine=species==='machine',hive=species==='hive';
     if(tower) {
       if(machine) {
@@ -509,32 +567,22 @@ export function createEntities(THREE, scene) {
       }
       return;
     }
-    const length=gate?9:7;
-    const gap=gate?5:0;
-    if(machine) {
-      for(const x of gate?[-3.65,3.65]:[-3.05,0,3.05]) {
-        batch.cube('#4e6763',x,.13,0,.74,.26,1.18,0,'metal');
-        batch.cube('#82978b',x,1.16,0,.47,2.1,.68,0,'metal');
-        batch.cube('#96d7c6',x,1.77,-.36,.17,.51,.025,0,'glow');
-      }
-      if(gate)batch.cube('#b9ac7c',0,2.37,0,7.72,.25,.72,0,'metal');
-      else {batch.cube('#596f68',0,.94,0,6.9,1.58,.43,0,'metal');for(const x of [-2.1,2.1])batch.cube('#ad9b6c',x,1.27,-.25,.06,.92,.04,0,'metal');batch.cube('#ffffff',0,1.34,-.25,.67,.2,.026,0,'accent');}
-    } else if(hive) {
-      for(let i=0;i<(gate?8:12);i++) {
-        const x=-length/2+.32+i*(length-.64)/((gate?8:12)-1);if(gate&&Math.abs(x)<gap/2)continue;
-        const h=1.4+.23*Math.sin(i*1.2);batch.sphere('#887789',x,h*.43,0,.54,h*.55,.49);
-        batch.add(cylinder(6,0),'#bbabb3',[x,h+.18,0],[.18,.72,.19],[0,0,.12*Math.sin(i)]);
-      }
-      if(gate){batch.rod('#998299',[-3.48,1.36,0],[-2.6,2.81,0],.18);batch.rod('#998299',[-2.6,2.81,0],[2.6,2.81,0],.19);batch.rod('#998299',[2.6,2.81,0],[3.48,1.36,0],.18);batch.sphere('#b9dcc1',0,2.83,0,.39,.13,.27,'glow');}
-      else batch.rod('#b4a4ad',[-3.35,.76,-.28],[3.35,.76,-.28],.15);
-    } else {
-      for(let i=0;i<(gate?14:12);i++) {
-        const x=-length/2+.28+i*(length-.56)/((gate?14:12)-1);if(gate&&Math.abs(x)<gap/2)continue;
-        batch.cyl('#a28358',x,.89,0,.18,1.72,1,'solid');batch.add(cylinder(6,0),'#b19a71',[x,1.9,0],[.18,.38,.18]);
-      }
-      if(gate){for(const x of [-3.36,3.36])batch.cube('#77593d',x,1.32,0,.34,2.64,.7);batch.cube('#8f704c',0,2.72,0,7.2,.26,.76);pennant(batch,-3.38,0,.35,3.25);}
-      else for(const y of [.52,1.24])batch.cube('#74593d',0,y,-.21,6.85,.15,.15);
+    const length=shape?.length??(gate?9:7),gap=shape?.gap??(gate?5:0);
+    if(!gate){wallBody(batch,species,length,detailed);return;}
+    const sideLength=(length-gap)/2,postWidth=Math.min(.38,Math.max(.1,sideLength)),postX=gap/2+postWidth/2;
+    for(const side of [-1,1]) {
+      batch.frameAt(side*(gap/2+sideLength/2),0,0,0,()=>wallBody(batch,species,sideLength,detailed));
+      batch.cube(machine?'#82978b':hive?'#9a849d':'#77593d',side*postX,1.38,0,postWidth,2.76,.8,0,machine?'metal':'solid');
     }
+    const header=gap+postWidth*2;
+    batch.cube(machine?'#b9ac7c':hive?'#ae9bb0':'#8f704c',0,2.84,0,header,.26,.83,0,machine?'metal':'solid');
+    // Controlled gates automatically admit friends. Keep the traversable arch
+    // clear; a raised grille denotes control, fully retracted for public open.
+    const grilleY=shape?.open?2.92:2.59;
+    batch.cube(machine?'#4b6962':hive?'#79667e':'#684f38',0,grilleY,0,gap,.17,.12,0,machine?'metal':'solid');
+    batch.cube('#ffffff',0,3.03,-.44,Math.min(.7,gap),.19,.03,0,'accent');
+    if(machine||hive)batch.sphere(shape?.open?'#b6f0cb':'#dbc79c',0,3.1,0,.13,.12,.12,'glow');
+    else if(sideLength>.5)pennant(batch,-postX,0,.23,3.28);
   }
 
   function ruinTemplate(batch,species,kind) {
@@ -554,9 +602,19 @@ export function createEntities(THREE, scene) {
     const rubble=cached('rubble',()=>new THREE.IcosahedronGeometry(1,0));
     for(let i=0;i<6;i++){const a=i*2.39,xx=Math.cos(a)*w*.5,zz=Math.sin(a)*z*.5;batch.add(rubble,machine?'#8b816b':hive?'#908088':'#a2957b',[xx,.12,zz],[.16,.12,.19],[i,.4,i*.23],material);}
   }
-  function scaffoldTemplate(batch,species,kind) {
+  function scaffoldTemplate(batch,species,kind,shape=null) {
     const [w,h,d]=DIMENSIONS[kind],machine=species==='machine',hive=species==='hive';
     const color=machine?'#b2a267':hive?'#b7ab9b':'#b89865',material=machine?'metal':'solid';
+    if(shape) {
+      const sections=kind==='gate'?[[-shape.length/2,-shape.gap/2],[shape.gap/2,shape.length/2]]:[[-shape.length/2,shape.length/2]];
+      for(const [from,to] of sections) {
+        const span=to-from;if(span<.01)continue;
+        batch.cube(color,(from+to)/2,.045,0,span,.09,.94,0,material);
+        for(const x of [from,to])for(const z of [-.6,.6])batch.rod(color,[x,.06,z],[x,h*.94,z],.028,material);
+        for(const z of [-.6,.6])batch.rod(color,[from,h*.58,z],[to,h*.58,z],.026,material);
+      }
+      return;
+    }
     batch.cube(machine?'#6e7d69':hive?'#8d847c':'#a29578',0,.045,0,w+.12,.09,d+.12,0,material);
     for(const x of [-w*.52,w*.52])for(const z of [-d*.52,d*.52])batch.rod(color,[x,.06,z],[x,h*.93,z],.029,material);
     for(const y of [h*.35,h*.7])for(const z of [-d*.52,d*.52])batch.rod(color,[-w*.52,y,z],[w*.52,y,z],.026,material);
@@ -570,15 +628,16 @@ export function createEntities(THREE, scene) {
     else {batch.add(roof(),species==='machine'?'#b2b08b':'#cbb28c',[0,.12,0],[1.11,1.34,1.03]);batch.rod('#817251',[-.5,.04,-.45],[0,.74,-.45],.029);batch.rod('#817251',[0,.74,-.45],[.5,.04,-.45],.029);batch.cube('#5e5846',0,.18,-.51,.35,.33,.024);}
     batch.cube('#ffffff',-.25,.27,-.52,.18,.12,.025,0,'accent');
   }
-  function getTemplate(species,kind,lod,mode='building') {
-    const key=`${species}:${kind}:${lod}:${mode}`;
+  function getTemplate(species,kind,lod,mode='building',shape=null) {
+    const key=`${species}:${kind}:${lod}:${mode}`+(shape?`:${shape.length.toFixed(4)}:${shape.gap.toFixed(4)}:${shape.open}`:'');
     if(pools.has(key))return pools.get(key);
     const batch=new Batch();
     if(mode==='ruin')ruinTemplate(batch,species,kind);
-    else if(mode==='scaffold')scaffoldTemplate(batch,species,kind);
+    else if(mode==='scaffold')scaffoldTemplate(batch,species,kind,shape);
     else if(mode==='shelter')shelterTemplate(batch,species);
     else if(mode==='road')batch.cube('#ffffff',0,0,0,1,.035,1);
-    else if(DEFENSE_KINDS.includes(kind))defensiveBuilding(batch,species,kind,lod==='near');
+    else if(mode==='join')wallJoin(batch,species);
+    else if(DEFENSE_KINDS.includes(kind))defensiveBuilding(batch,species,kind,lod==='near',shape);
     else if(MILITARY_KINDS.includes(kind))militaryBuilding(batch,species,kind,lod==='near');
     else if(species==='machine')machineBuilding(batch,kind,lod==='near');
     else if(species==='hive')hiveBuilding(batch,kind,lod==='near');
@@ -605,11 +664,15 @@ export function createEntities(THREE, scene) {
     if(old.instanceColor){mesh.instanceColor=new THREE.InstancedBufferAttribute(new Float32Array(capacity*3).fill(1),3);mesh.instanceColor.array.set(old.instanceColor.array);}
     mesh.count=pool.count;root.remove(old);old.dispose();root.add(mesh);pool.meshes[index]=mesh;return mesh;
   }
-  function instance(pool,x,y,z,rotation,sx,sy,sz,color,limit=100,allColor=false) {
+  function instance(pool,x,y,z,rotation,sx,sy,sz,color,limit=100,allColor=false,slope=0,health=1) {
     temp.position.set(x,y,z);temp.rotation.set(0,rotation||0,0);temp.scale.set(sx,sy,sz);temp.updateMatrix();
+    // Shear the local length axis over the endpoints' ground heights. Vertical
+    // posts remain vertical and adjoining segments meet at the same elevation.
+    temp.matrix.elements[1]+=slope*sx;
+    damageTint.setRGB(.65+.35*health,.65+.35*health,.65+.35*health);
     for(let i=0;i<pool.meshes.length;i++){
       let mesh=pool.meshes[i];if(pool.count>=mesh.userData.capacity)mesh=growPoolMesh(pool,i);
-      mesh.setMatrixAt(pool.count,temp.matrix);mesh.setColorAt(pool.count,allColor||mesh.userData.materialKind==='accent'?color:white);
+      mesh.setMatrixAt(pool.count,temp.matrix);mesh.setColorAt(pool.count,allColor||mesh.userData.materialKind==='accent'?color:health<1?damageTint:white);
       mesh.geometry.attributes.buildLimit.setX(pool.count,limit);
     }
     pool.count++;
@@ -622,6 +685,32 @@ export function createEntities(THREE, scene) {
   }
 
   const pickGeometry=cached('building-pick',()=>new THREE.CylinderGeometry(1,1,1,8));
+  const pickLocalPoint=new THREE.Vector3(),pickInverse=new THREE.Matrix4();
+  function buildingPickProxy() {
+    const proxy=new THREE.Mesh(pickGeometry,materials.solid);
+    proxy.raycast=function(raycaster,hits) {
+      const start=hits.length;
+      THREE.Mesh.prototype.raycast.call(this,raycaster,hits);
+      if(this.userData.buildLimit==null)return;
+      pickInverse.copy(this.matrixWorld).invert();
+      let count=start;
+      for(let i=start;i<hits.length;i++)if(pickLocalPoint.copy(hits[i].point).applyMatrix4(pickInverse).y<=this.userData.buildLimit)hits[count++]=hits[i];
+      hits.length=count;
+    };
+    return proxy;
+  }
+  function defensePickGeometry(shape,kind) {
+    const key=`defense-pick:${kind}:${shape.length.toFixed(4)}:${shape.gap.toFixed(4)}`;
+    return cached(key,()=>{
+      const batch=new Batch();
+      if(kind==='gate') {
+        const side=(shape.length-shape.gap)/2;
+        if(side>0)for(const sign of [-1,1])batch.cube('#ffffff',sign*(shape.gap/2+side/2),1.35,0,side,2.7,1);
+        batch.cube('#ffffff',0,2.86,0,shape.gap+.4,.3,1);
+      } else batch.cube('#ffffff',0,1.12,0,shape.length,2.24,1);
+      const [mesh]=batch.finish();return mesh.geometry;
+    });
+  }
   const haloMaterial=new THREE.LineBasicMaterial({color:'#ffe1a1',transparent:true,opacity:.75,depthWrite:false});
   const halo=new THREE.LineSegments(new THREE.BufferGeometry(),haloMaterial);halo.frustumCulled=false;halo.renderOrder=3;root.add(halo);
   let haloKey='';
@@ -638,6 +727,7 @@ export function createEntities(THREE, scene) {
   }
   const roadColors={human:new THREE.Color('#ac9b75'),machine:new THREE.Color('#748571'),hive:new THREE.Color('#a09492')};
   function roadNetwork(s,buildings,state,view) {
+    buildings=buildings.filter(b=>!['wall','tower'].includes(b.kind)&&!b.destroyed&&b.hp!==0).map(b=>{const span=defensiveSpan(b);return span?{...b,x:span.x,z:span.z}:b;});
     const key=buildings.map(b=>`${b.id}:${b.x}:${b.z}`).join('|');
     if(view.roadKey===key)return view.roads;
     view.roadKey=key;const segments=[];
@@ -665,10 +755,11 @@ export function createEntities(THREE, scene) {
     const lodKey=camera?`${Math.round(camera.position.x/12)}:${Math.round(camera.position.y/12)}:${Math.round(camera.position.z/12)}`:'default';
     // Building work changes on simulation cycles. The small structural digest
     // also handles reset, refounding and direct inspection fixtures immediately.
-    const revision=`${state.seed}:${state.tick}:${lodKey}|`+state.settlements.map(s=>`${s.id}:${conditionOf(s)}:${s.radius}:${s.factionId}:${s.occupiedBy}:${s.controllerId||settlementController(state,s)}:`+(s.buildings||[]).map(b=>`${b.id}:${b.kind}:${b.x}:${b.z}:${b.rotation}:${b.progress}:${b.destroyed||b.hp<=0}:${b.length}:${b.width}`).join(',')).join('|');
+    const revision=`${state.seed}:${state.tick}:${lodKey}|`+state.settlements.map(s=>`${s.id}:${conditionOf(s)}:${s.radius}:${s.factionId}:${s.occupiedBy}:${s.controllerId||settlementController(state,s)}:`+(s.buildings||[]).map(b=>`${b.id}:${b.kind}:${b.x}:${b.z}:${b.rotation}:${b.progress}:${b.destroyed||b.hp<=0}:${b.hp}:${b.maxHp}:${b.length}:${b.width}:${b.from?.x}:${b.from?.z}:${b.to?.x}:${b.to?.z}:${b.gateWidth}:${b.open}:${b.gateOpen}:${b.topologyId}:${b.joins?.from}:${b.joins?.to}`).join(',')).join('|');
     if(revision===lastRevision)return;lastRevision=revision;
     for(const pool of pools.values())pool.count=0;
-    for(const key of ['buildingRecords','completedBuildings','constructionSites','renderedBuildings','nearBuildings','farBuildings','ruinedBuildings','temporaryShelters','roadSegments','instances','drawCallsEstimate','camps','ruins'])diagnostics[key]=0;
+    for(const key of ['buildingRecords','completedBuildings','constructionSites','renderedBuildings','nearBuildings','farBuildings','ruinedBuildings','temporaryShelters','roadSegments','instances','drawCallsEstimate','camps','ruins','wallSegments','wallLength','wallJunctions','gatePassages','damagedBuildings'])diagnostics[key]=0;
+    diagnostics.defenseSpans=[];
     diagnostics.byKind=Object.fromEntries(KINDS.map(k=>[k,0]));diagnostics.bySpecies={human:0,machine:0,hive:0};diagnostics.settlements=state.settlements.length;diagnostics.minRadius=Infinity;diagnostics.maxRadius=0;
     const factions=new Map(state.factions.map(f=>[f.id,f]));const live=new Set();pickables=[];
     for(const s of state.settlements){
@@ -678,24 +769,45 @@ export function createEntities(THREE, scene) {
       const lod=distance>175?'far':'near';
       diagnostics.minRadius=Math.min(diagnostics.minRadius,radius);diagnostics.maxRadius=Math.max(diagnostics.maxRadius,radius);if(condition==='camp')diagnostics.camps++;if(condition==='ruin')diagnostics.ruins++;
       let view=settlements.get(s.id);if(!view){view={proxies:new Map(),roadKey:'',roads:[]};settlements.set(s.id,view);}live.add(s.id);
-      const records=(s.buildings||[]).filter(b=>Number.isFinite(b.x)&&Number.isFinite(b.z));
-      const liveBuildings=new Set();
+      const records=(s.buildings||[]).filter(b=>(Number.isFinite(b.x)&&Number.isFinite(b.z))||defensiveSpan(b));
+      const liveBuildings=new Set(),joins=new Map();
       for(const building of records){
         const kind=KINDS.includes(building.kind)?building.kind:'housing',progress=clamp(Number.isFinite(building.progress)?building.progress:1,0,1),d=DIMENSIONS[kind];
-        const y=ground(building.x,building.z,`building:${s.id}:${building.id}`,state.seed)+.025,rotation=building.rotation||0;
+        const shape=defensiveSpan(building),x=shape?.x??building.x,z=shape?.z??building.z,rotation=shape?.rotation??building.rotation??0;
+        const fromY=shape?ground(shape.from.x,shape.from.z,`defense:${s.id}:${building.id}:from`,state.seed):0,toY=shape?ground(shape.to.x,shape.to.z,`defense:${s.id}:${building.id}:to`,state.seed):0;
+        const y=(shape?(fromY+toY)/2:ground(x,z,`building:${s.id}:${building.id}`,state.seed))+.025,slope=shape?(toY-fromY)/shape.length:0;
         diagnostics.buildingRecords++;diagnostics.byKind[kind]++;diagnostics.bySpecies[species]++;diagnostics.renderedBuildings++;diagnostics[lod==='near'?'nearBuildings':'farBuildings']++;
-        const broken=building.destroyed||(building.hp!=null&&building.hp<=0),sx=DEFENSE_KINDS.includes(kind)?(building.length||d[0])/d[0]:1,sz=DEFENSE_KINDS.includes(kind)?(building.width||d[2])/d[2]:1;
+        const broken=building.destroyed||(building.hp!=null&&building.hp<=0),sx=DEFENSE_KINDS.includes(kind)?(shape?.length||building.length||d[0])/d[0]:1,sz=DEFENSE_KINDS.includes(kind)?(shape?.width||building.width||d[2])/d[2]:1;
+        const health=Number.isFinite(building.hp)&&building.maxHp>0?clamp(building.hp/building.maxHp,0,1):1;
+        if(health<1&&!broken)diagnostics.damagedBuildings++;
+        if(shape) {
+          diagnostics.wallSegments++;diagnostics.wallLength+=shape.length;
+          if(kind==='gate'&&condition==='active'&&!broken)diagnostics.gatePassages++;
+          diagnostics.defenseSpans.push({buildingId:building.id,settlementId:s.id,topologyId:building.topologyId??null,kind,from:{...shape.from,y:fromY},to:{...shape.to,y:toY},length:shape.length,gateWidth:shape.gap,open:shape.open,progress,broken:!!broken});
+          if(condition==='active'&&!broken)for(const end of ['from','to']) {
+            const point=shape[end],key=`${point.x.toFixed(3)}:${point.z.toFixed(3)}`;
+            let join=joins.get(key);if(!join){join={x:point.x,z:point.z,y:end==='from'?fromY:toY,width:shape.width,progress,health,count:0};joins.set(key,join);}
+            join.count++;join.progress=Math.max(join.progress,progress);join.health=Math.min(join.health,health);join.width=Math.max(join.width,shape.width);
+          }
+        }
         if(condition!=='active'||broken){
-          instance(getTemplate(species,kind,'far','ruin'),building.x,y,building.z,rotation,sx,1,sz,color);diagnostics.ruinedBuildings++;
+          instance(getTemplate(species,kind,'far','ruin'),x,y,z,rotation,sx,1,sz,color,100,false,slope);diagnostics.ruinedBuildings++;
         }else{
-          const pool=getTemplate(species,kind,lod);
-          instance(pool,building.x,y,building.z,rotation,sx,1,sz,color,progress>=1?100:Math.max(.09,d[1]*progress));
-          if(progress<1){instance(getTemplate(species,kind,'near','scaffold'),building.x,y,building.z,rotation,1,.35+progress*.65,1,color);diagnostics.constructionSites++;}
+          const pool=getTemplate(species,kind,lod,'building',shape);
+          instance(pool,x,y,z,rotation,shape?1:sx,1,sz,color,progress>=1?100:Math.max(.09,d[1]*progress),false,slope,health);
+          if(progress<1){instance(getTemplate(species,kind,'near','scaffold',shape),x,y,z,rotation,1,.35+progress*.65,sz,color,100,false,slope);diagnostics.constructionSites++;}
           else diagnostics.completedBuildings++;
         }
-        let proxy=view.proxies.get(building.id);if(!proxy){proxy=new THREE.Mesh(pickGeometry,materials.solid);view.proxies.set(building.id,proxy);}
+        let proxy=view.proxies.get(building.id);if(!proxy){proxy=buildingPickProxy();view.proxies.set(building.id,proxy);}
         const h=condition==='active'&&!broken?Math.max(.35,d[1]*(progress<1?progress:1)):1;
-        proxy.position.set(building.x,y+h*.5,building.z);proxy.scale.set(Math.max(d[0]*sx,d[2]*sz)*.53,h,Math.max(d[0]*sx,d[2]*sz)*.53);proxy.updateMatrixWorld(true);proxy.userData={settlementId:s.id,buildingId:building.id};pickables.push(proxy);liveBuildings.add(building.id);
+        if(shape) {
+          proxy.geometry=defensePickGeometry(shape,condition==='active'&&!broken?kind:'wall');proxy.position.set(x,y,z);proxy.rotation.set(0,rotation,0);proxy.scale.set(1,condition==='active'&&!broken?1:.22,sz);proxy.updateMatrix();proxy.matrix.elements[1]+=slope;proxy.matrixAutoUpdate=false;
+        }else{proxy.geometry=pickGeometry;proxy.matrixAutoUpdate=true;proxy.position.set(x,y+h*.5,z);proxy.rotation.set(0,rotation,0);proxy.scale.set(Math.max(d[0]*sx,d[2]*sz)*.53,h,Math.max(d[0]*sx,d[2]*sz)*.53);}
+        proxy.updateMatrixWorld(true);proxy.userData={settlementId:s.id,buildingId:building.id,topologyId:building.topologyId??null,buildLimit:shape&&condition==='active'&&!broken&&progress<1?Math.max(.09,d[1]*progress):null};pickables.push(proxy);liveBuildings.add(building.id);
+      }
+      for(const join of joins.values()) {
+        instance(getTemplate(species,'wall',lod,'join'),join.x,join.y+.025,join.z,0,join.width,1,join.width,color,join.progress>=1?100:Math.max(.09,2.3*join.progress),false,0,join.health);
+        if(join.count>1)diagnostics.wallJunctions++;
       }
       for(const id of view.proxies.keys())if(!liveBuildings.has(id))view.proxies.delete(id);
       if(condition==='active')for(const road of roadNetwork(s,records,state,view)){

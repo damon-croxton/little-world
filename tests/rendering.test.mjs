@@ -37,15 +37,21 @@ for (const aspect of [390 / 844, 1024 / 768, 1.6, 16 / 9, 2.4]) test(`overview f
   if (aspect === 1.6) assert.ok(maxX - minX > 1.5, 'desktop island should fill substantially more than the old overview');
 });
 
-test('every population category is exactly one real instance and overview silhouettes stay bounded', () => {
+test('population categories retain exact weighted census with one model per worker crew', () => {
   const { scene } = sceneAtOverview(), state = categories(), before = structuredClone(state), crowds = createCrowds(THREE, scene);
   crowds.update(state, 10, 's0', .5);
   const d = crowds.diagnostics;
   assert.equal(d.totalPopulation, 300); assert.equal(d.representedIndividuals, 300); assert.equal(d.visibleIndividuals, 300);
   assert.equal(d.homePresentIndividuals, 240); assert.equal(d.groupIndividuals, 60); assert.equal(d.workerIndividuals, 18); assert.equal(d.armyIndividuals, 12);
+  assert.equal(d.representedWorkerIndividuals, 18); assert.equal(d.visibleWorkerIndividuals, 18);
+  assert.equal(d.workerCrewCount, 3); assert.equal(d.visibleWorkerCrews, 3); assert.equal(d.drawnWorkerModels, 3);
+  assert.equal(d.workerBadgeCount, 0); assert.equal(d.workerBadgeLodCulled, 3);
+  assert.equal(d.militaryIndividuals, 30); assert.equal(d.visibleMilitaryIndividuals, 30);
   assert.equal(d.populationAccountingDelta, 0); assert.equal(d.overviewIndividuals, 300);
-  assert.equal(visibleMeshes(scene).reduce((n, m) => n + m.count, 0), 300);
-  assert.ok(d.triangleEstimate <= d.visibleIndividuals * 112, `${d.triangleEstimate} crowd triangles`);
+  assert.equal(d.drawnModels, 285); assert.equal(d.instances, d.drawnModels);
+  assert.equal(d.drawnModels, d.visibleIndividuals - d.visibleWorkerIndividuals + d.drawnWorkerModels);
+  assert.equal(visibleMeshes(scene).reduce((n, m) => n + m.count, 0), d.drawnModels);
+  assert.ok(d.triangleEstimate <= d.drawnModels * 112 + d.workerBadgeCount * 2, `${d.triangleEstimate} crowd triangles`);
   const species = new Map();
   for (const mesh of visibleMeshes(scene)) {
     const geometry = mesh.geometry;
@@ -65,6 +71,8 @@ test('every population category is exactly one real instance and overview silhou
     const matrix = new THREE.Matrix4(); mesh.getMatrixAt(sample.instanceIndex, matrix);
     const p = new THREE.Vector3().setFromMatrixPosition(matrix);
     assert.ok(Math.hypot(p.x - sample.x, p.y - sample.groundY, p.z - sample.z) < 1e-5, 'sample tracks literal rendered matrix');
+    assert.equal(sample.representedCount, sample.kind === 'worker' ? 6 : 1);
+    if (sample.kind === 'worker') { assert.equal(sample.crewSize, 6); assert.equal(sample.badgeText, '6×'); }
   }
   assert.deepEqual(state, before, 'renderer never mutates simulation'); crowds.dispose();
 });

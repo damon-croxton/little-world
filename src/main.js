@@ -30,6 +30,7 @@ let shownState=state;
 const view={victoryObserved:null,outcomeDismissed:false,worldGeneration:0,perspective:'omniscient',perspectiveOptions:[],speed:2,paused:false,selectedId:'s0',followId:null,overlay:'none',cinematic:false,quality:initialQuality,fps:0,diagnostics:{},advancing:null};
 let renderedPerspective=null;
 const scene=new THREE.Scene();
+scene.userData.crowdViewport={...initialViewport};
 scene.background=new THREE.Color('#879fa4');
 scene.fog=new THREE.FogExp2('#96aca9',.00085);
 const camera=new THREE.PerspectiveCamera(40,initialViewport.width/initialViewport.height,.2,2400);
@@ -110,7 +111,7 @@ const actions={
 };
 ui=createUI(document.getElementById('ui'),actions);
 function readDiagnostics(rendererPart){return typeof rendererPart.diagnostics==='function'?rendererPart.diagnostics():rendererPart.diagnostics||{};}
-function diagnostics(){const c=readDiagnostics(crowds),b=readDiagnostics(entities),t=readDiagnostics(terrain);return {fps:view.fps,frameMs:view.frameMs||0,performance:view.performance||null,performanceMode:view.advancing?'advancing':view.paused?'paused':'active',simulationSpeed:view.speed,simulationTime:state.time,simulationStep:state.step,drawCalls:renderer.info.render.calls,calls:renderer.info.render.calls,triangles:renderer.info.render.triangles,geometries:renderer.info.memory.geometries,textures:renderer.info.memory.textures,observationMode:view.perspective,viewer:shownState.viewer||null,groups:shownState.groups.length,totalPopulation:c.totalPopulation??shownState.settlements.reduce((n,s)=>n+s.population,0),visibleIndividuals:c.visibleIndividuals,representedIndividuals:c.representedIndividuals,crowds:c,buildings:b,terrain:t,fog:readDiagnostics(fog),combat:readDiagnostics(combatEffects)};}
+function diagnostics(){const c=readDiagnostics(crowds),b=readDiagnostics(entities),t=readDiagnostics(terrain);return {fps:view.fps,frameMs:view.frameMs||0,performance:view.performance||null,performanceMode:view.advancing?'advancing':view.paused?'paused':'active',simulationSpeed:view.speed,simulationTime:state.time,simulationStep:state.step,drawCalls:renderer.info.render.calls,calls:renderer.info.render.calls,triangles:renderer.info.render.triangles,geometries:renderer.info.memory.geometries,textures:renderer.info.memory.textures,observationMode:view.perspective,viewer:shownState.viewer||null,groups:shownState.groups.length,totalPopulation:c.totalPopulation??shownState.settlements.reduce((n,s)=>n+s.population,0),visibleIndividuals:c.visibleIndividuals,representedIndividuals:c.representedIndividuals,drawnModels:c.drawnModels??c.instances,visibleWorkerIndividuals:c.visibleWorkerIndividuals,drawnWorkerModels:c.drawnWorkerModels,visibleMilitaryIndividuals:c.visibleMilitaryIndividuals,crowds:c,buildings:b,terrain:t,fog:readDiagnostics(fog),combat:readDiagnostics(combatEffects)};}
 function refreshUI(){if(!ui)return;syncShownState();reconcileSelection();view.perspectiveOptions=state.factions.map(({id,name,species,color})=>({id,name,species,color}));view.outcome=state.outcome;view.victorySummary=state.outcome?.status==='victory'?{battles:state.stats.battles||0,captures:state.stats.captures||0,combatDeaths:state.stats.combatDeaths||0}:null;view.diagnostics=diagnostics();view.diagnosticsScope=renderedPerspective;ui.update(shownState,view);labelOccluders=[...document.querySelectorAll('.atlas-brand,.time-console,.faction-index,.inspector,.world-chronicle,.observation-tools,.atlas-settings,.field-guide,.first-light-note,.scale-reading,.mobile-toolbar,.mobile-gesture-hint,.world-outcome')].filter(el=>el.getClientRects().length).map(el=>el.getBoundingClientRect());}
 function clearOverlay(){for(const o of [...overlayGroup.children]){overlayGroup.remove(o);o.geometry?.dispose();o.material?.dispose();}}
 function updateOverlay(){
@@ -158,7 +159,7 @@ window.addEventListener('keydown',e=>{if(e.target.matches('input,textarea,select
   if(e.key.toLowerCase()==='h')document.body.classList.toggle('hide-ui');
   if(e.key==='Escape')actions.overview();
 });
-function resize(){const{width,height}=viewport();camera.aspect=width/height;camera.updateProjectionMatrix();renderer.setSize(width,height,false);composer.setSize(width,height);if(overviewLocked){fitOverview();controls.maxDistance=Math.max(700,overviewPosition.distanceTo(overviewTarget)*1.05);cameraGoal={target:overviewTarget.clone(),position:overviewPosition.clone()};}}
+function resize(){const{width,height}=viewport();scene.userData.crowdViewport={width,height};camera.aspect=width/height;camera.updateProjectionMatrix();renderer.setSize(width,height,false);composer.setSize(width,height);if(overviewLocked){fitOverview();controls.maxDistance=Math.max(700,overviewPosition.distanceTo(overviewTarget)*1.05);cameraGoal={target:overviewTarget.clone(),position:overviewPosition.clone()};}}
 window.addEventListener('resize',resize);window.visualViewport?.addEventListener('resize',resize);
 let then=performance.now(),uiTimer=0,frameCount=0,fpsTime=0,wallTime=0,timingKey='',timingTotals={simulationMs:0,sceneUpdateMs:0,renderSubmitMs:0,cpuMs:0,simulationPulses:0};
 document.addEventListener('visibilitychange',()=>{then=performance.now();});

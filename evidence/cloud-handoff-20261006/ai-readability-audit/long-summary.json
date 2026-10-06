@@ -1,0 +1,263 @@
+{
+  "runtime": "v24.19.0",
+  "startedAt": "2026-10-06T23:13:59.370Z",
+  "sourceSha256": "2bb4404bb14245eab7286bc772e437b70af631a36c12a4178ef664e196416257",
+  "cycles": 2000,
+  "civCount": 4,
+  "auditEveryCycles": 10,
+  "requestedSeeds": [
+    "first-light",
+    "tidal-garden",
+    "iron-valley",
+    "amber-dawn",
+    "winter-circuit",
+    "moss-and-machine",
+    "domination-01",
+    "domination-02",
+    "domination-03",
+    "domination-04",
+    "domination-05",
+    "domination-06",
+    "domination-07",
+    "domination-08",
+    "domination-09",
+    "domination-10",
+    "domination-11",
+    "domination-12",
+    "domination-13",
+    "domination-14"
+  ],
+  "stopAtVictory": false,
+  "runtimeScope": "Same Node runtime only; Chrome outcomes must be checked separately.",
+  "completedAt": "2026-10-06T23:19:46.648Z",
+  "sourceUnchangedDuringAudit": false,
+  "finalSourceSha256": "11b5b7574ba8ac8d9752928b5bc9f79396aab111bd82f97021d7c9a00c271e92",
+  "completedSeeds": 4,
+  "tested": 4,
+  "invariantPassed": 4,
+  "invariantFailed": 0,
+  "victories": 4,
+  "noWinnerByLimit": 0,
+  "victoryRateAmongAllRuns": 1,
+  "targetCycles": [
+    600,
+    1200
+  ],
+  "targetNominalWallMinutesAt2x": [
+    5,
+    10
+  ],
+  "earlyVictories": 0,
+  "targetWindowVictories": 3,
+  "lateVictories": 1,
+  "winningCycles": {
+    "minimum": 627,
+    "median": 809,
+    "maximum": 1599
+  },
+  "nominalWallSecondsAt2x": {
+    "minimum": 313.5,
+    "median": 404.5,
+    "maximum": 799.5
+  },
+  "winnerSpecies": {
+    "human": 1,
+    "machine": 3,
+    "hive": 0
+  },
+  "winnerAdvantages": {
+    "lean-logistics": 1,
+    "citadel": 1,
+    "longwatch": 1,
+    "war-school": 1
+  },
+  "peakActualPopulation": {
+    "minimum": 933,
+    "median": 2516,
+    "maximum": 2775
+  },
+  "seeds": [
+    {
+      "seed": "first-light",
+      "ok": true,
+      "completedCycles": 2000,
+      "victory": {
+        "winnerId": "f1",
+        "name": "Relay Reclaimers",
+        "species": "machine",
+        "advantage": "lean-logistics",
+        "wonAt": 1599,
+        "tick": 1599,
+        "nominalWallSecondsAt2x": 799.5,
+        "withinTarget600To1200Cycles": false
+      },
+      "peakPopulation": 933,
+      "firstContact": 82,
+      "firstMobilisation": 100,
+      "firstBattle": 143,
+      "conflict": {
+        "contacts": 7,
+        "mobilisations": 18,
+        "battles": 22,
+        "attacks": 4486,
+        "projectiles": 2000,
+        "towerShots": 0,
+        "combatDeaths": 175,
+        "retreats": 8,
+        "raids": 7,
+        "sieges": 18,
+        "breaches": 16,
+        "captures": 16,
+        "capitulations": 3,
+        "surrenders": 110,
+        "structuresDestroyed": 26,
+        "structureDamage": 4255.256588176856
+      },
+      "deathCauses": {
+        "combat": 175,
+        "workerColonistFieldAttrition": 0,
+        "strategicFieldAttrition": 12,
+        "homeScarcity": 0,
+        "unclassified": 0
+      },
+      "error": null
+    },
+    {
+      "seed": "tidal-garden",
+      "ok": true,
+      "completedCycles": 2000,
+      "victory": {
+        "winnerId": "f1",
+        "name": "Arc Reclaimers",
+        "species": "machine",
+        "advantage": "citadel",
+        "wonAt": 627,
+        "tick": 627,
+        "nominalWallSecondsAt2x": 313.5,
+        "withinTarget600To1200Cycles": true
+      },
+      "peakPopulation": 2498,
+      "firstContact": 90,
+      "firstMobilisation": 100,
+      "firstBattle": 144,
+      "conflict": {
+        "contacts": 10,
+        "mobilisations": 7,
+        "battles": 10,
+        "attacks": 1848,
+        "projectiles": 887,
+        "towerShots": 0,
+        "combatDeaths": 85,
+        "retreats": 4,
+        "raids": 3,
+        "sieges": 8,
+        "breaches": 8,
+        "captures": 8,
+        "capitulations": 3,
+        "surrenders": 60,
+        "structuresDestroyed": 10,
+        "structureDamage": 1737.7996927331117
+      },
+      "deathCauses": {
+        "combat": 85,
+        "workerColonistFieldAttrition": 0,
+        "strategicFieldAttrition": 4,
+        "homeScarcity": 0,
+        "unclassified": 0
+      },
+      "error": null
+    },
+    {
+      "seed": "iron-valley",
+      "ok": true,
+      "completedCycles": 2000,
+      "victory": {
+        "winnerId": "f0",
+        "name": "Orchard Wardens",
+        "species": "human",
+        "advantage": "longwatch",
+        "wonAt": 988,
+        "tick": 988,
+        "nominalWallSecondsAt2x": 494,
+        "withinTarget600To1200Cycles": true
+      },
+      "peakPopulation": 2775,
+      "firstContact": 93,
+      "firstMobilisation": 100,
+      "firstBattle": 136,
+      "conflict": {
+        "contacts": 7,
+        "mobilisations": 11,
+        "battles": 11,
+        "attacks": 1716,
+        "projectiles": 791,
+        "towerShots": 0,
+        "combatDeaths": 80,
+        "retreats": 4,
+        "raids": 2,
+        "sieges": 10,
+        "breaches": 7,
+        "captures": 7,
+        "capitulations": 3,
+        "surrenders": 20,
+        "structuresDestroyed": 10,
+        "structureDamage": 1600
+      },
+      "deathCauses": {
+        "combat": 80,
+        "workerColonistFieldAttrition": 0,
+        "strategicFieldAttrition": 31,
+        "homeScarcity": 0,
+        "unclassified": 0
+      },
+      "error": null
+    },
+    {
+      "seed": "amber-dawn",
+      "ok": true,
+      "completedCycles": 2000,
+      "victory": {
+        "winnerId": "f1",
+        "name": "Copper Survey Mesh",
+        "species": "machine",
+        "advantage": "war-school",
+        "wonAt": 630,
+        "tick": 630,
+        "nominalWallSecondsAt2x": 315,
+        "withinTarget600To1200Cycles": true
+      },
+      "peakPopulation": 2534,
+      "firstContact": 95,
+      "firstMobilisation": 100,
+      "firstBattle": 148,
+      "conflict": {
+        "contacts": 7,
+        "mobilisations": 12,
+        "battles": 15,
+        "attacks": 2588,
+        "projectiles": 1148,
+        "towerShots": 0,
+        "combatDeaths": 150,
+        "retreats": 9,
+        "raids": 1,
+        "sieges": 9,
+        "breaches": 7,
+        "captures": 7,
+        "capitulations": 3,
+        "surrenders": 55,
+        "structuresDestroyed": 0,
+        "structureDamage": 165.84594798508056
+      },
+      "deathCauses": {
+        "combat": 150,
+        "workerColonistFieldAttrition": 0,
+        "strategicFieldAttrition": 4,
+        "homeScarcity": 0,
+        "unclassified": 0
+      },
+      "error": null
+    }
+  ],
+  "timingScope": "Nominal observer pacing at2x, not measured browser/phone throughput. Winner-only timing distribution is accompanied by all-run victory rate and failed/unfinished counts.",
+  "browserVerification": "Not run by this Node audit."
+}

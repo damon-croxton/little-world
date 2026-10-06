@@ -90,3 +90,29 @@ test('seeded strengths display real numerical bonuses and tradeoffs',()=>{
 test('replaying the same world clears abandoned dirty setup fields',()=>{
   const t=setup();try{t.root.querySelector('#atlas-seed').value='not-committed';t.fire('#atlas-seed','input');t.actions.reset('ui-dom-proof',{civCount:4});assert.equal(t.root.querySelector('#atlas-seed').value,'ui-dom-proof');}finally{t.dispose();}
 });
+
+test('crew diagnostics distinguish actual people, weighted visibility and drawn models',()=>{
+  const t=setup();try{
+    const actual=t.state.settlements.reduce((sum,home)=>sum+home.population,0);
+    t.view.diagnostics.crowds={totalPopulation:actual,representedIndividuals:actual,visibleIndividuals:actual,culledIndividuals:0,drawnModels:actual-20,visibleWorkerIndividuals:22,drawnWorkerModels:2,visibleMilitaryIndividuals:14};
+    t.update();
+    const rows=Object.fromEntries([...t.root.querySelectorAll('.render-counts > div')].map(row=>[row.querySelector('dt').textContent,row.querySelector('dd').textContent]));
+    assert.equal(rows['Actual population'],actual.toLocaleString('en'));
+    assert.equal(rows['People visible in this view'],actual.toLocaleString('en'));
+    assert.equal(rows['Drawn crowd models'],(actual-20).toLocaleString('en'));
+    assert.equal(rows['Workers represented'],'22');assert.equal(rows['Worker crew models'],'2');
+    assert.match(t.root.querySelector('[data-slot="world-scale"]').textContent,new RegExp((actual-20).toLocaleString('en')+' models'));
+    assert.match(t.root.querySelector('[data-slot="render-accounting"]').textContent,/count badge.*Soldiers are drawn individually/);
+  }finally{t.dispose();}
+});
+
+test('own tactical inspector explains decisions while foreign observation hides private reasoning',()=>{
+  const t=setup();try{
+    const home=t.state.settlements[0];
+    const army={id:'ui-tactical-army',kind:'army',factionId:home.factionId,originId:home.id,size:12,units:{infantry:8,ranged:4},phase:'retreating',supply:75,morale:61,combat:{intent:'retreat',reason:'Observed defenders outnumber our supported force.',localStrength:12,enemyStrength:44}};
+    t.state.groups.push(army);t.view.selectedId=army.id;t.update();
+    const decision=t.root.querySelector('.tactical-reading');assert.ok(decision);assert.match(decision.textContent,/Retreat/);assert.match(decision.textContent,/Observed defenders outnumber/);assert.match(decision.textContent,/Own force\s*12/);assert.match(decision.textContent,/Estimated opposition\s*44/);
+    t.view.perspective='f1';t.update({...t.state,viewer:{mode:'faction',factionId:'f1'},knownPlaces:[]});
+    assert.equal(t.root.querySelector('.tactical-reading'),null);assert.doesNotMatch(t.root.querySelector('.inspector').textContent,/Observed defenders outnumber/);
+  }finally{t.dispose();}
+});

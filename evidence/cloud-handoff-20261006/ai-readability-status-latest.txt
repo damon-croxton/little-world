@@ -1,0 +1,23 @@
+LittleWorld AI and readability pass — 2026-10-06 23:13 UTC
+
+The live version remains safely checkpointed at 1ce023f. No new publication has occurred.
+Eight Astra/xhigh specialists have run across stages, with a maximum of six concurrent workers plus the integration lead.
+
+Implemented: single worker models with real crew-count badges; joined gate-first defensive screens; visible-threat priority, stable tactical targets and committed retreat; accounted worker cargo raids and economic building destruction; separated physical melee/ranged movement; reduced decorative clutter; inspector reasons and honest people/model diagnostics.
+
+Verification so far: full Node suite 213/213 passed before the latest label and audit refinements. Real Chrome captured natural before and after worker, battle and overview videos at normal 1x on the RTX 3080 Ti, with zero browser errors. Controlled Chrome scenarios passed twice. Final captures and regression suite are still required.
+
+Independent audits caught and corrected private enemy morale/supply leaking into strength estimates, duplicate garrison movement, nonfinite breach diagnostics, and storage spoilage accounting. A further strategic hidden-wall test exposed an unseen wall changing dispatch; its focused fix is now being verified. The 20-seed audit will begin after that fix.
+
+Visual review found the revised terrain and individual battle movement clearer. Overview badge overlaps are now fixed with label LOD and deterministic overlap filtering; browser confirmation is next. A quarter-facing gate capture will document the actual opening.
+
+Confirmed baseline Library files:
+Battle screenshot: libfile_20003c11e8608191a661eef53b9140cd
+Worker screenshot: libfile_ff4801efbe9481918d427bc8bd749af8
+Normal 1x battle video: libfile_0598f69edabc81919c03802a658a633b
+Overview screenshot: libfile_409bc72c3dec819192b44e607456507e
+
+Evidence folders: screenshots/ai-readability-before, screenshots/ai-readability-after, screenshots/ai-readability-workers, screenshots/ai-readability-tactical-browser.
+Remaining: final tactical/knowledge audit, multi-seed long runs, full Chrome observer/mobile controls, label review, performance sampling, final Library evidence, authorized main push, all CI jobs green, exact live build and actual public-browser smoke.
+
+No user action is needed. Outgoing parent thread messaging is not exposed in this environment, so this status is persisted for parent retrieval.

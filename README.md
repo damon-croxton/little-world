@@ -1,6 +1,6 @@
 # LittleWorld
 
-An observer-first domination simulation of human settlers, scavenger machines and alien hives. Civilisations gather physical resources, grow settlements, train infantry and ranged forces, build walls and shooting towers, scout through fog of war, and compete to control the world. Every living body represents one actual population member; temporary falling markers depict recorded deaths.
+An observer-first domination simulation of human settlers, scavenger machines and alien hives. Civilisations gather physical resources, grow settlements, train infantry and ranged forces, build defenses, scout through fog of war, and compete to control the world. Each resource crew appears as one worker with its actual count, such as 11×. Soldiers and home inhabitants remain individual bodies; temporary falling markers depict recorded deaths.
 
 All architecture, terrain, characters and effects are original procedural geometry. Built with vanilla JavaScript and Three.js 0.160.1; no downloaded artwork is required.
 
@@ -40,9 +40,10 @@ Seeded advantages are independent of species. Examples include faster gathering 
 
 - Workers travel to finite or regenerating deposits, extract within reach, carry cargo and deliver it home. Journey provisions are funded before departure. Trapped or exhausted expeditions can lose real people and cargo.
 - Each species has distinct infantry and ranged producers. Buildings require funded construction, and finite training queues pay their costs and reserve existing civilians. A cancelled or destroyed course cannot complete later.
-- Walls, controlled gates and staffed towers are real building records with health. Towers need two actual ranged operators and paid ammunition. Civilians can contest a paper resource claim until real troops or towers secure it.
+- Defenses grow as connected screens facing known approaches, beginning with a usable gate and joined wings. The rear remains open, and planned construction preserves friendly routes. Staffed towers need two actual ranged operators and paid ammunition. Civilians can contest a paper resource claim until real troops or towers secure it.
 - Terrain includes deep water, rocky barriers, fords and mountain passes. Group routes and body formation offsets respect physical obstacles; friendly/occupier gates preserve access.
-- Infantry strikes and ranged projectiles create real damage and casualty events. Effects read those events and never start a cosmetic battle. Formations, reactions, falling markers and retreat signals remain bounded.
+- Infantry loosen into reachable contact positions; ranged soldiers seek firing distance. Local body separation and a shared squad route keep passage movement physical. Infantry strikes and ranged projectiles create real damage and casualty events; effects only read those events.
+- Squads prioritize locally observed defenders, compare their supported strength with observable enemy types, and retreat when heavily overmatched. They can seize an exposed crew's real cargo or damage economic buildings. A useful breach must beat the cost of a detour. The inspector explains decisions and target interruptions. Lost storage records excess supplies as spoilage in the ledger.
 - Field observations travel with scouts and parties; home reports and earned relays deliver command knowledge. Hidden enemy stores, queues, future routes and fresh deposit quantities are unavailable to AI planners.
 - Technology and trade require resources and people. A resource ledger accounts for production, extraction, cargo, deliveries, consumption, construction, research, training and losses.
 
@@ -65,6 +66,8 @@ With `npm start` running separately, browser verification can run in an authoris
 npx playwright install --with-deps chromium
 node tests/controls-v2.mjs
 node tests/visual-v2.mjs
+node tests/tactical-browser.mjs
+node tests/ai-readability-browser.mjs
 ```
 
 Browser tests default to bundled Chromium. `BASE_URL` accepts a local server or hosted project subpath; `QA_CIVS` selects the start count. `QA_TIER=full` includes the 3,000-cycle/high-quality tier. `QA_QUALITY=low` selects performance rendering, `BROWSER_CHANNEL=chrome` selects installed Chrome, and `QA_VIDEO=0` explicitly skips recording. Software-WebGL CI is labelled as such.
@@ -73,9 +76,9 @@ The Pages workflow gates every push to `main` on Node tests, seeded simulation a
 
 ## Measurement and model boundaries
 
-This is a simulation-first tech demo, not a historical prediction or a directly controlled multiplayer RTS. Strategic decisions and logistics operate through settlements and groups; individuals are separately rendered bodies. Home civilian activity is representative motion, while deployed teams and battle formations follow physical state.
+This is a simulation-first tech demo, not a historical prediction or a directly controlled multiplayer RTS. Strategic decisions and logistics operate through settlements and groups. Resource crews use one articulated model with a count badge, while their complete workforce and cargo remain in the simulation. Home civilian activity is representative motion; military bodies follow physical state. Local congestion can queue soldiers; individual soldiers do not run global route planners.
 
-The live diagnostics distinguish actual/scoped population, represented bodies and camera-visible bodies. In a civilisation perspective, the count covers its own census and observable foreign people, not hidden world population. Paused, active and advancing timing windows are separate.
+The live diagnostics distinguish actual/scoped population, people represented in the view, and actual drawn models. A visible 11-person crew contributes eleven people and one model. Count badges hide at the widest zoom and avoid overlap; selecting a visible crew keeps its badge available. In a civilisation perspective, the census includes owned and observable foreign people. Paused, active and advancing timing windows are separate.
 
 Node render benchmarks measure CPU simulation/crowd work and geometry only. They do not measure GPU, buildings, landscape, interface or screen refresh. Browser frame measurements describe their recorded runner, viewport and quality, not a guarantee for other hardware. DOM and synthetic pointer tests are not evidence of actual mobile layout or native gestures.
 
@@ -85,10 +88,10 @@ New births and housing stop at 900 people per settlement; each independent facti
 
 - `src/sim/core.js`, `economy.js`: physical work, settlement growth, paid construction and conservation.
 - `src/sim/military.js`, `defenses.js`: real role census, training and funded defensive planning.
-- `src/sim/strategy.js`, `combat.js`, `conquest.js`, `control.js`: scouting, campaigns, impacts, occupation and sovereignty.
+- `src/sim/strategy.js`, `combat.js`, `formations.js`, `conquest.js`, `control.js`: scouting, tactical decisions, physical contact, impacts, occupation and sovereignty.
 - `src/sim/knowledge.js`, `progression.js`: visibility, returned intelligence, technology and commerce.
 - `src/world.js`, `config.js`, `sim/navigation.js`: seeded geography, civilisation count and collision-aware routes.
-- `src/render/`: terrain, buildings, individually instanced bodies, fog and combat effects.
+- `src/render/`: terrain, buildings, instanced bodies, count-badged workers, fog and combat effects.
 - `src/main.js`, `clock.js`, `input.js`, `ui.js`: observer integration, timing, gestures and interface.
 
 Three.js is MIT licensed. Playwright and Linkedom are development-only verification dependencies.

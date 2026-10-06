@@ -1,0 +1,4722 @@
+{
+  "at": "2026-10-06T23:13:19.754Z",
+  "url": "http://127.0.0.1:4174/?seed=first-light&civs=4&quality=low",
+  "tier": "ci",
+  "quality": "low",
+  "scope": "Real DOM/mouse/keyboard observer commands, deterministic API only for replay and natural disappearance setup",
+  "checks": [
+    {
+      "name": "Boot: configured faction controls, WebGL canvas, current cycle labels",
+      "status": "passed",
+      "detail": {
+        "gpu": "ANGLE (NVIDIA, NVIDIA GeForce RTX 3080 Ti (0x00002208) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        "initialPopulation": 413
+      }
+    },
+    {
+      "name": "Pause button freezes cycles, pulses, and sampled individual motion",
+      "status": "passed",
+      "detail": {
+        "step": 29,
+        "samples": 38
+      }
+    },
+    {
+      "name": "Resume button advances simulation pulses",
+      "status": "passed"
+    },
+    {
+      "name": "1x button sets speed, resumes, and advances cycles",
+      "status": "passed",
+      "detail": {
+        "pulses": 1,
+        "cycles": 0.10000000000000009
+      }
+    },
+    {
+      "name": "2x button sets speed, resumes, and advances cycles",
+      "status": "passed",
+      "detail": {
+        "pulses": 1,
+        "cycles": 0.10000000000000009
+      }
+    },
+    {
+      "name": "4x button sets speed, resumes, and advances cycles",
+      "status": "passed",
+      "detail": {
+        "pulses": 1,
+        "cycles": 0.10000000000000009
+      }
+    },
+    {
+      "name": "16x button sets speed, resumes, and advances cycles",
+      "status": "passed",
+      "detail": {
+        "pulses": 3,
+        "cycles": 0.2999999999999998
+      }
+    },
+    {
+      "name": "32x button sets speed, resumes, and advances cycles",
+      "status": "passed",
+      "detail": {
+        "pulses": 7,
+        "cycles": 0.7000000000000002
+      }
+    },
+    {
+      "name": "Space toggles pause; number shortcuts choose all five rates",
+      "status": "passed"
+    },
+    {
+      "name": "Seed form resets to cycle zero and clears selection follow",
+      "status": "passed"
+    },
+    {
+      "name": "Civilization slider starts reproducible three, four and five civilization worlds",
+      "status": "passed",
+      "detail": {
+        "counts": [
+          3,
+          4,
+          5
+        ]
+      }
+    },
+    {
+      "name": "Unsaved seed and civilization edits survive blur and interface refresh",
+      "status": "passed"
+    },
+    {
+      "name": "Faction perspective hides unknown actors and switching views never changes simulation",
+      "status": "passed"
+    },
+    {
+      "name": "Seed input protects text from global keyboard shortcuts",
+      "status": "passed"
+    },
+    {
+      "name": "Reset same seed reproduces identical initial state and 30-cycle replay",
+      "status": "passed",
+      "detail": {
+        "initialBytes": 851588,
+        "replayBytes": 2226677
+      }
+    },
+    {
+      "name": "Faction 1 click selects actual colony",
+      "status": "passed",
+      "detail": "SETTLEMENT IN FOCUS\nI\nAmber Hearth\nAmber Commons\nHuman"
+    },
+    {
+      "name": "Faction 2 click selects actual colony",
+      "status": "passed",
+      "detail": "SETTLEMENT IN FOCUS\nII\nRelay Foundry\nRelay Reclaimers\nMachine"
+    },
+    {
+      "name": "Faction 3 click selects actual colony",
+      "status": "passed",
+      "detail": "SETTLEMENT IN FOCUS\nIII\nOpal Cradle\nOpal Thorn Kin\nHive"
+    },
+    {
+      "name": "Faction 4 click selects actual colony",
+      "status": "passed",
+      "detail": "SETTLEMENT IN FOCUS\nI\nDawn Hearth\nDawn Artificers\nHuman"
+    },
+    {
+      "name": "Visible world label selects the named settlement",
+      "status": "passed"
+    },
+    {
+      "name": "Follow button focuses colony and toggles off",
+      "status": "passed"
+    },
+    {
+      "name": "World drag cancels follow",
+      "status": "passed"
+    },
+    {
+      "name": "Cinematic button moves paused camera; Escape exits",
+      "status": "passed"
+    },
+    {
+      "name": "Keyboard F/C/H follow, cinematic and UI visibility controls work",
+      "status": "passed"
+    },
+    {
+      "name": "Settings quality switches real renderer shadows",
+      "status": "passed"
+    },
+    {
+      "name": "Field guide opens and explains actual individuals and cycle time",
+      "status": "passed"
+    },
+    {
+      "name": "Focused buttons retain native Space and Enter activation",
+      "status": "passed"
+    },
+    {
+      "name": "Settings and field guide exclude each other and dismiss cleanly",
+      "status": "passed"
+    },
+    {
+      "name": "Repeated seed submissions use the latest seed and clear old follow",
+      "status": "passed"
+    },
+    {
+      "name": "Reset interrupts Developed world without advancing the new seed or false success",
+      "status": "passed",
+      "detail": {
+        "seed": "controls-latest",
+        "step": 0
+      }
+    },
+    {
+      "name": "Stop interrupts bulk advance, reports actual progress and stays paused",
+      "status": "passed",
+      "detail": {
+        "completedCycles": 375,
+        "step": 3750
+      }
+    },
+    {
+      "name": "Speed change cancels bulk advance and resumes only the requested clock rate",
+      "status": "passed",
+      "detail": {
+        "startStep": 3527,
+        "endStep": 3528,
+        "speed": 4
+      }
+    },
+    {
+      "name": "Developed world button actually advances current seed by 1,200 cycles",
+      "status": "passed",
+      "detail": {
+        "milliseconds": 25485,
+        "cycle": 1200
+      }
+    },
+    {
+      "name": "Natural domination pauses once; Keep watching resumes without repeated result interruption",
+      "status": "passed",
+      "detail": {
+        "status": "victory",
+        "winnerId": "f2",
+        "wonAt": 952,
+        "tick": 952,
+        "reason": "All remaining independent settlements and viable opposing armies have been defeated.",
+        "continuedFromStep": 12000,
+        "continuedToStep": 12003
+      }
+    },
+    {
+      "name": "Developed world population and drawn models satisfy weighted crew accounting",
+      "status": "passed",
+      "detail": {
+        "population": 695,
+        "represented": 695,
+        "visiblePeople": 695,
+        "visibleWorkers": 224,
+        "workerModels": 12,
+        "militaryIndividuals": 79,
+        "actualMeshInstances": 483
+      }
+    },
+    {
+      "name": "Population, crew and model counts in diagnostics settings are truthful",
+      "status": "passed",
+      "detail": {
+        "Actual population": "695",
+        "Represented individuals": "695",
+        "People visible in this view": "695",
+        "Drawn crowd models": "483",
+        "Workers represented": "224",
+        "Worker crew models": "12",
+        "Individual soldiers visible": "79",
+        "Hidden by culling": "0"
+      }
+    },
+    {
+      "name": "territory overlay click updates view and accessible state",
+      "status": "passed",
+      "detail": {
+        "calls": 232,
+        "triangles": 1790075,
+        "groups": 12
+      }
+    },
+    {
+      "name": "knowledge overlay click updates view and accessible state",
+      "status": "passed",
+      "detail": {
+        "calls": 232,
+        "triangles": 1790075,
+        "groups": 12
+      }
+    },
+    {
+      "name": "routes overlay click updates view and accessible state",
+      "status": "passed",
+      "detail": {
+        "calls": 232,
+        "triangles": 1790075,
+        "groups": 12
+      }
+    },
+    {
+      "name": "resources overlay click updates view and accessible state",
+      "status": "passed",
+      "detail": {
+        "calls": 232,
+        "triangles": 1790075,
+        "groups": 12
+      }
+    },
+    {
+      "name": "none overlay click updates view and accessible state",
+      "status": "passed",
+      "detail": {
+        "calls": 231,
+        "triangles": 1790075,
+        "groups": 12
+      }
+    },
+    {
+      "name": "Life, Intelligence, Record tabs update accessible panel",
+      "status": "passed"
+    },
+    {
+      "name": "Inspector tabs support arrow, Home, and End keys",
+      "status": "passed"
+    },
+    {
+      "name": "Chronicle scope switches world and selected faction events",
+      "status": "passed"
+    },
+    {
+      "name": "Visible party control selects and follows actual group",
+      "status": "passed",
+      "detail": {
+        "id": "g1474"
+      }
+    },
+    {
+      "name": "Expired selected party falls back to its home and clears follow",
+      "status": "passed",
+      "detail": {
+        "expired": "g1474",
+        "origin": "s2",
+        "cycles": 5
+      }
+    },
+    {
+      "name": "Worksite link opens resource inspector and real remaining stock",
+      "status": "passed",
+      "detail": {
+        "id": "n225",
+        "amount": 2689.4810384277066
+      }
+    },
+    {
+      "name": "Resource Teams and Ledger tabs disclose actual teams and ledger values",
+      "status": "passed",
+      "detail": {
+        "teams": 1,
+        "ledger": {
+          "initial": 505273,
+          "regenerated": 7649.716316414713,
+          "extracted": 15382.755836937038,
+          "delivered": 14910.255365356628,
+          "produced": 6452.313729242216,
+          "consumed": 14442.743211975787,
+          "construction": 123.20000000000002,
+          "research": 1824,
+          "training": 710.932,
+          "tradeNet": 0,
+          "lost": 2345.841817765297
+        }
+      }
+    },
+    {
+      "name": "Canvas resource picking selects an actual visible deposit",
+      "status": "passed",
+      "detail": {
+        "expected": "n0",
+        "selected": "n0",
+        "x": 796.5189227674589,
+        "y": 604.3734270763769
+      }
+    },
+    {
+      "name": "Responsive 1440x900: main controls remain in viewport and clickable",
+      "status": "passed",
+      "detail": {
+        "controls": 9
+      }
+    },
+    {
+      "name": "Responsive 960x700: main controls remain in viewport and clickable",
+      "status": "passed",
+      "detail": {
+        "controls": 9
+      }
+    },
+    {
+      "name": "Touch portrait: coarse-pointer layout starts collapsed and contains its canvas",
+      "status": "passed",
+      "detail": {
+        "coarse": true,
+        "touchPoints": 1,
+        "width": 390,
+        "height": 844,
+        "documentWidth": 390,
+        "documentHeight": 844,
+        "canvas": {
+          "x": 0,
+          "y": 0,
+          "right": 390,
+          "bottom": 844
+        }
+      }
+    },
+    {
+      "name": "Touch portrait: society and inspector panels open, fit and close",
+      "status": "passed"
+    },
+    {
+      "name": "Touch portrait: one-finger pan, pinch zoom and two-finger orbit keep the page stationary",
+      "status": "passed",
+      "detail": {
+        "before": {
+          "position": [
+            621.4272522249303,
+            610.7280582039604,
+            795.4268828479098
+          ],
+          "target": [
+            26.595822613204014,
+            4,
+            34.042652944901135
+          ],
+          "distance": 1140.8984669158233,
+          "selected": "s0",
+          "step": 14,
+          "scroll": [
+            0,
+            0
+          ]
+        },
+        "panned": {
+          "position": [
+            591.7430696506277,
+            622.6962702030511,
+            809.0804815473084
+          ],
+          "target": [
+            -3.088359961098498,
+            15.968211999090615,
+            47.696251644299615
+          ],
+          "distance": 1140.8984669158235,
+          "selected": "s0",
+          "step": 14,
+          "scroll": [
+            0,
+            0
+          ]
+        },
+        "zoomed": {
+          "position": [
+            270.0135239306216,
+            296.5265812747294,
+            399.80359260271007
+          ],
+          "target": [
+            -4.402979671993257,
+            16.498246719055988,
+            48.300926875963775
+          ],
+          "distance": 526.5685231919174,
+          "selected": "s0",
+          "step": 14,
+          "scroll": [
+            0,
+            0
+          ]
+        },
+        "orbited": {
+          "position": [
+            161.14805426773887,
+            342.7958207037743,
+            426.9806738904916
+          ],
+          "target": [
+            -4.407234156069676,
+            16.4999620624799,
+            48.30288377735754
+          ],
+          "distance": 526.5685231919174,
+          "selected": "s0",
+          "step": 14,
+          "scroll": [
+            0,
+            0
+          ]
+        }
+      }
+    },
+    {
+      "name": "Touch portrait: a real crew keeps one model and a readable selected badge",
+      "status": "passed",
+      "detail": {
+        "crew": {
+          "id": "g121",
+          "size": 11
+        },
+        "modelCount": 1,
+        "badge": "11×",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        }
+      }
+    },
+    {
+      "name": "Touch landscape: coarse-pointer layout starts collapsed and contains its canvas",
+      "status": "passed",
+      "detail": {
+        "coarse": true,
+        "touchPoints": 1,
+        "width": 844,
+        "height": 390,
+        "documentWidth": 844,
+        "documentHeight": 390,
+        "canvas": {
+          "x": 0,
+          "y": 0,
+          "right": 844,
+          "bottom": 390
+        }
+      }
+    },
+    {
+      "name": "Touch landscape: society and inspector panels open, fit and close",
+      "status": "passed"
+    },
+    {
+      "name": "Touch landscape: one-finger pan, pinch zoom and two-finger orbit keep the page stationary",
+      "status": "passed",
+      "detail": {
+        "before": {
+          "position": [
+            227.10218063273638,
+            208.51648517992297,
+            290.69079120990256
+          ],
+          "target": [
+            26.595822613204014,
+            4,
+            34.042652944901135
+          ],
+          "distance": 384.575167153962,
+          "selected": "s0",
+          "step": 15,
+          "scroll": [
+            0,
+            0
+          ]
+        },
+        "panned": {
+          "position": [
+            205.39953437275932,
+            217.26666284543623,
+            300.67318577330394
+          ],
+          "target": [
+            4.893176353226839,
+            12.750177665513226,
+            44.02504750830252
+          ],
+          "distance": 384.57516715396207,
+          "selected": "s0",
+          "step": 15,
+          "scroll": [
+            0,
+            0
+          ]
+        },
+        "zoomed": {
+          "position": [
+            96.43430483069226,
+            107.50939129065937,
+            162.96699341876183
+          ],
+          "target": [
+            3.982949400502378,
+            13.117167361464071,
+            44.443717401157656
+          ],
+          "distance": 177.49623099413643,
+          "selected": "s0",
+          "step": 15,
+          "scroll": [
+            0,
+            0
+          ]
+        },
+        "orbited": {
+          "position": [
+            18.86972095992945,
+            139.6479096686943,
+            168.03116181762294
+          ],
+          "target": [
+            3.979781148788614,
+            13.118444752481377,
+            44.44517467684209
+          ],
+          "distance": 177.49623099413634,
+          "selected": "s0",
+          "step": 15,
+          "scroll": [
+            0,
+            0
+          ]
+        }
+      }
+    },
+    {
+      "name": "Touch landscape: a real crew keeps one model and a readable selected badge",
+      "status": "passed",
+      "detail": {
+        "crew": {
+          "id": "g121",
+          "size": 11
+        },
+        "modelCount": 1,
+        "badge": "11×",
+        "viewport": {
+          "width": 844,
+          "height": 390
+        }
+      }
+    },
+    {
+      "name": "No runtime errors through observer workflow",
+      "status": "passed"
+    }
+  ],
+  "errors": [],
+  "warnings": [],
+  "screenshots": [
+    {
+      "path": "screenshots\\ai-readability-controls\\controls-v2-initial-1440.png",
+      "tick": 0,
+      "seed": "first-light",
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "camera": [
+        227.09958730628458,
+        208.51467706018104,
+        290.6875893686582
+      ],
+      "target": [
+        26.594985586266983,
+        4.000013529978993,
+        34.041691874572635
+      ],
+      "diagnostics": {
+        "fps": 50,
+        "frameMs": 20.000000000000004,
+        "performance": {
+          "mode": "paused",
+          "speed": 4,
+          "quality": "low",
+          "sampledFrames": 50,
+          "sampledSeconds": 1.0000000000000002,
+          "simulationPulses": 0,
+          "simulationCyclesPerSecond": 0,
+          "simulationMs": 0.0020000004768371583,
+          "sceneUpdateMs": 0.5059999871253967,
+          "renderSubmitMs": 1.091999990940094,
+          "cpuMs": 1.5999999785423278,
+          "gpuTiming": false
+        },
+        "performanceMode": "paused",
+        "simulationSpeed": 4,
+        "simulationTime": 0,
+        "simulationStep": 0,
+        "drawCalls": 176,
+        "calls": 176,
+        "triangles": 1782049,
+        "geometries": 75,
+        "textures": 14,
+        "observationMode": "omniscient",
+        "viewer": null,
+        "groups": 0,
+        "totalPopulation": 413,
+        "visibleIndividuals": 413,
+        "representedIndividuals": 413,
+        "drawnModels": 413,
+        "visibleWorkerIndividuals": 0,
+        "drawnWorkerModels": 0,
+        "visibleMilitaryIndividuals": 52,
+        "crowds": {
+          "totalPopulation": 413,
+          "representedIndividuals": 413,
+          "visibleIndividuals": 413,
+          "culledIndividuals": 0,
+          "homePresentIndividuals": 413,
+          "homeVisibleIndividuals": 413,
+          "groupIndividuals": 0,
+          "groupVisibleIndividuals": 0,
+          "workerIndividuals": 0,
+          "representedWorkerIndividuals": 0,
+          "visibleWorkerIndividuals": 0,
+          "workerCrewCount": 0,
+          "visibleWorkerCrews": 0,
+          "drawnWorkerModels": 0,
+          "workerBadgeCount": 0,
+          "workerBadgeCapacity": 0,
+          "workerBadgeDrawCalls": 0,
+          "militaryIndividuals": 52,
+          "visibleMilitaryIndividuals": 52,
+          "armyIndividuals": 0,
+          "groupCount": 0,
+          "instances": 413,
+          "drawnModels": 413,
+          "detailedIndividuals": 0,
+          "simplifiedIndividuals": 413,
+          "overviewIndividuals": 413,
+          "reusedFrame": true,
+          "drawCallsEstimate": 6,
+          "triangleEstimate": 44344,
+          "allocatedInstances": 640,
+          "instanceAllocationUnfulfilled": 0,
+          "homePresentBySettlement": {
+            "s0": 108,
+            "s1": 99,
+            "s2": 98,
+            "s3": 108
+          },
+          "populationAccountingDelta": 0,
+          "terrainCacheSamples": 238,
+          "occlusionCulling": false,
+          "censusScope": "whole-world",
+          "workerBadgeLodCulled": 0,
+          "workerBadgeOverlapCulled": 0
+        },
+        "buildings": {
+          "buildingRecords": 36,
+          "completedBuildings": 36,
+          "constructionSites": 0,
+          "renderedBuildings": 36,
+          "nearBuildings": 0,
+          "farBuildings": 36,
+          "ruinedBuildings": 0,
+          "temporaryShelters": 0,
+          "roadSegments": 84,
+          "instances": 163,
+          "drawCallsEstimate": 40,
+          "settlements": 4,
+          "camps": 0,
+          "ruins": 0,
+          "wallSegments": 0,
+          "wallLength": 0,
+          "wallJunctions": 0,
+          "gatePassages": 0,
+          "damagedBuildings": 0,
+          "defenseSpans": [],
+          "byKind": {
+            "housing": 16,
+            "storage": 4,
+            "workshop": 4,
+            "farm": 4,
+            "power": 4,
+            "lab": 0,
+            "hub": 4,
+            "barracks": 0,
+            "range": 0,
+            "fabricator": 0,
+            "launcher": 0,
+            "brooder": 0,
+            "spitter": 0,
+            "wall": 0,
+            "gate": 0,
+            "tower": 0
+          },
+          "bySpecies": {
+            "human": 18,
+            "machine": 9,
+            "hive": 9
+          },
+          "minRadius": 11.261017305526636,
+          "maxRadius": 11.26101730552665
+        },
+        "terrain": {
+          "worldRadius": 180,
+          "resourceSites": 520,
+          "visibleResourceSites": 520,
+          "visibleResourceSiteDetails": 1498,
+          "impassableRidges": 2,
+          "tacticalPasses": 7,
+          "resourcePieces": 4631,
+          "visibleResourcePieces": 4631,
+          "visibleDecorativePieces": 1152,
+          "depletedSites": 0,
+          "activeWorksites": 0,
+          "resourceRevision": 1,
+          "decorativeChunks": 21,
+          "resourceBatches": 95,
+          "resourceDrawCalls": 95,
+          "clearingRevision": 2
+        },
+        "fog": {
+          "active": false,
+          "visibleCells": 0,
+          "exploredCells": 0,
+          "rememberedPlaces": 0,
+          "drawCalls": 0
+        },
+        "combat": {
+          "projectiles": 0,
+          "strikes": 0,
+          "impacts": 0,
+          "casualties": 0,
+          "retreats": 0,
+          "visibleEffects": 0,
+          "droppedEffects": 0,
+          "drawCallsEstimate": 0,
+          "events": 0,
+          "reusedFrame": true
+        }
+      }
+    },
+    {
+      "path": "screenshots\\ai-readability-controls\\controls-v2-natural-victory-result.png",
+      "tick": 1200,
+      "seed": "first-light",
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "camera": [
+        227.09958730628458,
+        208.51467706018104,
+        290.6875893686582
+      ],
+      "target": [
+        26.594985586266983,
+        4.000013529978993,
+        34.041691874572635
+      ],
+      "diagnostics": {
+        "fps": 0,
+        "frameMs": 0,
+        "performance": null,
+        "performanceMode": "paused",
+        "simulationSpeed": 4,
+        "simulationTime": 1200,
+        "simulationStep": 12000,
+        "drawCalls": 231,
+        "calls": 231,
+        "triangles": 1790075,
+        "geometries": 217,
+        "textures": 14,
+        "observationMode": "omniscient",
+        "viewer": null,
+        "groups": 12,
+        "totalPopulation": 695,
+        "visibleIndividuals": 695,
+        "representedIndividuals": 695,
+        "drawnModels": 483,
+        "visibleWorkerIndividuals": 224,
+        "drawnWorkerModels": 12,
+        "visibleMilitaryIndividuals": 79,
+        "crowds": {
+          "totalPopulation": 695,
+          "representedIndividuals": 695,
+          "visibleIndividuals": 695,
+          "culledIndividuals": 0,
+          "homePresentIndividuals": 471,
+          "homeVisibleIndividuals": 471,
+          "groupIndividuals": 224,
+          "groupVisibleIndividuals": 224,
+          "workerIndividuals": 224,
+          "representedWorkerIndividuals": 224,
+          "visibleWorkerIndividuals": 224,
+          "workerCrewCount": 12,
+          "visibleWorkerCrews": 12,
+          "drawnWorkerModels": 12,
+          "workerBadgeCount": 0,
+          "workerBadgeCapacity": 0,
+          "workerBadgeDrawCalls": 0,
+          "militaryIndividuals": 79,
+          "visibleMilitaryIndividuals": 79,
+          "armyIndividuals": 0,
+          "groupCount": 12,
+          "instances": 483,
+          "drawnModels": 483,
+          "detailedIndividuals": 0,
+          "simplifiedIndividuals": 695,
+          "overviewIndividuals": 695,
+          "reusedFrame": true,
+          "drawCallsEstimate": 8,
+          "triangleEstimate": 52719,
+          "allocatedInstances": 3456,
+          "instanceAllocationUnfulfilled": 0,
+          "homePresentBySettlement": {
+            "s0": 81,
+            "s1": 199,
+            "s2": 125,
+            "s3": 66
+          },
+          "populationAccountingDelta": 0,
+          "terrainCacheSamples": 2989,
+          "occlusionCulling": false,
+          "censusScope": "whole-world",
+          "workerBadgeLodCulled": 12,
+          "workerBadgeOverlapCulled": 0
+        },
+        "buildings": {
+          "buildingRecords": 91,
+          "completedBuildings": 72,
+          "constructionSites": 0,
+          "renderedBuildings": 91,
+          "nearBuildings": 0,
+          "farBuildings": 91,
+          "ruinedBuildings": 19,
+          "temporaryShelters": 0,
+          "roadSegments": 209,
+          "instances": 400,
+          "drawCallsEstimate": 93,
+          "settlements": 4,
+          "camps": 0,
+          "ruins": 0,
+          "wallSegments": 8,
+          "wallLength": 59.999999999999986,
+          "wallJunctions": 6,
+          "gatePassages": 2,
+          "damagedBuildings": 2,
+          "defenseSpans": [
+            {
+              "buildingId": "b202",
+              "settlementId": "s0",
+              "topologyId": "s0:defense-screen",
+              "kind": "gate",
+              "from": {
+                "x": -71.18221820598072,
+                "z": -56.166778919266605,
+                "y": 2.2
+              },
+              "to": {
+                "x": -76.28036485534102,
+                "z": -63.583577469963274,
+                "y": 2.2
+              },
+              "length": 8.999999999999995,
+              "gateWidth": 5,
+              "open": false,
+              "progress": 1,
+              "broken": false
+            },
+            {
+              "buildingId": "b253",
+              "settlementId": "s0",
+              "topologyId": "s0:defense-screen",
+              "kind": "wall",
+              "from": {
+                "x": -71.18221820598072,
+                "z": -56.166778919266605,
+                "y": 2.2
+              },
+              "to": {
+                "x": -66.24340680557812,
+                "z": -51.206119492209226,
+                "y": 2.9429814838451147
+              },
+              "length": 6.999999999999995,
+              "gateWidth": 0,
+              "open": false,
+              "progress": 1,
+              "broken": false
+            },
+            {
+              "buildingId": "b304",
+              "settlementId": "s0",
+              "topologyId": "s0:defense-screen",
+              "kind": "wall",
+              "from": {
+                "x": -76.28036485534102,
+                "z": -63.583577469963274,
+                "y": 2.2
+              },
+              "to": {
+                "x": -79.14247266154855,
+                "z": -69.97171795884154,
+                "y": 4.116438257131434
+              },
+              "length": 6.999999999999995,
+              "gateWidth": 0,
+              "open": false,
+              "progress": 1,
+              "broken": false
+            },
+            {
+              "buildingId": "b209",
+              "settlementId": "s1",
+              "topologyId": "s1:defense-screen",
+              "kind": "gate",
+              "from": {
+                "x": 68.36044678500846,
+                "z": -81.35581775423907,
+                "y": 3.466321012174202
+              },
+              "to": {
+                "x": 69.49596300451608,
+                "z": -72.42773829025381,
+                "y": 3.4015571458140634
+              },
+              "length": 9.000000000000007,
+              "gateWidth": 5,
+              "open": false,
+              "progress": 1,
+              "broken": false
+            },
+            {
+              "buildingId": "b263",
+              "settlementId": "s1",
+              "topologyId": "s1:defense-screen",
+              "kind": "wall",
+              "from": {
+                "x": 68.36044678500846,
+                "z": -81.35581775423907,
+                "y": 3.466321012174202
+              },
+              "to": {
+                "x": 66.24176168969485,
+                "z": -88.02748722048932,
+                "y": 3.4861946170426865
+              },
+              "length": 6.999999999999995,
+              "gateWidth": 0,
+              "open": false,
+              "progress": 1,
+              "broken": false
+            },
+            {
+              "buildingId": "b313",
+              "settlementId": "s1",
+              "topologyId": "s1:defense-screen",
+              "kind": "wall",
+              "from": {
+                "x": 69.49596300451608,
+                "z": -72.42773829025381,
+                "y": 3.4015571458140634
+              },
+              "to": {
+                "x": 69.11478584991382,
+                "z": -65.43812428254142,
+                "y": 3.2828084428441127
+              },
+              "length": 6.999999999999996,
+              "gateWidth": 0,
+              "open": false,
+              "progress": 1,
+              "broken": false
+            },
+            {
+              "buildingId": "b1084",
+              "settlementId": "s1",
+              "topologyId": "s1:defense-screen",
+              "kind": "wall",
+              "from": {
+                "x": 66.24176168969485,
+                "z": -88.02748722048932,
+                "y": 3.4861946170426865
+              },
+              "to": {
+                "x": 64.12307659438126,
+                "z": -94.69915668673958,
+                "y": 3.4480005026413294
+              },
+              "length": 7.0000000000000036,
+              "gateWidth": 0,
+              "open": false,
+              "progress": 1,
+              "broken": false
+            },
+            {
+              "buildingId": "b1105",
+              "settlementId": "s1",
+              "topologyId": "s1:defense-screen",
+              "kind": "wall",
+              "from": {
+                "x": 69.11478584991382,
+                "z": -65.43812428254142,
+                "y": 3.2828084428441127
+              },
+              "to": {
+                "x": 68.73360869531156,
+                "z": -58.448510274829026,
+                "y": 3.132456593100694
+              },
+              "length": 7.000000000000003,
+              "gateWidth": 0,
+              "open": false,
+              "progress": 1,
+              "broken": false
+            }
+          ],
+          "byKind": {
+            "housing": 20,
+            "storage": 11,
+            "workshop": 8,
+            "farm": 13,
+            "power": 10,
+            "lab": 4,
+            "hub": 4,
+            "barracks": 3,
+            "range": 3,
+            "fabricator": 1,
+            "launcher": 1,
+            "brooder": 2,
+            "spitter": 2,
+            "wall": 6,
+            "gate": 2,
+            "tower": 1
+          },
+          "bySpecies": {
+            "human": 40,
+            "machine": 24,
+            "hive": 27
+          },
+          "minRadius": 14.950851033010338,
+          "maxRadius": 23.431971080212165
+        },
+        "terrain": {
+          "worldRadius": 180,
+          "resourceSites": 520,
+          "visibleResourceSites": 520,
+          "visibleResourceSiteDetails": 1498,
+          "impassableRidges": 2,
+          "tacticalPasses": 7,
+          "resourcePieces": 4631,
+          "visibleResourcePieces": 4494,
+          "visibleDecorativePieces": 1137,
+          "depletedSites": 6,
+          "activeWorksites": 2,
+          "resourceRevision": 49,
+          "decorativeChunks": 21,
+          "resourceBatches": 95,
+          "resourceDrawCalls": 95,
+          "clearingRevision": 21
+        },
+        "fog": {
+          "active": false,
+          "visibleCells": 0,
+          "exploredCells": 0,
+          "rememberedPlaces": 0,
+          "drawCalls": 0
+        },
+        "combat": {
+          "projectiles": 0,
+          "strikes": 0,
+          "impacts": 0,
+          "casualties": 0,
+          "retreats": 0,
+          "visibleEffects": 0,
+          "droppedEffects": 0,
+          "drawCallsEstimate": 0,
+          "events": 0,
+          "reusedFrame": true
+        }
+      }
+    },
+    {
+      "path": "screenshots\\ai-readability-controls\\controls-v2-developed-1440.png",
+      "tick": 1200,
+      "seed": "first-light",
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "camera": [
+        227.09958730628458,
+        208.51467706018104,
+        290.6875893686582
+      ],
+      "target": [
+        26.594985586266983,
+        4.000013529978993,
+        34.041691874572635
+      ],
+      "diagnostics": {
+        "fps": 50,
+        "frameMs": 19.999999999999996,
+        "performance": {
+          "mode": "paused",
+          "speed": 4,
+          "quality": "low",
+          "sampledFrames": 51,
+          "sampledSeconds": 1.0199999999999998,
+          "simulationPulses": 0,
+          "simulationCyclesPerSecond": 0,
+          "simulationMs": 0.005882352006201651,
+          "sceneUpdateMs": 0.7352940825855031,
+          "renderSubmitMs": 1.9725490294250787,
+          "cpuMs": 2.7137254640167834,
+          "gpuTiming": false
+        },
+        "performanceMode": "paused",
+        "simulationSpeed": 4,
+        "simulationTime": 1200.3,
+        "simulationStep": 12003,
+        "drawCalls": 231,
+        "calls": 231,
+        "triangles": 1790075,
+        "geometries": 217,
+        "textures": 14,
+        "observationMode": "omniscient",
+        "viewer": null,
+        "groups": 12,
+        "totalPopulation": 695,
+        "visibleIndividuals": 695,
+        "representedIndividuals": 695,
+        "drawnModels": 483,
+        "visibleWorkerIndividuals": 224,
+        "drawnWorkerModels": 12,
+        "visibleMilitaryIndividuals": 79,
+        "crowds": {
+          "totalPopulation": 695,
+          "representedIndividuals": 695,
+          "visibleIndividuals": 695,
+          "culledIndividuals": 0,
+          "homePresentIndividuals": 471,
+          "homeVisibleIndividuals": 471,
+          "groupIndividuals": 224,
+          "groupVisibleIndividuals": 224,
+          "workerIndividuals": 224,
+          "representedWorkerIndividuals": 224,
+          "visibleWorkerIndividuals": 224,
+          "workerCrewCount": 12,
+          "visibleWorkerCrews": 12,
+          "drawnWorkerModels": 12,
+          "workerBadgeCount": 0,
+          "workerBadgeCapacity": 0,
+          "workerBadgeDrawCalls": 0,
+          "militaryIndividuals": 79,
+          "visibleMilitaryIndividuals": 79,
+          "armyIndividuals": 0,
+          "groupCount": 12,
+          "instances": 483,
+          "drawnModels": 483,
+          "detailedIndividuals": 0,
+          "simplifiedIndividuals": 695,
+          "overviewIndividuals": 695,
+          "reusedFrame": true,
+          "drawCallsEstimate": 8,
+          "triangleEstimate": 52719,
+          "allocatedInstances": 3456,
+          "instanceAllocationUnfulfilled": 0,
+          "homePresentBySettlement": {
+            "s0": 81,
+            "s1": 199,
+            "s2": 125,
+            "s3": 66
+          },
+          "populationAccountingDelta": 0,
+          "terrainCacheSamples": 2991,
+          "occlusionCulling": false,
+          "censusScope": "whole-world",
+          "workerBadgeLodCulled": 12,
+          "workerBadgeOverlapCulled": 0
+        },
+        "buildings": {
+          "buildingRecords": 91,
+          "completedBuildings": 72,
+          "constructionSites": 0,
+          "renderedBuildings": 91,
+          "nearBuildings": 0,
+          "farBuildings": 91,
+          "ruinedBuildings": 19,
+          "temporaryShelters": 0,
+          "roadSegments": 209,
+          "instances": 400,
+          "drawCallsEstimate": 93,
+          "settlements": 4,
+          "camps": 0,
+          "ruins": 0,
+          "wallSegments": 8,
+          "wallLength": 59.999999999999986,
+          "wallJunctions": 6,
+          "gatePassages": 2,
+          "damagedBuildings": 2,
+          "defenseSpans": [
+            {
+              "buildingId": "b202",
+              "settlementId": "s0",
+              "topologyId": "s0:defense-screen",
+              "kind": "gate",
+              "from": {
+                "x": -71.18221820598072,
+                "z": -56.166778919266605,
+                "y": 2.2
+              },
+              "to": {
+                "x": -76.28036485534102,
+                "z": -63.583577469963274,
+                "y": 2.2
+              },
+              "length": 8.999999999999995,
+              "gateWidth": 5,
+              "open": false,
+              "progress": 1,
+              "broken": false
+            },
+            {
+              "buildingId": "b253",
+              "settlementId": "s0",
+              "topologyId": "s0:defense-screen",
+              "kind": "wall",
+              "from": {
+                "x": -71.18221820598072,
+                "z": -56.166778919266605,
+                "y": 2.2
+              },
+              "to": {
+                "x": -66.24340680557812,
+                "z": -51.206119492209226,
+                "y": 2.9429814838451147
+              },
+              "length": 6.999999999999995,
+              "gateWidth": 0,
+              "open": false,
+              "progress": 1,
+              "broken": false
+            },
+            {
+              "buildingId": "b304",
+              "settlementId": "s0",
+              "topologyId": "s0:defense-screen",
+              "kind": "wall",
+              "from": {
+                "x": -76.28036485534102,
+                "z": -63.583577469963274,
+                "y": 2.2
+              },
+              "to": {
+                "x": -79.14247266154855,
+                "z": -69.97171795884154,
+                "y": 4.116438257131434
+              },
+              "length": 6.999999999999995,
+              "gateWidth": 0,
+              "open": false,
+              "progress": 1,
+              "broken": false
+            },
+            {
+              "buildingId": "b209",
+              "settlementId": "s1",
+              "topologyId": "s1:defense-screen",
+              "kind": "gate",
+              "from": {
+                "x": 68.36044678500846,
+                "z": -81.35581775423907,
+                "y": 3.466321012174202
+              },
+              "to": {
+                "x": 69.49596300451608,
+                "z": -72.42773829025381,
+                "y": 3.4015571458140634
+              },
+              "length": 9.000000000000007,
+              "gateWidth": 5,
+              "open": false,
+              "progress": 1,
+              "broken": false
+            },
+            {
+              "buildingId": "b263",
+              "settlementId": "s1",
+              "topologyId": "s1:defense-screen",
+              "kind": "wall",
+              "from": {
+                "x": 68.36044678500846,
+                "z": -81.35581775423907,
+                "y": 3.466321012174202
+              },
+              "to": {
+                "x": 66.24176168969485,
+                "z": -88.02748722048932,
+                "y": 3.4861946170426865
+              },
+              "length": 6.999999999999995,
+              "gateWidth": 0,
+              "open": false,
+              "progress": 1,
+              "broken": false
+            },
+            {
+              "buildingId": "b313",
+              "settlementId": "s1",
+              "topologyId": "s1:defense-screen",
+              "kind": "wall",
+              "from": {
+                "x": 69.49596300451608,
+                "z": -72.42773829025381,
+                "y": 3.4015571458140634
+              },
+              "to": {
+                "x": 69.11478584991382,
+                "z": -65.43812428254142,
+                "y": 3.2828084428441127
+              },
+              "length": 6.999999999999996,
+              "gateWidth": 0,
+              "open": false,
+              "progress": 1,
+              "broken": false
+            },
+            {
+              "buildingId": "b1084",
+              "settlementId": "s1",
+              "topologyId": "s1:defense-screen",
+              "kind": "wall",
+              "from": {
+                "x": 66.24176168969485,
+                "z": -88.02748722048932,
+                "y": 3.4861946170426865
+              },
+              "to": {
+                "x": 64.12307659438126,
+                "z": -94.69915668673958,
+                "y": 3.4480005026413294
+              },
+              "length": 7.0000000000000036,
+              "gateWidth": 0,
+              "open": false,
+              "progress": 1,
+              "broken": false
+            },
+            {
+              "buildingId": "b1105",
+              "settlementId": "s1",
+              "topologyId": "s1:defense-screen",
+              "kind": "wall",
+              "from": {
+                "x": 69.11478584991382,
+                "z": -65.43812428254142,
+                "y": 3.2828084428441127
+              },
+              "to": {
+                "x": 68.73360869531156,
+                "z": -58.448510274829026,
+                "y": 3.132456593100694
+              },
+              "length": 7.000000000000003,
+              "gateWidth": 0,
+              "open": false,
+              "progress": 1,
+              "broken": false
+            }
+          ],
+          "byKind": {
+            "housing": 20,
+            "storage": 11,
+            "workshop": 8,
+            "farm": 13,
+            "power": 10,
+            "lab": 4,
+            "hub": 4,
+            "barracks": 3,
+            "range": 3,
+            "fabricator": 1,
+            "launcher": 1,
+            "brooder": 2,
+            "spitter": 2,
+            "wall": 6,
+            "gate": 2,
+            "tower": 1
+          },
+          "bySpecies": {
+            "human": 40,
+            "machine": 24,
+            "hive": 27
+          },
+          "minRadius": 14.950851033010338,
+          "maxRadius": 23.431971080212165
+        },
+        "terrain": {
+          "worldRadius": 180,
+          "resourceSites": 520,
+          "visibleResourceSites": 520,
+          "visibleResourceSiteDetails": 1498,
+          "impassableRidges": 2,
+          "tacticalPasses": 7,
+          "resourcePieces": 4631,
+          "visibleResourcePieces": 4494,
+          "visibleDecorativePieces": 1137,
+          "depletedSites": 6,
+          "activeWorksites": 3,
+          "resourceRevision": 51,
+          "decorativeChunks": 21,
+          "resourceBatches": 95,
+          "resourceDrawCalls": 95,
+          "clearingRevision": 21
+        },
+        "fog": {
+          "active": false,
+          "visibleCells": 0,
+          "exploredCells": 0,
+          "rememberedPlaces": 0,
+          "drawCalls": 0
+        },
+        "combat": {
+          "projectiles": 0,
+          "strikes": 0,
+          "impacts": 0,
+          "casualties": 0,
+          "retreats": 0,
+          "visibleEffects": 0,
+          "droppedEffects": 0,
+          "drawCallsEstimate": 0,
+          "events": 0,
+          "reusedFrame": true
+        }
+      }
+    },
+    {
+      "path": "screenshots\\ai-readability-controls\\controls-v2-party.png",
+      "tick": 1200,
+      "seed": "first-light",
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "camera": [
+        99.4873316877273,
+        46.07138978324578,
+        125.40630029348597
+      ],
+      "target": [
+        57.22308375708671,
+        5.5596472747743135,
+        70.69880914079448
+      ],
+      "diagnostics": {
+        "fps": 50,
+        "frameMs": 19.999999999999996,
+        "performance": {
+          "mode": "paused",
+          "speed": 4,
+          "quality": "low",
+          "sampledFrames": 51,
+          "sampledSeconds": 1.0199999999999998,
+          "simulationPulses": 0,
+          "simulationCyclesPerSecond": 0,
+          "simulationMs": 0.00196078244377585,
+          "sceneUpdateMs": 0.7117646675483853,
+          "renderSubmitMs": 2.147058846903782,
+          "cpuMs": 2.8607842968959436,
+          "gpuTiming": false
+        },
+        "performanceMode": "paused",
+        "simulationSpeed": 4,
+        "simulationTime": 1200.3,
+        "simulationStep": 12003,
+        "drawCalls": 227,
+        "calls": 227,
+        "triangles": 1816679,
+        "geometries": 266,
+        "textures": 15,
+        "observationMode": "omniscient",
+        "viewer": null,
+        "groups": 12,
+        "totalPopulation": 695,
+        "visibleIndividuals": 453,
+        "representedIndividuals": 695,
+        "drawnModels": 333,
+        "visibleWorkerIndividuals": 126,
+        "drawnWorkerModels": 6,
+        "visibleMilitaryIndividuals": 79,
+        "crowds": {
+          "totalPopulation": 695,
+          "representedIndividuals": 695,
+          "visibleIndividuals": 453,
+          "culledIndividuals": 242,
+          "homePresentIndividuals": 471,
+          "homeVisibleIndividuals": 327,
+          "groupIndividuals": 224,
+          "groupVisibleIndividuals": 126,
+          "workerIndividuals": 224,
+          "representedWorkerIndividuals": 224,
+          "visibleWorkerIndividuals": 126,
+          "workerCrewCount": 12,
+          "visibleWorkerCrews": 6,
+          "drawnWorkerModels": 6,
+          "workerBadgeCount": 6,
+          "workerBadgeCapacity": 16,
+          "workerBadgeDrawCalls": 1,
+          "militaryIndividuals": 79,
+          "visibleMilitaryIndividuals": 79,
+          "armyIndividuals": 0,
+          "groupCount": 12,
+          "instances": 333,
+          "drawnModels": 333,
+          "detailedIndividuals": 213,
+          "simplifiedIndividuals": 240,
+          "overviewIndividuals": 199,
+          "reusedFrame": false,
+          "drawCallsEstimate": 6,
+          "triangleEstimate": 149549,
+          "allocatedInstances": 4096,
+          "instanceAllocationUnfulfilled": 0,
+          "homePresentBySettlement": {
+            "s0": 81,
+            "s1": 199,
+            "s2": 125,
+            "s3": 66
+          },
+          "populationAccountingDelta": 0,
+          "terrainCacheSamples": 2991,
+          "occlusionCulling": false,
+          "censusScope": "whole-world",
+          "workerBadgeLodCulled": 0,
+          "workerBadgeOverlapCulled": 0
+        },
+        "buildings": {
+          "buildingRecords": 91,
+          "completedBuildings": 72,
+          "constructionSites": 0,
+          "renderedBuildings": 91,
+          "nearBuildings": 45,
+          "farBuildings": 46,
+          "ruinedBuildings": 19,
+          "temporaryShelters": 0,
+          "roadSegments": 209,
+          "instances": 406,
+          "drawCallsEstimate": 114,
+          "settlements": 4,
+          "camps": 0,
+          "ruins": 0,
+          "wallSegments": 8,
+          "wallLength": 59.999999999999986,
+          "wallJunctions": 6,
+          "gatePassages": 2,
+          "damagedBuildings": 2,
+          "defenseSpans": [
+            {
+              "buildingId": "b202",
+              "settlementId": "s0",
+              "topologyId": "s0:defense-screen",
+              "kind": "gate",
+              "from": {
+                "x": -71.18221820598072,
+                "z": -56.166778919266605,
+                "y": 2.2
+              },
+              "to": {
+                "x": -76.28036485534102,
+                "z": -63.583577469963274,
+                "y": 2.2
+              },
+              "length": 8.999999999999995,
+              "gateWidth": 5,
+              "open": false,
+              "progress": 1,
+              "broken": false
+            },
+            {
+              "buildingId": "b253",
+              "settlementId": "s0",
+              "topologyId": "s0:defense-screen",
+              "kind": "wall",
+              "from": {
+                "x": -71.18221820598072,
+                "z": -56.166778919266605,
+                "y": 2.2
+              },
+              "to": {
+                "x": -66.24340680557812,
+                "z": -51.206119492209226,
+                "y": 2.9429814838451147
+              },
+              "length": 6.999999999999995,
+              "gateWidth": 0,
+              "open": false,
+              "progress": 1,
+              "broken": false
+            },
+            {
+              "buildingId": "b304",
+              "settlementId": "s0",
+              "topologyId": "s0:defense-screen",
+              "kind": "wall",
+              "from": {
+                "x": -76.28036485534102,
+                "z": -63.583577469963274,
+                "y": 2.2
+              },
+              "to": {
+                "x": -79.14247266154855,
+                "z": -69.97171795884154,
+                "y": 4.116438257131434
+              },
+              "length": 6.999999999999995,
+              "gateWidth": 0,
+              "open": false,
+              "progress": 1,
+              "broken": false
+            },
+            {
+              "buildingId": "b209",
+              "settlementId": "s1",
+              "topologyId": "s1:defense-screen",
+              "kind": "gate",
+              "from": {
+                "x": 68.36044678500846,
+                "z": -81.35581775423907,
+                "y": 3.466321012174202
+              },
+              "to": {
+                "x": 69.49596300451608,
+                "z": -72.42773829025381,
+                "y": 3.4015571458140634
+              },
+              "length": 9.000000000000007,
+              "gateWidth": 5,
+              "open": false,
+              "progress": 1,
+              "broken": false
+            },
+            {
+              "buildingId": "b263",
+              "settlementId": "s1",
+              "topologyId": "s1:defense-screen",
+              "kind": "wall",
+              "from": {
+                "x": 68.36044678500846,
+                "z": -81.35581775423907,
+                "y": 3.466321012174202
+              },
+              "to": {
+                "x": 66.24176168969485,
+                "z": -88.02748722048932,
+                "y": 3.4861946170426865
+              },
+              "length": 6.999999999999995,
+              "gateWidth": 0,
+              "open": false,
+              "progress": 1,
+              "broken": false
+            },
+            {
+              "buildingId": "b313",
+              "settlementId": "s1",
+              "topologyId": "s1:defense-screen",
+              "kind": "wall",
+              "from": {
+                "x": 69.49596300451608,
+                "z": -72.42773829025381,
+                "y": 3.4015571458140634
+              },
+              "to": {
+                "x": 69.11478584991382,
+                "z": -65.43812428254142,
+                "y": 3.2828084428441127
+              },
+              "length": 6.999999999999996,
+              "gateWidth": 0,
+              "open": false,
+              "progress": 1,
+              "broken": false
+            },
+            {
+              "buildingId": "b1084",
+              "settlementId": "s1",
+              "topologyId": "s1:defense-screen",
+              "kind": "wall",
+              "from": {
+                "x": 66.24176168969485,
+                "z": -88.02748722048932,
+                "y": 3.4861946170426865
+              },
+              "to": {
+                "x": 64.12307659438126,
+                "z": -94.69915668673958,
+                "y": 3.4480005026413294
+              },
+              "length": 7.0000000000000036,
+              "gateWidth": 0,
+              "open": false,
+              "progress": 1,
+              "broken": false
+            },
+            {
+              "buildingId": "b1105",
+              "settlementId": "s1",
+              "topologyId": "s1:defense-screen",
+              "kind": "wall",
+              "from": {
+                "x": 69.11478584991382,
+                "z": -65.43812428254142,
+                "y": 3.2828084428441127
+              },
+              "to": {
+                "x": 68.73360869531156,
+                "z": -58.448510274829026,
+                "y": 3.132456593100694
+              },
+              "length": 7.000000000000003,
+              "gateWidth": 0,
+              "open": false,
+              "progress": 1,
+              "broken": false
+            }
+          ],
+          "byKind": {
+            "housing": 20,
+            "storage": 11,
+            "workshop": 8,
+            "farm": 13,
+            "power": 10,
+            "lab": 4,
+            "hub": 4,
+            "barracks": 3,
+            "range": 3,
+            "fabricator": 1,
+            "launcher": 1,
+            "brooder": 2,
+            "spitter": 2,
+            "wall": 6,
+            "gate": 2,
+            "tower": 1
+          },
+          "bySpecies": {
+            "human": 40,
+            "machine": 24,
+            "hive": 27
+          },
+          "minRadius": 14.950851033010338,
+          "maxRadius": 23.431971080212165
+        },
+        "terrain": {
+          "worldRadius": 180,
+          "resourceSites": 520,
+          "visibleResourceSites": 520,
+          "visibleResourceSiteDetails": 1498,
+          "impassableRidges": 2,
+          "tacticalPasses": 7,
+          "resourcePieces": 4631,
+          "visibleResourcePieces": 4494,
+          "visibleDecorativePieces": 1137,
+          "depletedSites": 6,
+          "activeWorksites": 3,
+          "resourceRevision": 51,
+          "decorativeChunks": 21,
+          "resourceBatches": 95,
+          "resourceDrawCalls": 95,
+          "clearingRevision": 21
+        },
+        "fog": {
+          "active": false,
+          "visibleCells": 0,
+          "exploredCells": 0,
+          "rememberedPlaces": 0,
+          "drawCalls": 0
+        },
+        "combat": {
+          "projectiles": 0,
+          "strikes": 0,
+          "impacts": 0,
+          "casualties": 0,
+          "retreats": 0,
+          "visibleEffects": 0,
+          "droppedEffects": 0,
+          "drawCallsEstimate": 0,
+          "events": 0,
+          "reusedFrame": true
+        }
+      }
+    },
+    {
+      "path": "screenshots\\ai-readability-controls\\controls-v2-resource.png",
+      "tick": 1205,
+      "seed": "first-light",
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "camera": [
+        92.22990177180826,
+        21.438099783425326,
+        119.2432916120236
+      ],
+      "target": [
+        74.30780827981276,
+        6.154968917301475,
+        95.60003759317311
+      ],
+      "diagnostics": {
+        "fps": 50,
+        "frameMs": 19.998039215686163,
+        "performance": {
+          "mode": "paused",
+          "speed": 4,
+          "quality": "low",
+          "sampledFrames": 51,
+          "sampledSeconds": 1.0198999999999943,
+          "simulationPulses": 0,
+          "simulationCyclesPerSecond": 0,
+          "simulationMs": 0.0078431391248516,
+          "sceneUpdateMs": 0.7647058940401265,
+          "renderSubmitMs": 1.6333333277234845,
+          "cpuMs": 2.4058823608884623,
+          "gpuTiming": false
+        },
+        "performanceMode": "paused",
+        "simulationSpeed": 4,
+        "simulationTime": 1205.3,
+        "simulationStep": 12053,
+        "drawCalls": 210,
+        "calls": 210,
+        "triangles": 1696725,
+        "geometries": 267,
+        "textures": 15,
+        "observationMode": "omniscient",
+        "viewer": null,
+        "groups": 11,
+        "totalPopulation": 698,
+        "visibleIndividuals": 251,
+        "representedIndividuals": 698,
+        "drawnModels": 131,
+        "visibleWorkerIndividuals": 126,
+        "drawnWorkerModels": 6,
+        "visibleMilitaryIndividuals": 79,
+        "crowds": {
+          "totalPopulation": 698,
+          "representedIndividuals": 698,
+          "visibleIndividuals": 251,
+          "culledIndividuals": 447,
+          "homePresentIndividuals": 485,
+          "homeVisibleIndividuals": 125,
+          "groupIndividuals": 213,
+          "groupVisibleIndividuals": 126,
+          "workerIndividuals": 213,
+          "representedWorkerIndividuals": 213,
+          "visibleWorkerIndividuals": 126,
+          "workerCrewCount": 11,
+          "visibleWorkerCrews": 6,
+          "drawnWorkerModels": 6,
+          "workerBadgeCount": 5,
+          "workerBadgeCapacity": 16,
+          "workerBadgeDrawCalls": 1,
+          "militaryIndividuals": 79,
+          "visibleMilitaryIndividuals": 79,
+          "armyIndividuals": 0,
+          "groupCount": 11,
+          "instances": 131,
+          "drawnModels": 131,
+          "detailedIndividuals": 213,
+          "simplifiedIndividuals": 38,
+          "overviewIndividuals": 0,
+          "reusedFrame": false,
+          "drawCallsEstimate": 4,
+          "triangleEstimate": 127781,
+          "allocatedInstances": 4160,
+          "instanceAllocationUnfulfilled": 0,
+          "homePresentBySettlement": {
+            "s0": 92,
+            "s1": 200,
+            "s2": 125,
+            "s3": 68
+          },
+          "populationAccountingDelta": 0,
+          "terrainCacheSamples": 3000,
+          "occlusionCulling": false,
+          "censusScope": "whole-world",
+          "workerBadgeLodCulled": 0,
+          "workerBadgeOverlapCulled": 1
+        },
+        "buildings": {
+          "buildingRecords": 91,
+          "completedBuildings": 72,
+          "constructionSites": 0,
+          "renderedBuildings": 91,
+          "nearBuildings": 45,
+          "farBuildings": 46,
+          "ruinedBuildings": 19,
+          "temporaryShelters": 0,
+          "roadSegments": 209,
+          "instances": 406,
+          "drawCallsEstimate": 114,
+          "settlements": 4,
+          "camps": 0,
+          "ruins": 0,
+          "wallSegments": 8,
+          "wallLength": 59.999999999999986,
+          "wallJunctions": 6,
+          "gatePassages": 2,
+          "damagedBuildings": 2,
+          "defenseSpans": [
+            {
+              "buildingId": "b202",
+              "settlementId": "s0",
+              "topologyId": "s0:defense-screen",
+              "kind": "gate",
+              "from": {
+                "x": -71.18221820598072,
+                "z": -56.166778919266605,
+                "y": 2.2
+              },
+              "to": {
+                "x": -76.28036485534102,
+                "z": -63.583577469963274,
+                "y": 2.2
+              },
+              "length": 8.999999999999995,
+              "gateWidth": 5,
+              "open": false,
+              "progress": 1,
+              "broken": false
+            },
+            {
+              "buildingId": "b253",
+              "settlementId": "s0",
+              "topologyId": "s0:defense-screen",
+              "kind": "wall",
+              "from": {
+                "x": -71.18221820598072,
+                "z": -56.166778919266605,
+                "y": 2.2
+              },
+              "to": {
+                "x": -66.24340680557812,
+                "z": -51.206119492209226,
+                "y": 2.9429814838451147
+              },
+              "length": 6.999999999999995,
+              "gateWidth": 0,
+              "open": false,
+              "progress": 1,
+              "broken": false
+            },
+            {
+              "buildingId": "b304",
+              "settlementId": "s0",
+              "topologyId": "s0:defense-screen",
+              "kind": "wall",
+              "from": {
+                "x": -76.28036485534102,
+                "z": -63.583577469963274,
+                "y": 2.2
+              },
+              "to": {
+                "x": -79.14247266154855,
+                "z": -69.97171795884154,
+                "y": 4.116438257131434
+              },
+              "length": 6.999999999999995,
+              "gateWidth": 0,
+              "open": false,
+              "progress": 1,
+              "broken": false
+            },
+            {
+              "buildingId": "b209",
+              "settlementId": "s1",
+              "topologyId": "s1:defense-screen",
+              "kind": "gate",
+              "from": {
+                "x": 68.36044678500846,
+                "z": -81.35581775423907,
+                "y": 3.466321012174202
+              },
+              "to": {
+                "x": 69.49596300451608,
+                "z": -72.42773829025381,
+                "y": 3.4015571458140634
+              },
+              "length": 9.000000000000007,
+              "gateWidth": 5,
+              "open": false,
+              "progress": 1,
+              "broken": false
+            },
+            {
+              "buildingId": "b263",
+              "settlementId": "s1",
+              "topologyId": "s1:defense-screen",
+              "kind": "wall",
+              "from": {
+                "x": 68.36044678500846,
+                "z": -81.35581775423907,
+                "y": 3.466321012174202
+              },
+              "to": {
+                "x": 66.24176168969485,
+                "z": -88.02748722048932,
+                "y": 3.4861946170426865
+              },
+              "length": 6.999999999999995,
+              "gateWidth": 0,
+              "open": false,
+              "progress": 1,
+              "broken": false
+            },
+            {
+              "buildingId": "b313",
+              "settlementId": "s1",
+              "topologyId": "s1:defense-screen",
+              "kind": "wall",
+              "from": {
+                "x": 69.49596300451608,
+                "z": -72.42773829025381,
+                "y": 3.4015571458140634
+              },
+              "to": {
+                "x": 69.11478584991382,
+                "z": -65.43812428254142,
+                "y": 3.2828084428441127
+              },
+              "length": 6.999999999999996,
+              "gateWidth": 0,
+              "open": false,
+              "progress": 1,
+              "broken": false
+            },
+            {
+              "buildingId": "b1084",
+              "settlementId": "s1",
+              "topologyId": "s1:defense-screen",
+              "kind": "wall",
+              "from": {
+                "x": 66.24176168969485,
+                "z": -88.02748722048932,
+                "y": 3.4861946170426865
+              },
+              "to": {
+                "x": 64.12307659438126,
+                "z": -94.69915668673958,
+                "y": 3.4480005026413294
+              },
+              "length": 7.0000000000000036,
+              "gateWidth": 0,
+              "open": false,
+              "progress": 1,
+              "broken": false
+            },
+            {
+              "buildingId": "b1105",
+              "settlementId": "s1",
+              "topologyId": "s1:defense-screen",
+              "kind": "wall",
+              "from": {
+                "x": 69.11478584991382,
+                "z": -65.43812428254142,
+                "y": 3.2828084428441127
+              },
+              "to": {
+                "x": 68.73360869531156,
+                "z": -58.448510274829026,
+                "y": 3.132456593100694
+              },
+              "length": 7.000000000000003,
+              "gateWidth": 0,
+              "open": false,
+              "progress": 1,
+              "broken": false
+            }
+          ],
+          "byKind": {
+            "housing": 20,
+            "storage": 11,
+            "workshop": 8,
+            "farm": 13,
+            "power": 10,
+            "lab": 4,
+            "hub": 4,
+            "barracks": 3,
+            "range": 3,
+            "fabricator": 1,
+            "launcher": 1,
+            "brooder": 2,
+            "spitter": 2,
+            "wall": 6,
+            "gate": 2,
+            "tower": 1
+          },
+          "bySpecies": {
+            "human": 40,
+            "machine": 24,
+            "hive": 27
+          },
+          "minRadius": 14.950851033010338,
+          "maxRadius": 23.431971080212165
+        },
+        "terrain": {
+          "worldRadius": 180,
+          "resourceSites": 520,
+          "visibleResourceSites": 520,
+          "visibleResourceSiteDetails": 1498,
+          "impassableRidges": 2,
+          "tacticalPasses": 7,
+          "resourcePieces": 4631,
+          "visibleResourcePieces": 4492,
+          "visibleDecorativePieces": 1137,
+          "depletedSites": 6,
+          "activeWorksites": 6,
+          "resourceRevision": 52,
+          "decorativeChunks": 21,
+          "resourceBatches": 95,
+          "resourceDrawCalls": 95,
+          "clearingRevision": 21
+        },
+        "fog": {
+          "active": false,
+          "visibleCells": 0,
+          "exploredCells": 0,
+          "rememberedPlaces": 0,
+          "drawCalls": 0
+        },
+        "combat": {
+          "projectiles": 0,
+          "strikes": 0,
+          "impacts": 0,
+          "casualties": 0,
+          "retreats": 0,
+          "visibleEffects": 0,
+          "droppedEffects": 0,
+          "drawCallsEstimate": 0,
+          "events": 0,
+          "reusedFrame": true
+        }
+      }
+    },
+    {
+      "path": "screenshots\\ai-readability-controls\\controls-v2-responsive-1440x900.png",
+      "tick": 1205,
+      "seed": "first-light",
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "camera": [
+        227.06569212697036,
+        208.46574507755267,
+        290.6444344475627
+      ],
+      "target": [
+        26.608857932792134,
+        4.000587210058417,
+        34.05949600552547
+      ],
+      "diagnostics": {
+        "fps": 50,
+        "frameMs": 19.999999999999996,
+        "performance": {
+          "mode": "paused",
+          "speed": 4,
+          "quality": "low",
+          "sampledFrames": 51,
+          "sampledSeconds": 1.0199999999999998,
+          "simulationPulses": 0,
+          "simulationCyclesPerSecond": 0,
+          "simulationMs": 0.0078431391248516,
+          "sceneUpdateMs": 0.6254902236601886,
+          "renderSubmitMs": 1.7607843127905154,
+          "cpuMs": 2.3941176755755555,
+          "gpuTiming": false
+        },
+        "performanceMode": "paused",
+        "simulationSpeed": 4,
+        "simulationTime": 1205.3,
+        "simulationStep": 12053,
+        "drawCalls": 231,
+        "calls": 231,
+        "triangles": 1790545,
+        "geometries": 267,
+        "textures": 15,
+        "observationMode": "omniscient",
+        "viewer": null,
+        "groups": 11,
+        "totalPopulation": 698,
+        "visibleIndividuals": 698,
+        "representedIndividuals": 698,
+        "drawnModels": 496,
+        "visibleWorkerIndividuals": 213,
+        "drawnWorkerModels": 11,
+        "visibleMilitaryIndividuals": 79,
+        "crowds": {
+          "totalPopulation": 698,
+          "representedIndividuals": 698,
+          "visibleIndividuals": 698,
+          "culledIndividuals": 0,
+          "homePresentIndividuals": 485,
+          "homeVisibleIndividuals": 485,
+          "groupIndividuals": 213,
+          "groupVisibleIndividuals": 213,
+          "workerIndividuals": 213,
+          "representedWorkerIndividuals": 213,
+          "visibleWorkerIndividuals": 213,
+          "workerCrewCount": 11,
+          "visibleWorkerCrews": 11,
+          "drawnWorkerModels": 11,
+          "workerBadgeCount": 0,
+          "workerBadgeCapacity": 16,
+          "workerBadgeDrawCalls": 0,
+          "militaryIndividuals": 79,
+          "visibleMilitaryIndividuals": 79,
+          "armyIndividuals": 0,
+          "groupCount": 11,
+          "instances": 496,
+          "drawnModels": 496,
+          "detailedIndividuals": 0,
+          "simplifiedIndividuals": 698,
+          "overviewIndividuals": 698,
+          "reusedFrame": true,
+          "drawCallsEstimate": 8,
+          "triangleEstimate": 54025,
+          "allocatedInstances": 4160,
+          "instanceAllocationUnfulfilled": 0,
+          "homePresentBySettlement": {
+            "s0": 92,
+            "s1": 200,
+            "s2": 125,
+            "s3": 68
+          },
+          "populationAccountingDelta": 0,
+          "terrainCacheSamples": 3000,
+          "occlusionCulling": false,
+          "censusScope": "whole-world",
+          "workerBadgeLodCulled": 11,
+          "workerBadgeOverlapCulled": 0
+        },
+        "buildings": {
+          "buildingRecords": 91,
+          "completedBuildings": 72,
+          "constructionSites": 0,
+          "renderedBuildings": 91,
+          "nearBuildings": 0,
+          "farBuildings": 91,
+          "ruinedBuildings": 19,
+          "temporaryShelters": 0,
+          "roadSegments": 209,
+          "instances": 400,
+          "drawCallsEstimate": 93,
+          "settlements": 4,
+          "camps": 0,
+          "ruins": 0,
+          "wallSegments": 8,
+          "wallLength": 59.999999999999986,
+          "wallJunctions": 6,
+          "gatePassages": 2,
+          "damagedBuildings": 2,
+          "defenseSpans": [
+            {
+              "buildingId": "b202",
+              "settlementId": "s0",
+              "topologyId": "s0:defense-screen",
+              "kind": "gate",
+              "from": {
+                "x": -71.18221820598072,
+                "z": -56.166778919266605,
+                "y": 2.2
+              },
+              "to": {
+                "x": -76.28036485534102,
+                "z": -63.583577469963274,
+                "y": 2.2
+              },
+              "length": 8.999999999999995,
+              "gateWidth": 5,
+              "open": false,
+              "progress": 1,
+              "broken": false
+            },
+            {
+              "buildingId": "b253",
+              "settlementId": "s0",
+              "topologyId": "s0:defense-screen",
+              "kind": "wall",
+              "from": {
+                "x": -71.18221820598072,
+                "z": -56.166778919266605,
+                "y": 2.2
+              },
+              "to": {
+                "x": -66.24340680557812,
+                "z": -51.206119492209226,
+                "y": 2.9429814838451147
+              },
+              "length": 6.999999999999995,
+              "gateWidth": 0,
+              "open": false,
+              "progress": 1,
+              "broken": false
+            },
+            {
+              "buildingId": "b304",
+              "settlementId": "s0",
+              "topologyId": "s0:defense-screen",
+              "kind": "wall",
+              "from": {
+                "x": -76.28036485534102,
+                "z": -63.583577469963274,
+                "y": 2.2
+              },
+              "to": {
+                "x": -79.14247266154855,
+                "z": -69.97171795884154,
+                "y": 4.116438257131434
+              },
+              "length": 6.999999999999995,
+              "gateWidth": 0,
+              "open": false,
+              "progress": 1,
+              "broken": false
+            },
+            {
+              "buildingId": "b209",
+              "settlementId": "s1",
+              "topologyId": "s1:defense-screen",
+              "kind": "gate",
+              "from": {
+                "x": 68.36044678500846,
+                "z": -81.35581775423907,
+                "y": 3.466321012174202
+              },
+              "to": {
+                "x": 69.49596300451608,
+                "z": -72.42773829025381,
+                "y": 3.4015571458140634
+              },
+              "length": 9.000000000000007,
+              "gateWidth": 5,
+              "open": false,
+              "progress": 1,
+              "broken": false
+            },
+            {
+              "buildingId": "b263",
+              "settlementId": "s1",
+              "topologyId": "s1:defense-screen",
+              "kind": "wall",
+              "from": {
+                "x": 68.36044678500846,
+                "z": -81.35581775423907,
+                "y": 3.466321012174202
+              },
+              "to": {
+                "x": 66.24176168969485,
+                "z": -88.02748722048932,
+                "y": 3.4861946170426865
+              },
+              "length": 6.999999999999995,
+              "gateWidth": 0,
+              "open": false,
+              "progress": 1,
+              "broken": false
+            },
+            {
+              "buildingId": "b313",
+              "settlementId": "s1",
+              "topologyId": "s1:defense-screen",
+              "kind": "wall",
+              "from": {
+                "x": 69.49596300451608,
+                "z": -72.42773829025381,
+                "y": 3.4015571458140634
+              },
+              "to": {
+                "x": 69.11478584991382,
+                "z": -65.43812428254142,
+                "y": 3.2828084428441127
+              },
+              "length": 6.999999999999996,
+              "gateWidth": 0,
+              "open": false,
+              "progress": 1,
+              "broken": false
+            },
+            {
+              "buildingId": "b1084",
+              "settlementId": "s1",
+              "topologyId": "s1:defense-screen",
+              "kind": "wall",
+              "from": {
+                "x": 66.24176168969485,
+                "z": -88.02748722048932,
+                "y": 3.4861946170426865
+              },
+              "to": {
+                "x": 64.12307659438126,
+                "z": -94.69915668673958,
+                "y": 3.4480005026413294
+              },
+              "length": 7.0000000000000036,
+              "gateWidth": 0,
+              "open": false,
+              "progress": 1,
+              "broken": false
+            },
+            {
+              "buildingId": "b1105",
+              "settlementId": "s1",
+              "topologyId": "s1:defense-screen",
+              "kind": "wall",
+              "from": {
+                "x": 69.11478584991382,
+                "z": -65.43812428254142,
+                "y": 3.2828084428441127
+              },
+              "to": {
+                "x": 68.73360869531156,
+                "z": -58.448510274829026,
+                "y": 3.132456593100694
+              },
+              "length": 7.000000000000003,
+              "gateWidth": 0,
+              "open": false,
+              "progress": 1,
+              "broken": false
+            }
+          ],
+          "byKind": {
+            "housing": 20,
+            "storage": 11,
+            "workshop": 8,
+            "farm": 13,
+            "power": 10,
+            "lab": 4,
+            "hub": 4,
+            "barracks": 3,
+            "range": 3,
+            "fabricator": 1,
+            "launcher": 1,
+            "brooder": 2,
+            "spitter": 2,
+            "wall": 6,
+            "gate": 2,
+            "tower": 1
+          },
+          "bySpecies": {
+            "human": 40,
+            "machine": 24,
+            "hive": 27
+          },
+          "minRadius": 14.950851033010338,
+          "maxRadius": 23.431971080212165
+        },
+        "terrain": {
+          "worldRadius": 180,
+          "resourceSites": 520,
+          "visibleResourceSites": 520,
+          "visibleResourceSiteDetails": 1498,
+          "impassableRidges": 2,
+          "tacticalPasses": 7,
+          "resourcePieces": 4631,
+          "visibleResourcePieces": 4492,
+          "visibleDecorativePieces": 1137,
+          "depletedSites": 6,
+          "activeWorksites": 6,
+          "resourceRevision": 52,
+          "decorativeChunks": 21,
+          "resourceBatches": 95,
+          "resourceDrawCalls": 95,
+          "clearingRevision": 21
+        },
+        "fog": {
+          "active": false,
+          "visibleCells": 0,
+          "exploredCells": 0,
+          "rememberedPlaces": 0,
+          "drawCalls": 0
+        },
+        "combat": {
+          "projectiles": 0,
+          "strikes": 0,
+          "impacts": 0,
+          "casualties": 0,
+          "retreats": 0,
+          "visibleEffects": 0,
+          "droppedEffects": 0,
+          "drawCallsEstimate": 0,
+          "events": 0,
+          "reusedFrame": true
+        }
+      }
+    },
+    {
+      "path": "screenshots\\ai-readability-controls\\controls-v2-responsive-960x700.png",
+      "tick": 1205,
+      "seed": "first-light",
+      "viewport": {
+        "width": 960,
+        "height": 700
+      },
+      "camera": [
+        228.87790250274833,
+        210.32681613839745,
+        292.9637385388842
+      ],
+      "target": [
+        26.596695388250346,
+        4.000039316434283,
+        34.043780665853234
+      ],
+      "diagnostics": {
+        "fps": 48,
+        "frameMs": 20.81428571428619,
+        "performance": {
+          "mode": "paused",
+          "speed": 4,
+          "quality": "low",
+          "sampledFrames": 49,
+          "sampledSeconds": 1.0199000000000231,
+          "simulationPulses": 0,
+          "simulationCyclesPerSecond": 0,
+          "simulationMs": 0.006122450439297423,
+          "sceneUpdateMs": 1.095918395081345,
+          "renderSubmitMs": 1.836734693877551,
+          "cpuMs": 2.9387755393981934,
+          "gpuTiming": false
+        },
+        "performanceMode": "paused",
+        "simulationSpeed": 4,
+        "simulationTime": 1205.3,
+        "simulationStep": 12053,
+        "drawCalls": 231,
+        "calls": 231,
+        "triangles": 1790545,
+        "geometries": 267,
+        "textures": 4,
+        "observationMode": "omniscient",
+        "viewer": null,
+        "groups": 11,
+        "totalPopulation": 698,
+        "visibleIndividuals": 698,
+        "representedIndividuals": 698,
+        "drawnModels": 496,
+        "visibleWorkerIndividuals": 213,
+        "drawnWorkerModels": 11,
+        "visibleMilitaryIndividuals": 79,
+        "crowds": {
+          "totalPopulation": 698,
+          "representedIndividuals": 698,
+          "visibleIndividuals": 698,
+          "culledIndividuals": 0,
+          "homePresentIndividuals": 485,
+          "homeVisibleIndividuals": 485,
+          "groupIndividuals": 213,
+          "groupVisibleIndividuals": 213,
+          "workerIndividuals": 213,
+          "representedWorkerIndividuals": 213,
+          "visibleWorkerIndividuals": 213,
+          "workerCrewCount": 11,
+          "visibleWorkerCrews": 11,
+          "drawnWorkerModels": 11,
+          "workerBadgeCount": 0,
+          "workerBadgeCapacity": 16,
+          "workerBadgeDrawCalls": 0,
+          "militaryIndividuals": 79,
+          "visibleMilitaryIndividuals": 79,
+          "armyIndividuals": 0,
+          "groupCount": 11,
+          "instances": 496,
+          "drawnModels": 496,
+          "detailedIndividuals": 0,
+          "simplifiedIndividuals": 698,
+          "overviewIndividuals": 698,
+          "reusedFrame": false,
+          "drawCallsEstimate": 8,
+          "triangleEstimate": 54025,
+          "allocatedInstances": 4160,
+          "instanceAllocationUnfulfilled": 0,
+          "homePresentBySettlement": {
+            "s0": 92,
+            "s1": 200,
+            "s2": 125,
+            "s3": 68
+          },
+          "populationAccountingDelta": 0,
+          "terrainCacheSamples": 3000,
+          "occlusionCulling": false,
+          "censusScope": "whole-world",
+          "workerBadgeLodCulled": 11,
+          "workerBadgeOverlapCulled": 0
+        },
+        "buildings": {
+          "buildingRecords": 91,
+          "completedBuildings": 72,
+          "constructionSites": 0,
+          "renderedBuildings": 91,
+          "nearBuildings": 0,
+          "farBuildings": 91,
+          "ruinedBuildings": 19,
+          "temporaryShelters": 0,
+          "roadSegments": 209,
+          "instances": 400,
+          "drawCallsEstimate": 93,
+          "settlements": 4,
+          "camps": 0,
+          "ruins": 0,
+          "wallSegments": 8,
+          "wallLength": 59.999999999999986,
+          "wallJunctions": 6,
+          "gatePassages": 2,
+          "damagedBuildings": 2,
+          "defenseSpans": [
+            {
+              "buildingId": "b202",
+              "settlementId": "s0",
+              "topologyId": "s0:defense-screen",
+              "kind": "gate",
+              "from": {
+                "x": -71.18221820598072,
+                "z": -56.166778919266605,
+                "y": 2.2
+              },
+              "to": {
+                "x": -76.28036485534102,
+                "z": -63.583577469963274,
+                "y": 2.2
+              },
+              "length": 8.999999999999995,
+              "gateWidth": 5,
+              "open": false,
+              "progress": 1,
+              "broken": false
+            },
+            {
+              "buildingId": "b253",
+              "settlementId": "s0",
+              "topologyId": "s0:defense-screen",
+              "kind": "wall",
+              "from": {
+                "x": -71.18221820598072,
+                "z": -56.166778919266605,
+                "y": 2.2
+              },
+              "to": {
+                "x": -66.24340680557812,
+                "z": -51.206119492209226,
+                "y": 2.9429814838451147
+              },
+              "length": 6.999999999999995,
+              "gateWidth": 0,
+              "open": false,
+              "progress": 1,
+              "broken": false
+            },
+            {
+              "buildingId": "b304",
+              "settlementId": "s0",
+              "topologyId": "s0:defense-screen",
+              "kind": "wall",
+              "from": {
+                "x": -76.28036485534102,
+                "z": -63.583577469963274,
+                "y": 2.2
+              },
+              "to": {
+                "x": -79.14247266154855,
+                "z": -69.97171795884154,
+                "y": 4.116438257131434
+              },
+              "length": 6.999999999999995,
+              "gateWidth": 0,
+              "open": false,
+              "progress": 1,
+              "broken": false
+            },
+            {
+              "buildingId": "b209",
+              "settlementId": "s1",
+              "topologyId": "s1:defense-screen",
+              "kind": "gate",
+              "from": {
+                "x": 68.36044678500846,
+                "z": -81.35581775423907,
+                "y": 3.466321012174202
+              },
+              "to": {
+                "x": 69.49596300451608,
+                "z": -72.42773829025381,
+                "y": 3.4015571458140634
+              },
+              "length": 9.000000000000007,
+              "gateWidth": 5,
+              "open": false,
+              "progress": 1,
+              "broken": false
+            },
+            {
+              "buildingId": "b263",
+              "settlementId": "s1",
+              "topologyId": "s1:defense-screen",
+              "kind": "wall",
+              "from": {
+                "x": 68.36044678500846,
+                "z": -81.35581775423907,
+                "y": 3.466321012174202
+              },
+              "to": {
+                "x": 66.24176168969485,
+                "z": -88.02748722048932,
+                "y": 3.4861946170426865
+              },
+              "length": 6.999999999999995,
+              "gateWidth": 0,
+              "open": false,
+              "progress": 1,
+              "broken": false
+            },
+            {
+              "buildingId": "b313",
+              "settlementId": "s1",
+              "topologyId": "s1:defense-screen",
+              "kind": "wall",
+              "from": {
+                "x": 69.49596300451608,
+                "z": -72.42773829025381,
+                "y": 3.4015571458140634
+              },
+              "to": {
+                "x": 69.11478584991382,
+                "z": -65.43812428254142,
+                "y": 3.2828084428441127
+              },
+              "length": 6.999999999999996,
+              "gateWidth": 0,
+              "open": false,
+              "progress": 1,
+              "broken": false
+            },
+            {
+              "buildingId": "b1084",
+              "settlementId": "s1",
+              "topologyId": "s1:defense-screen",
+              "kind": "wall",
+              "from": {
+                "x": 66.24176168969485,
+                "z": -88.02748722048932,
+                "y": 3.4861946170426865
+              },
+              "to": {
+                "x": 64.12307659438126,
+                "z": -94.69915668673958,
+                "y": 3.4480005026413294
+              },
+              "length": 7.0000000000000036,
+              "gateWidth": 0,
+              "open": false,
+              "progress": 1,
+              "broken": false
+            },
+            {
+              "buildingId": "b1105",
+              "settlementId": "s1",
+              "topologyId": "s1:defense-screen",
+              "kind": "wall",
+              "from": {
+                "x": 69.11478584991382,
+                "z": -65.43812428254142,
+                "y": 3.2828084428441127
+              },
+              "to": {
+                "x": 68.73360869531156,
+                "z": -58.448510274829026,
+                "y": 3.132456593100694
+              },
+              "length": 7.000000000000003,
+              "gateWidth": 0,
+              "open": false,
+              "progress": 1,
+              "broken": false
+            }
+          ],
+          "byKind": {
+            "housing": 20,
+            "storage": 11,
+            "workshop": 8,
+            "farm": 13,
+            "power": 10,
+            "lab": 4,
+            "hub": 4,
+            "barracks": 3,
+            "range": 3,
+            "fabricator": 1,
+            "launcher": 1,
+            "brooder": 2,
+            "spitter": 2,
+            "wall": 6,
+            "gate": 2,
+            "tower": 1
+          },
+          "bySpecies": {
+            "human": 40,
+            "machine": 24,
+            "hive": 27
+          },
+          "minRadius": 14.950851033010338,
+          "maxRadius": 23.431971080212165
+        },
+        "terrain": {
+          "worldRadius": 180,
+          "resourceSites": 520,
+          "visibleResourceSites": 520,
+          "visibleResourceSiteDetails": 1498,
+          "impassableRidges": 2,
+          "tacticalPasses": 7,
+          "resourcePieces": 4631,
+          "visibleResourcePieces": 4492,
+          "visibleDecorativePieces": 1137,
+          "depletedSites": 6,
+          "activeWorksites": 6,
+          "resourceRevision": 52,
+          "decorativeChunks": 21,
+          "resourceBatches": 95,
+          "resourceDrawCalls": 95,
+          "clearingRevision": 21
+        },
+        "fog": {
+          "active": false,
+          "visibleCells": 0,
+          "exploredCells": 0,
+          "rememberedPlaces": 0,
+          "drawCalls": 0
+        },
+        "combat": {
+          "projectiles": 0,
+          "strikes": 0,
+          "impacts": 0,
+          "casualties": 0,
+          "retreats": 0,
+          "visibleEffects": 0,
+          "droppedEffects": 0,
+          "drawCallsEstimate": 0,
+          "events": 0,
+          "reusedFrame": true
+        }
+      }
+    },
+    {
+      "path": "screenshots\\ai-readability-controls\\controls-v2-touch-portrait-collapsed.png",
+      "tick": 1,
+      "seed": "first-light",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "camera": [
+        621.4272522249303,
+        610.7280582039604,
+        795.4268828479098
+      ],
+      "target": [
+        26.595822613204014,
+        4,
+        34.042652944901135
+      ],
+      "diagnostics": {
+        "fps": 0,
+        "frameMs": 0,
+        "performance": null,
+        "performanceMode": "paused",
+        "simulationSpeed": 2,
+        "simulationTime": 1.4,
+        "simulationStep": 14,
+        "drawCalls": 181,
+        "calls": 181,
+        "triangles": 1767401,
+        "geometries": 81,
+        "textures": 2,
+        "observationMode": "omniscient",
+        "viewer": null,
+        "groups": 16,
+        "totalPopulation": 413,
+        "visibleIndividuals": 413,
+        "representedIndividuals": 413,
+        "drawnModels": 261,
+        "visibleWorkerIndividuals": 168,
+        "drawnWorkerModels": 16,
+        "visibleMilitaryIndividuals": 52,
+        "crowds": {
+          "totalPopulation": 413,
+          "representedIndividuals": 413,
+          "visibleIndividuals": 413,
+          "culledIndividuals": 0,
+          "homePresentIndividuals": 245,
+          "homeVisibleIndividuals": 245,
+          "groupIndividuals": 168,
+          "groupVisibleIndividuals": 168,
+          "workerIndividuals": 168,
+          "representedWorkerIndividuals": 168,
+          "visibleWorkerIndividuals": 168,
+          "workerCrewCount": 16,
+          "visibleWorkerCrews": 16,
+          "drawnWorkerModels": 16,
+          "workerBadgeCount": 0,
+          "workerBadgeCapacity": 0,
+          "workerBadgeDrawCalls": 0,
+          "militaryIndividuals": 52,
+          "visibleMilitaryIndividuals": 52,
+          "armyIndividuals": 0,
+          "groupCount": 16,
+          "instances": 261,
+          "drawnModels": 261,
+          "detailedIndividuals": 0,
+          "simplifiedIndividuals": 413,
+          "overviewIndividuals": 413,
+          "reusedFrame": true,
+          "drawCallsEstimate": 7,
+          "triangleEstimate": 28028,
+          "allocatedInstances": 704,
+          "instanceAllocationUnfulfilled": 0,
+          "homePresentBySettlement": {
+            "s0": 64,
+            "s1": 59,
+            "s2": 58,
+            "s3": 64
+          },
+          "populationAccountingDelta": 0,
+          "terrainCacheSamples": 287,
+          "occlusionCulling": false,
+          "censusScope": "whole-world",
+          "workerBadgeLodCulled": 16,
+          "workerBadgeOverlapCulled": 0
+        },
+        "buildings": {
+          "buildingRecords": 39,
+          "completedBuildings": 36,
+          "constructionSites": 3,
+          "renderedBuildings": 39,
+          "nearBuildings": 0,
+          "farBuildings": 39,
+          "ruinedBuildings": 0,
+          "temporaryShelters": 0,
+          "roadSegments": 93,
+          "instances": 182,
+          "drawCallsEstimate": 44,
+          "settlements": 4,
+          "camps": 0,
+          "ruins": 0,
+          "wallSegments": 0,
+          "wallLength": 0,
+          "wallJunctions": 0,
+          "gatePassages": 0,
+          "damagedBuildings": 0,
+          "defenseSpans": [],
+          "byKind": {
+            "housing": 16,
+            "storage": 4,
+            "workshop": 4,
+            "farm": 6,
+            "power": 5,
+            "lab": 0,
+            "hub": 4,
+            "barracks": 0,
+            "range": 0,
+            "fabricator": 0,
+            "launcher": 0,
+            "brooder": 0,
+            "spitter": 0,
+            "wall": 0,
+            "gate": 0,
+            "tower": 0
+          },
+          "bySpecies": {
+            "human": 20,
+            "machine": 10,
+            "hive": 9
+          },
+          "minRadius": 11.26101730552664,
+          "maxRadius": 11.750000000000004
+        },
+        "terrain": {
+          "worldRadius": 180,
+          "resourceSites": 520,
+          "visibleResourceSites": 520,
+          "visibleResourceSiteDetails": 1498,
+          "impassableRidges": 2,
+          "tacticalPasses": 7,
+          "resourcePieces": 4631,
+          "visibleResourcePieces": 4631,
+          "visibleDecorativePieces": 1152,
+          "depletedSites": 0,
+          "activeWorksites": 0,
+          "resourceRevision": 1,
+          "decorativeChunks": 21,
+          "resourceBatches": 95,
+          "resourceDrawCalls": 95,
+          "clearingRevision": 3
+        },
+        "fog": {
+          "active": false,
+          "visibleCells": 0,
+          "exploredCells": 0,
+          "rememberedPlaces": 0,
+          "drawCalls": 0
+        },
+        "combat": {
+          "projectiles": 0,
+          "strikes": 0,
+          "impacts": 0,
+          "casualties": 0,
+          "retreats": 0,
+          "visibleEffects": 0,
+          "droppedEffects": 0,
+          "drawCallsEstimate": 0,
+          "events": 0,
+          "reusedFrame": true
+        }
+      }
+    },
+    {
+      "path": "screenshots\\ai-readability-controls\\controls-v2-touch-portrait-after-gestures.png",
+      "tick": 1,
+      "seed": "first-light",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "camera": [
+        159.68928921964792,
+        343.39008199746604,
+        427.10308389682626
+      ],
+      "target": [
+        -4.407239401945062,
+        16.499964177537255,
+        48.30288619026136
+      ],
+      "diagnostics": {
+        "fps": 50,
+        "frameMs": 19.998039215686283,
+        "performance": {
+          "mode": "paused",
+          "speed": 2,
+          "quality": "low",
+          "sampledFrames": 51,
+          "sampledSeconds": 1.0199000000000005,
+          "simulationPulses": 0,
+          "simulationCyclesPerSecond": 0,
+          "simulationMs": 0.00784313678741455,
+          "sceneUpdateMs": 0.9274509584202486,
+          "renderSubmitMs": 1.0862745163487453,
+          "cpuMs": 2.0215686115564084,
+          "gpuTiming": false
+        },
+        "performanceMode": "paused",
+        "simulationSpeed": 2,
+        "simulationTime": 1.4,
+        "simulationStep": 14,
+        "drawCalls": 164,
+        "calls": 164,
+        "triangles": 1660900,
+        "geometries": 81,
+        "textures": 2,
+        "observationMode": "omniscient",
+        "viewer": null,
+        "groups": 16,
+        "totalPopulation": 413,
+        "visibleIndividuals": 385,
+        "representedIndividuals": 413,
+        "drawnModels": 233,
+        "visibleWorkerIndividuals": 168,
+        "drawnWorkerModels": 16,
+        "visibleMilitaryIndividuals": 37,
+        "crowds": {
+          "totalPopulation": 413,
+          "representedIndividuals": 413,
+          "visibleIndividuals": 385,
+          "culledIndividuals": 28,
+          "homePresentIndividuals": 245,
+          "homeVisibleIndividuals": 217,
+          "groupIndividuals": 168,
+          "groupVisibleIndividuals": 168,
+          "workerIndividuals": 168,
+          "representedWorkerIndividuals": 168,
+          "visibleWorkerIndividuals": 168,
+          "workerCrewCount": 16,
+          "visibleWorkerCrews": 16,
+          "drawnWorkerModels": 16,
+          "workerBadgeCount": 0,
+          "workerBadgeCapacity": 0,
+          "workerBadgeDrawCalls": 0,
+          "militaryIndividuals": 52,
+          "visibleMilitaryIndividuals": 37,
+          "armyIndividuals": 0,
+          "groupCount": 16,
+          "instances": 233,
+          "drawnModels": 233,
+          "detailedIndividuals": 0,
+          "simplifiedIndividuals": 385,
+          "overviewIndividuals": 385,
+          "reusedFrame": false,
+          "drawCallsEstimate": 6,
+          "triangleEstimate": 25060,
+          "allocatedInstances": 704,
+          "instanceAllocationUnfulfilled": 0,
+          "homePresentBySettlement": {
+            "s0": 64,
+            "s1": 59,
+            "s2": 58,
+            "s3": 64
+          },
+          "populationAccountingDelta": 0,
+          "terrainCacheSamples": 287,
+          "occlusionCulling": false,
+          "censusScope": "whole-world",
+          "workerBadgeLodCulled": 16,
+          "workerBadgeOverlapCulled": 0
+        },
+        "buildings": {
+          "buildingRecords": 39,
+          "completedBuildings": 36,
+          "constructionSites": 3,
+          "renderedBuildings": 39,
+          "nearBuildings": 0,
+          "farBuildings": 39,
+          "ruinedBuildings": 0,
+          "temporaryShelters": 0,
+          "roadSegments": 93,
+          "instances": 182,
+          "drawCallsEstimate": 44,
+          "settlements": 4,
+          "camps": 0,
+          "ruins": 0,
+          "wallSegments": 0,
+          "wallLength": 0,
+          "wallJunctions": 0,
+          "gatePassages": 0,
+          "damagedBuildings": 0,
+          "defenseSpans": [],
+          "byKind": {
+            "housing": 16,
+            "storage": 4,
+            "workshop": 4,
+            "farm": 6,
+            "power": 5,
+            "lab": 0,
+            "hub": 4,
+            "barracks": 0,
+            "range": 0,
+            "fabricator": 0,
+            "launcher": 0,
+            "brooder": 0,
+            "spitter": 0,
+            "wall": 0,
+            "gate": 0,
+            "tower": 0
+          },
+          "bySpecies": {
+            "human": 20,
+            "machine": 10,
+            "hive": 9
+          },
+          "minRadius": 11.26101730552664,
+          "maxRadius": 11.750000000000004
+        },
+        "terrain": {
+          "worldRadius": 180,
+          "resourceSites": 520,
+          "visibleResourceSites": 520,
+          "visibleResourceSiteDetails": 1498,
+          "impassableRidges": 2,
+          "tacticalPasses": 7,
+          "resourcePieces": 4631,
+          "visibleResourcePieces": 4631,
+          "visibleDecorativePieces": 1152,
+          "depletedSites": 0,
+          "activeWorksites": 0,
+          "resourceRevision": 1,
+          "decorativeChunks": 21,
+          "resourceBatches": 95,
+          "resourceDrawCalls": 95,
+          "clearingRevision": 3
+        },
+        "fog": {
+          "active": false,
+          "visibleCells": 0,
+          "exploredCells": 0,
+          "rememberedPlaces": 0,
+          "drawCalls": 0
+        },
+        "combat": {
+          "projectiles": 0,
+          "strikes": 0,
+          "impacts": 0,
+          "casualties": 0,
+          "retreats": 0,
+          "visibleEffects": 0,
+          "droppedEffects": 0,
+          "drawCallsEstimate": 0,
+          "events": 0,
+          "reusedFrame": true
+        }
+      }
+    },
+    {
+      "path": "screenshots\\ai-readability-controls\\controls-v2-touch-portrait-worker-badge.png",
+      "tick": 51,
+      "seed": "first-light",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "camera": [
+        133.06846230039156,
+        192.09470540426477,
+        275.5847270703741
+      ],
+      "target": [
+        39.767301277489175,
+        11.619092907929241,
+        64.19335005273295
+      ],
+      "diagnostics": {
+        "fps": 0,
+        "frameMs": 0,
+        "performance": null,
+        "performanceMode": "paused",
+        "simulationSpeed": 2,
+        "simulationTime": 51.4,
+        "simulationStep": 514,
+        "drawCalls": 164,
+        "calls": 164,
+        "triangles": 1483105,
+        "geometries": 117,
+        "textures": 3,
+        "observationMode": "omniscient",
+        "viewer": null,
+        "groups": 26,
+        "totalPopulation": 461,
+        "visibleIndividuals": 273,
+        "representedIndividuals": 461,
+        "drawnModels": 133,
+        "visibleWorkerIndividuals": 154,
+        "drawnWorkerModels": 14,
+        "visibleMilitaryIndividuals": 31,
+        "crowds": {
+          "totalPopulation": 461,
+          "representedIndividuals": 461,
+          "visibleIndividuals": 273,
+          "culledIndividuals": 188,
+          "homePresentIndividuals": 203,
+          "homeVisibleIndividuals": 111,
+          "groupIndividuals": 258,
+          "groupVisibleIndividuals": 162,
+          "workerIndividuals": 242,
+          "representedWorkerIndividuals": 242,
+          "visibleWorkerIndividuals": 154,
+          "workerCrewCount": 22,
+          "visibleWorkerCrews": 14,
+          "drawnWorkerModels": 14,
+          "workerBadgeCount": 2,
+          "workerBadgeCapacity": 16,
+          "workerBadgeDrawCalls": 1,
+          "militaryIndividuals": 70,
+          "visibleMilitaryIndividuals": 31,
+          "armyIndividuals": 0,
+          "groupCount": 26,
+          "instances": 133,
+          "drawnModels": 133,
+          "detailedIndividuals": 0,
+          "simplifiedIndividuals": 273,
+          "overviewIndividuals": 273,
+          "reusedFrame": false,
+          "drawCallsEstimate": 7,
+          "triangleEstimate": 14767,
+          "allocatedInstances": 1024,
+          "instanceAllocationUnfulfilled": 0,
+          "homePresentBySettlement": {
+            "s0": 47,
+            "s1": 48,
+            "s2": 47,
+            "s3": 61
+          },
+          "populationAccountingDelta": 0,
+          "terrainCacheSamples": 598,
+          "occlusionCulling": false,
+          "censusScope": "whole-world",
+          "workerBadgeLodCulled": 12,
+          "workerBadgeOverlapCulled": 0
+        },
+        "buildings": {
+          "buildingRecords": 48,
+          "completedBuildings": 44,
+          "constructionSites": 4,
+          "renderedBuildings": 48,
+          "nearBuildings": 0,
+          "farBuildings": 48,
+          "ruinedBuildings": 0,
+          "temporaryShelters": 0,
+          "roadSegments": 120,
+          "instances": 235,
+          "drawCallsEstimate": 64,
+          "settlements": 4,
+          "camps": 0,
+          "ruins": 0,
+          "wallSegments": 0,
+          "wallLength": 0,
+          "wallJunctions": 0,
+          "gatePassages": 0,
+          "damagedBuildings": 0,
+          "defenseSpans": [],
+          "byKind": {
+            "housing": 16,
+            "storage": 4,
+            "workshop": 4,
+            "farm": 7,
+            "power": 5,
+            "lab": 0,
+            "hub": 4,
+            "barracks": 2,
+            "range": 2,
+            "fabricator": 1,
+            "launcher": 1,
+            "brooder": 1,
+            "spitter": 1,
+            "wall": 0,
+            "gate": 0,
+            "tower": 0
+          },
+          "bySpecies": {
+            "human": 24,
+            "machine": 12,
+            "hive": 12
+          },
+          "minRadius": 12.652380652512885,
+          "maxRadius": 12.652380652512893
+        },
+        "terrain": {
+          "worldRadius": 180,
+          "resourceSites": 520,
+          "visibleResourceSites": 520,
+          "visibleResourceSiteDetails": 1498,
+          "impassableRidges": 2,
+          "tacticalPasses": 7,
+          "resourcePieces": 4631,
+          "visibleResourcePieces": 4625,
+          "visibleDecorativePieces": 1148,
+          "depletedSites": 0,
+          "activeWorksites": 11,
+          "resourceRevision": 3,
+          "decorativeChunks": 21,
+          "resourceBatches": 95,
+          "resourceDrawCalls": 95,
+          "clearingRevision": 5
+        },
+        "fog": {
+          "active": false,
+          "visibleCells": 0,
+          "exploredCells": 0,
+          "rememberedPlaces": 0,
+          "drawCalls": 0
+        },
+        "combat": {
+          "projectiles": 0,
+          "strikes": 0,
+          "impacts": 0,
+          "casualties": 0,
+          "retreats": 0,
+          "visibleEffects": 0,
+          "droppedEffects": 0,
+          "drawCallsEstimate": 0,
+          "events": 0,
+          "reusedFrame": true
+        }
+      }
+    },
+    {
+      "path": "screenshots\\ai-readability-controls\\controls-v2-touch-landscape-collapsed.png",
+      "tick": 1,
+      "seed": "first-light",
+      "viewport": {
+        "width": 844,
+        "height": 390
+      },
+      "camera": [
+        227.10218063273638,
+        208.51648517992297,
+        290.69079120990256
+      ],
+      "target": [
+        26.595822613204014,
+        4,
+        34.042652944901135
+      ],
+      "diagnostics": {
+        "fps": 0,
+        "frameMs": 0,
+        "performance": null,
+        "performanceMode": "paused",
+        "simulationSpeed": 2,
+        "simulationTime": 1.5,
+        "simulationStep": 15,
+        "drawCalls": 181,
+        "calls": 181,
+        "triangles": 1767401,
+        "geometries": 81,
+        "textures": 2,
+        "observationMode": "omniscient",
+        "viewer": null,
+        "groups": 16,
+        "totalPopulation": 413,
+        "visibleIndividuals": 413,
+        "representedIndividuals": 413,
+        "drawnModels": 261,
+        "visibleWorkerIndividuals": 168,
+        "drawnWorkerModels": 16,
+        "visibleMilitaryIndividuals": 52,
+        "crowds": {
+          "totalPopulation": 413,
+          "representedIndividuals": 413,
+          "visibleIndividuals": 413,
+          "culledIndividuals": 0,
+          "homePresentIndividuals": 245,
+          "homeVisibleIndividuals": 245,
+          "groupIndividuals": 168,
+          "groupVisibleIndividuals": 168,
+          "workerIndividuals": 168,
+          "representedWorkerIndividuals": 168,
+          "visibleWorkerIndividuals": 168,
+          "workerCrewCount": 16,
+          "visibleWorkerCrews": 16,
+          "drawnWorkerModels": 16,
+          "workerBadgeCount": 0,
+          "workerBadgeCapacity": 0,
+          "workerBadgeDrawCalls": 0,
+          "militaryIndividuals": 52,
+          "visibleMilitaryIndividuals": 52,
+          "armyIndividuals": 0,
+          "groupCount": 16,
+          "instances": 261,
+          "drawnModels": 261,
+          "detailedIndividuals": 0,
+          "simplifiedIndividuals": 413,
+          "overviewIndividuals": 413,
+          "reusedFrame": true,
+          "drawCallsEstimate": 7,
+          "triangleEstimate": 28028,
+          "allocatedInstances": 704,
+          "instanceAllocationUnfulfilled": 0,
+          "homePresentBySettlement": {
+            "s0": 64,
+            "s1": 59,
+            "s2": 58,
+            "s3": 64
+          },
+          "populationAccountingDelta": 0,
+          "terrainCacheSamples": 288,
+          "occlusionCulling": false,
+          "censusScope": "whole-world",
+          "workerBadgeLodCulled": 16,
+          "workerBadgeOverlapCulled": 0
+        },
+        "buildings": {
+          "buildingRecords": 39,
+          "completedBuildings": 36,
+          "constructionSites": 3,
+          "renderedBuildings": 39,
+          "nearBuildings": 0,
+          "farBuildings": 39,
+          "ruinedBuildings": 0,
+          "temporaryShelters": 0,
+          "roadSegments": 93,
+          "instances": 182,
+          "drawCallsEstimate": 44,
+          "settlements": 4,
+          "camps": 0,
+          "ruins": 0,
+          "wallSegments": 0,
+          "wallLength": 0,
+          "wallJunctions": 0,
+          "gatePassages": 0,
+          "damagedBuildings": 0,
+          "defenseSpans": [],
+          "byKind": {
+            "housing": 16,
+            "storage": 4,
+            "workshop": 4,
+            "farm": 6,
+            "power": 5,
+            "lab": 0,
+            "hub": 4,
+            "barracks": 0,
+            "range": 0,
+            "fabricator": 0,
+            "launcher": 0,
+            "brooder": 0,
+            "spitter": 0,
+            "wall": 0,
+            "gate": 0,
+            "tower": 0
+          },
+          "bySpecies": {
+            "human": 20,
+            "machine": 10,
+            "hive": 9
+          },
+          "minRadius": 11.26101730552664,
+          "maxRadius": 11.750000000000004
+        },
+        "terrain": {
+          "worldRadius": 180,
+          "resourceSites": 520,
+          "visibleResourceSites": 520,
+          "visibleResourceSiteDetails": 1498,
+          "impassableRidges": 2,
+          "tacticalPasses": 7,
+          "resourcePieces": 4631,
+          "visibleResourcePieces": 4631,
+          "visibleDecorativePieces": 1152,
+          "depletedSites": 0,
+          "activeWorksites": 0,
+          "resourceRevision": 1,
+          "decorativeChunks": 21,
+          "resourceBatches": 95,
+          "resourceDrawCalls": 95,
+          "clearingRevision": 3
+        },
+        "fog": {
+          "active": false,
+          "visibleCells": 0,
+          "exploredCells": 0,
+          "rememberedPlaces": 0,
+          "drawCalls": 0
+        },
+        "combat": {
+          "projectiles": 0,
+          "strikes": 0,
+          "impacts": 0,
+          "casualties": 0,
+          "retreats": 0,
+          "visibleEffects": 0,
+          "droppedEffects": 0,
+          "drawCallsEstimate": 0,
+          "events": 0,
+          "reusedFrame": true
+        }
+      }
+    },
+    {
+      "path": "screenshots\\ai-readability-controls\\controls-v2-touch-landscape-after-gestures.png",
+      "tick": 1,
+      "seed": "first-light",
+      "viewport": {
+        "width": 844,
+        "height": 390
+      },
+      "camera": [
+        18.056992759129322,
+        139.9815577718644,
+        167.78411952890286
+      ],
+      "target": [
+        3.979777781173,
+        13.118446110252895,
+        44.44517622581761
+      ],
+      "diagnostics": {
+        "fps": 50,
+        "frameMs": 19.999999999999996,
+        "performance": {
+          "mode": "paused",
+          "speed": 2,
+          "quality": "low",
+          "sampledFrames": 51,
+          "sampledSeconds": 1.0199999999999998,
+          "simulationPulses": 0,
+          "simulationCyclesPerSecond": 0,
+          "simulationMs": 0.0078431391248516,
+          "sceneUpdateMs": 0.9509803641076181,
+          "renderSubmitMs": 1.164705895910076,
+          "cpuMs": 2.1235293991425457,
+          "gpuTiming": false
+        },
+        "performanceMode": "paused",
+        "simulationSpeed": 2,
+        "simulationTime": 1.5,
+        "simulationStep": 15,
+        "drawCalls": 177,
+        "calls": 177,
+        "triangles": 1791894,
+        "geometries": 100,
+        "textures": 3,
+        "observationMode": "omniscient",
+        "viewer": null,
+        "groups": 16,
+        "totalPopulation": 413,
+        "visibleIndividuals": 413,
+        "representedIndividuals": 413,
+        "drawnModels": 261,
+        "visibleWorkerIndividuals": 168,
+        "drawnWorkerModels": 16,
+        "visibleMilitaryIndividuals": 52,
+        "crowds": {
+          "totalPopulation": 413,
+          "representedIndividuals": 413,
+          "visibleIndividuals": 413,
+          "culledIndividuals": 0,
+          "homePresentIndividuals": 245,
+          "homeVisibleIndividuals": 245,
+          "groupIndividuals": 168,
+          "groupVisibleIndividuals": 168,
+          "workerIndividuals": 168,
+          "representedWorkerIndividuals": 168,
+          "visibleWorkerIndividuals": 168,
+          "workerCrewCount": 16,
+          "visibleWorkerCrews": 16,
+          "drawnWorkerModels": 16,
+          "workerBadgeCount": 0,
+          "workerBadgeCapacity": 16,
+          "workerBadgeDrawCalls": 0,
+          "militaryIndividuals": 52,
+          "visibleMilitaryIndividuals": 52,
+          "armyIndividuals": 0,
+          "groupCount": 16,
+          "instances": 261,
+          "drawnModels": 261,
+          "detailedIndividuals": 0,
+          "simplifiedIndividuals": 413,
+          "overviewIndividuals": 262,
+          "reusedFrame": false,
+          "drawCallsEstimate": 9,
+          "triangleEstimate": 55804,
+          "allocatedInstances": 896,
+          "instanceAllocationUnfulfilled": 0,
+          "homePresentBySettlement": {
+            "s0": 64,
+            "s1": 59,
+            "s2": 58,
+            "s3": 64
+          },
+          "populationAccountingDelta": 0,
+          "terrainCacheSamples": 288,
+          "occlusionCulling": false,
+          "censusScope": "whole-world",
+          "workerBadgeLodCulled": 16,
+          "workerBadgeOverlapCulled": 0
+        },
+        "buildings": {
+          "buildingRecords": 39,
+          "completedBuildings": 36,
+          "constructionSites": 3,
+          "renderedBuildings": 39,
+          "nearBuildings": 9,
+          "farBuildings": 30,
+          "ruinedBuildings": 0,
+          "temporaryShelters": 0,
+          "roadSegments": 93,
+          "instances": 183,
+          "drawCallsEstimate": 45,
+          "settlements": 4,
+          "camps": 0,
+          "ruins": 0,
+          "wallSegments": 0,
+          "wallLength": 0,
+          "wallJunctions": 0,
+          "gatePassages": 0,
+          "damagedBuildings": 0,
+          "defenseSpans": [],
+          "byKind": {
+            "housing": 16,
+            "storage": 4,
+            "workshop": 4,
+            "farm": 6,
+            "power": 5,
+            "lab": 0,
+            "hub": 4,
+            "barracks": 0,
+            "range": 0,
+            "fabricator": 0,
+            "launcher": 0,
+            "brooder": 0,
+            "spitter": 0,
+            "wall": 0,
+            "gate": 0,
+            "tower": 0
+          },
+          "bySpecies": {
+            "human": 20,
+            "machine": 10,
+            "hive": 9
+          },
+          "minRadius": 11.26101730552664,
+          "maxRadius": 11.750000000000004
+        },
+        "terrain": {
+          "worldRadius": 180,
+          "resourceSites": 520,
+          "visibleResourceSites": 520,
+          "visibleResourceSiteDetails": 1498,
+          "impassableRidges": 2,
+          "tacticalPasses": 7,
+          "resourcePieces": 4631,
+          "visibleResourcePieces": 4631,
+          "visibleDecorativePieces": 1152,
+          "depletedSites": 0,
+          "activeWorksites": 0,
+          "resourceRevision": 1,
+          "decorativeChunks": 21,
+          "resourceBatches": 95,
+          "resourceDrawCalls": 95,
+          "clearingRevision": 3
+        },
+        "fog": {
+          "active": false,
+          "visibleCells": 0,
+          "exploredCells": 0,
+          "rememberedPlaces": 0,
+          "drawCalls": 0
+        },
+        "combat": {
+          "projectiles": 0,
+          "strikes": 0,
+          "impacts": 0,
+          "casualties": 0,
+          "retreats": 0,
+          "visibleEffects": 0,
+          "droppedEffects": 0,
+          "drawCallsEstimate": 0,
+          "events": 0,
+          "reusedFrame": true
+        }
+      }
+    },
+    {
+      "path": "screenshots\\ai-readability-controls\\controls-v2-touch-landscape-worker-badge.png",
+      "tick": 51,
+      "seed": "first-light",
+      "viewport": {
+        "width": 844,
+        "height": 390
+      },
+      "camera": [
+        57.443300956743194,
+        82.99106326775673,
+        136.38104044887749
+      ],
+      "target": [
+        44.273127219661156,
+        9.806291932591211,
+        62.13170585085994
+      ],
+      "diagnostics": {
+        "fps": 0,
+        "frameMs": 0,
+        "performance": null,
+        "performanceMode": "paused",
+        "simulationSpeed": 2,
+        "simulationTime": 51.5,
+        "simulationStep": 515,
+        "drawCalls": 194,
+        "calls": 194,
+        "triangles": 1680315,
+        "geometries": 160,
+        "textures": 3,
+        "observationMode": "omniscient",
+        "viewer": null,
+        "groups": 26,
+        "totalPopulation": 461,
+        "visibleIndividuals": 131,
+        "representedIndividuals": 461,
+        "drawnModels": 66,
+        "visibleWorkerIndividuals": 72,
+        "drawnWorkerModels": 7,
+        "visibleMilitaryIndividuals": 18,
+        "crowds": {
+          "totalPopulation": 461,
+          "representedIndividuals": 461,
+          "visibleIndividuals": 131,
+          "culledIndividuals": 330,
+          "homePresentIndividuals": 203,
+          "homeVisibleIndividuals": 51,
+          "groupIndividuals": 258,
+          "groupVisibleIndividuals": 80,
+          "workerIndividuals": 242,
+          "representedWorkerIndividuals": 242,
+          "visibleWorkerIndividuals": 72,
+          "workerCrewCount": 22,
+          "visibleWorkerCrews": 7,
+          "drawnWorkerModels": 7,
+          "workerBadgeCount": 6,
+          "workerBadgeCapacity": 16,
+          "workerBadgeDrawCalls": 1,
+          "militaryIndividuals": 70,
+          "visibleMilitaryIndividuals": 18,
+          "armyIndividuals": 0,
+          "groupCount": 26,
+          "instances": 66,
+          "drawnModels": 66,
+          "detailedIndividuals": 25,
+          "simplifiedIndividuals": 106,
+          "overviewIndividuals": 4,
+          "reusedFrame": false,
+          "drawCallsEstimate": 6,
+          "triangleEstimate": 36599,
+          "allocatedInstances": 1536,
+          "instanceAllocationUnfulfilled": 0,
+          "homePresentBySettlement": {
+            "s0": 47,
+            "s1": 48,
+            "s2": 47,
+            "s3": 61
+          },
+          "populationAccountingDelta": 0,
+          "terrainCacheSamples": 594,
+          "occlusionCulling": false,
+          "censusScope": "whole-world",
+          "workerBadgeLodCulled": 0,
+          "workerBadgeOverlapCulled": 1
+        },
+        "buildings": {
+          "buildingRecords": 48,
+          "completedBuildings": 44,
+          "constructionSites": 4,
+          "renderedBuildings": 48,
+          "nearBuildings": 24,
+          "farBuildings": 24,
+          "ruinedBuildings": 0,
+          "temporaryShelters": 0,
+          "roadSegments": 120,
+          "instances": 241,
+          "drawCallsEstimate": 85,
+          "settlements": 4,
+          "camps": 0,
+          "ruins": 0,
+          "wallSegments": 0,
+          "wallLength": 0,
+          "wallJunctions": 0,
+          "gatePassages": 0,
+          "damagedBuildings": 0,
+          "defenseSpans": [],
+          "byKind": {
+            "housing": 16,
+            "storage": 4,
+            "workshop": 4,
+            "farm": 7,
+            "power": 5,
+            "lab": 0,
+            "hub": 4,
+            "barracks": 2,
+            "range": 2,
+            "fabricator": 1,
+            "launcher": 1,
+            "brooder": 1,
+            "spitter": 1,
+            "wall": 0,
+            "gate": 0,
+            "tower": 0
+          },
+          "bySpecies": {
+            "human": 24,
+            "machine": 12,
+            "hive": 12
+          },
+          "minRadius": 12.652380652512885,
+          "maxRadius": 12.652380652512893
+        },
+        "terrain": {
+          "worldRadius": 180,
+          "resourceSites": 520,
+          "visibleResourceSites": 520,
+          "visibleResourceSiteDetails": 1498,
+          "impassableRidges": 2,
+          "tacticalPasses": 7,
+          "resourcePieces": 4631,
+          "visibleResourcePieces": 4625,
+          "visibleDecorativePieces": 1148,
+          "depletedSites": 0,
+          "activeWorksites": 10,
+          "resourceRevision": 3,
+          "decorativeChunks": 21,
+          "resourceBatches": 95,
+          "resourceDrawCalls": 95,
+          "clearingRevision": 5
+        },
+        "fog": {
+          "active": false,
+          "visibleCells": 0,
+          "exploredCells": 0,
+          "rememberedPlaces": 0,
+          "drawCalls": 0
+        },
+        "combat": {
+          "projectiles": 0,
+          "strikes": 0,
+          "impacts": 0,
+          "casualties": 0,
+          "retreats": 0,
+          "visibleEffects": 0,
+          "droppedEffects": 0,
+          "drawCallsEstimate": 0,
+          "events": 0,
+          "reusedFrame": true
+        }
+      }
+    }
+  ],
+  "responsive": [
+    {
+      "width": 1440,
+      "height": 900,
+      "boxes": [
+        {
+          "selector": "[data-action=\"pause\"]",
+          "x": 1078.46875,
+          "y": 50,
+          "width": 67,
+          "height": 32
+        },
+        {
+          "selector": "[data-action=\"speed\"][data-value=\"32\"]",
+          "x": 1300.734375,
+          "y": 50,
+          "width": 35.265625,
+          "height": 32
+        },
+        {
+          "selector": "[data-action=\"settings\"]",
+          "x": 1358,
+          "y": 52,
+          "width": 38,
+          "height": 28
+        },
+        {
+          "selector": ".faction-entry",
+          "x": 30,
+          "y": 191.5,
+          "width": 191,
+          "height": 53
+        },
+        {
+          "selector": "[data-action=\"develop\"]",
+          "x": 30,
+          "y": 467.28125,
+          "width": 191,
+          "height": 36
+        },
+        {
+          "selector": "[data-action=\"tab\"][data-value=\"life\"]",
+          "x": 1140,
+          "y": 235.75,
+          "width": 29.953125,
+          "height": 33
+        },
+        {
+          "selector": "[data-action=\"follow\"]",
+          "x": 1144,
+          "y": 773.703125,
+          "width": 90.390625,
+          "height": 17
+        },
+        {
+          "selector": "[data-action=\"overlay\"][data-value=\"resources\"]",
+          "x": 1244.890625,
+          "y": 837,
+          "width": 55.828125,
+          "height": 28
+        },
+        {
+          "selector": "[data-action=\"cinematic\"]",
+          "x": 1320.71875,
+          "y": 828,
+          "width": 91.28125,
+          "height": 46
+        }
+      ]
+    },
+    {
+      "width": 960,
+      "height": 700,
+      "boxes": [
+        {
+          "selector": "[data-action=\"pause\"]",
+          "x": 619.46875,
+          "y": 42,
+          "width": 67,
+          "height": 32
+        },
+        {
+          "selector": "[data-action=\"speed\"][data-value=\"32\"]",
+          "x": 836.734375,
+          "y": 42,
+          "width": 35.265625,
+          "height": 32
+        },
+        {
+          "selector": "[data-action=\"settings\"]",
+          "x": 886,
+          "y": 44,
+          "width": 38,
+          "height": 28
+        },
+        {
+          "selector": ".faction-entry",
+          "x": 20,
+          "y": 164.5,
+          "width": 173,
+          "height": 46
+        },
+        {
+          "selector": "[data-action=\"develop\"]",
+          "x": 20,
+          "y": 367.5,
+          "width": 173,
+          "height": 32
+        },
+        {
+          "selector": "[data-action=\"tab\"][data-value=\"life\"]",
+          "x": 686,
+          "y": 219.75,
+          "width": 29.953125,
+          "height": 33
+        },
+        {
+          "selector": "[data-action=\"follow\"]",
+          "x": 690,
+          "y": 582.703125,
+          "width": 90.390625,
+          "height": 17
+        },
+        {
+          "selector": "[data-action=\"overlay\"][data-value=\"resources\"]",
+          "x": 784.890625,
+          "y": 643,
+          "width": 53.828125,
+          "height": 28
+        },
+        {
+          "selector": "[data-action=\"cinematic\"]",
+          "x": 856.71875,
+          "y": 634,
+          "width": 83.28125,
+          "height": 46
+        }
+      ]
+    },
+    {
+      "device": "portrait",
+      "hasTouch": true,
+      "isMobile": true,
+      "coarse": true,
+      "touchPoints": 1,
+      "width": 390,
+      "height": 844,
+      "documentWidth": 390,
+      "documentHeight": 844,
+      "canvas": {
+        "x": 0,
+        "y": 0,
+        "right": 390,
+        "bottom": 844
+      }
+    },
+    {
+      "device": "landscape",
+      "hasTouch": true,
+      "isMobile": true,
+      "coarse": true,
+      "touchPoints": 1,
+      "width": 844,
+      "height": 390,
+      "documentWidth": 844,
+      "documentHeight": 390,
+      "canvas": {
+        "x": 0,
+        "y": 0,
+        "right": 844,
+        "bottom": 390
+      }
+    }
+  ],
+  "environment": {
+    "browser": "153.0.8010.53",
+    "platform": "win32",
+    "launch": {
+      "headless": true,
+      "args": [
+        "--disable-background-timer-throttling",
+        "--disable-renderer-backgrounding"
+      ],
+      "channel": "chrome"
+    },
+    "tier": "ci",
+    "quality": "low",
+    "civCount": 4,
+    "url": "http://127.0.0.1:4174/?seed=first-light&civs=4&quality=low",
+    "gpu": "ANGLE (NVIDIA, NVIDIA GeForce RTX 3080 Ti (0x00002208) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+    "measurementLimit": "Headless browser on this runner only. Frame timings are not foreground hardware performance or a cross-device guarantee."
+  },
+  "passed": 60,
+  "failed": 0,
+  "populationEvidence": {
+    "total": 695,
+    "diagnostics": {
+      "fps": 0,
+      "frameMs": 0,
+      "performance": null,
+      "performanceMode": "paused",
+      "simulationSpeed": 4,
+      "simulationTime": 1200.3,
+      "simulationStep": 12003,
+      "drawCalls": 231,
+      "calls": 231,
+      "triangles": 1790075,
+      "geometries": 217,
+      "textures": 14,
+      "observationMode": "omniscient",
+      "viewer": null,
+      "groups": 12,
+      "totalPopulation": 695,
+      "visibleIndividuals": 695,
+      "representedIndividuals": 695,
+      "drawnModels": 483,
+      "visibleWorkerIndividuals": 224,
+      "drawnWorkerModels": 12,
+      "visibleMilitaryIndividuals": 79,
+      "crowds": {
+        "totalPopulation": 695,
+        "representedIndividuals": 695,
+        "visibleIndividuals": 695,
+        "culledIndividuals": 0,
+        "homePresentIndividuals": 471,
+        "homeVisibleIndividuals": 471,
+        "groupIndividuals": 224,
+        "groupVisibleIndividuals": 224,
+        "workerIndividuals": 224,
+        "representedWorkerIndividuals": 224,
+        "visibleWorkerIndividuals": 224,
+        "workerCrewCount": 12,
+        "visibleWorkerCrews": 12,
+        "drawnWorkerModels": 12,
+        "workerBadgeCount": 0,
+        "workerBadgeCapacity": 0,
+        "workerBadgeDrawCalls": 0,
+        "militaryIndividuals": 79,
+        "visibleMilitaryIndividuals": 79,
+        "armyIndividuals": 0,
+        "groupCount": 12,
+        "instances": 483,
+        "drawnModels": 483,
+        "detailedIndividuals": 0,
+        "simplifiedIndividuals": 695,
+        "overviewIndividuals": 695,
+        "reusedFrame": true,
+        "drawCallsEstimate": 8,
+        "triangleEstimate": 52719,
+        "allocatedInstances": 3456,
+        "instanceAllocationUnfulfilled": 0,
+        "homePresentBySettlement": {
+          "s0": 81,
+          "s1": 199,
+          "s2": 125,
+          "s3": 66
+        },
+        "populationAccountingDelta": 0,
+        "terrainCacheSamples": 2991,
+        "occlusionCulling": false,
+        "censusScope": "whole-world",
+        "workerBadgeLodCulled": 12,
+        "workerBadgeOverlapCulled": 0
+      },
+      "buildings": {
+        "buildingRecords": 91,
+        "completedBuildings": 72,
+        "constructionSites": 0,
+        "renderedBuildings": 91,
+        "nearBuildings": 0,
+        "farBuildings": 91,
+        "ruinedBuildings": 19,
+        "temporaryShelters": 0,
+        "roadSegments": 209,
+        "instances": 400,
+        "drawCallsEstimate": 93,
+        "settlements": 4,
+        "camps": 0,
+        "ruins": 0,
+        "wallSegments": 8,
+        "wallLength": 59.999999999999986,
+        "wallJunctions": 6,
+        "gatePassages": 2,
+        "damagedBuildings": 2,
+        "defenseSpans": [
+          {
+            "buildingId": "b202",
+            "settlementId": "s0",
+            "topologyId": "s0:defense-screen",
+            "kind": "gate",
+            "from": {
+              "x": -71.18221820598072,
+              "z": -56.166778919266605,
+              "y": 2.2
+            },
+            "to": {
+              "x": -76.28036485534102,
+              "z": -63.583577469963274,
+              "y": 2.2
+            },
+            "length": 8.999999999999995,
+            "gateWidth": 5,
+            "open": false,
+            "progress": 1,
+            "broken": false
+          },
+          {
+            "buildingId": "b253",
+            "settlementId": "s0",
+            "topologyId": "s0:defense-screen",
+            "kind": "wall",
+            "from": {
+              "x": -71.18221820598072,
+              "z": -56.166778919266605,
+              "y": 2.2
+            },
+            "to": {
+              "x": -66.24340680557812,
+              "z": -51.206119492209226,
+              "y": 2.9429814838451147
+            },
+            "length": 6.999999999999995,
+            "gateWidth": 0,
+            "open": false,
+            "progress": 1,
+            "broken": false
+          },
+          {
+            "buildingId": "b304",
+            "settlementId": "s0",
+            "topologyId": "s0:defense-screen",
+            "kind": "wall",
+            "from": {
+              "x": -76.28036485534102,
+              "z": -63.583577469963274,
+              "y": 2.2
+            },
+            "to": {
+              "x": -79.14247266154855,
+              "z": -69.97171795884154,
+              "y": 4.116438257131434
+            },
+            "length": 6.999999999999995,
+            "gateWidth": 0,
+            "open": false,
+            "progress": 1,
+            "broken": false
+          },
+          {
+            "buildingId": "b209",
+            "settlementId": "s1",
+            "topologyId": "s1:defense-screen",
+            "kind": "gate",
+            "from": {
+              "x": 68.36044678500846,
+              "z": -81.35581775423907,
+              "y": 3.466321012174202
+            },
+            "to": {
+              "x": 69.49596300451608,
+              "z": -72.42773829025381,
+              "y": 3.4015571458140634
+            },
+            "length": 9.000000000000007,
+            "gateWidth": 5,
+            "open": false,
+            "progress": 1,
+            "broken": false
+          },
+          {
+            "buildingId": "b263",
+            "settlementId": "s1",
+            "topologyId": "s1:defense-screen",
+            "kind": "wall",
+            "from": {
+              "x": 68.36044678500846,
+              "z": -81.35581775423907,
+              "y": 3.466321012174202
+            },
+            "to": {
+              "x": 66.24176168969485,
+              "z": -88.02748722048932,
+              "y": 3.4861946170426865
+            },
+            "length": 6.999999999999995,
+            "gateWidth": 0,
+            "open": false,
+            "progress": 1,
+            "broken": false
+          },
+          {
+            "buildingId": "b313",
+            "settlementId": "s1",
+            "topologyId": "s1:defense-screen",
+            "kind": "wall",
+            "from": {
+              "x": 69.49596300451608,
+              "z": -72.42773829025381,
+              "y": 3.4015571458140634
+            },
+            "to": {
+              "x": 69.11478584991382,
+              "z": -65.43812428254142,
+              "y": 3.2828084428441127
+            },
+            "length": 6.999999999999996,
+            "gateWidth": 0,
+            "open": false,
+            "progress": 1,
+            "broken": false
+          },
+          {
+            "buildingId": "b1084",
+            "settlementId": "s1",
+            "topologyId": "s1:defense-screen",
+            "kind": "wall",
+            "from": {
+              "x": 66.24176168969485,
+              "z": -88.02748722048932,
+              "y": 3.4861946170426865
+            },
+            "to": {
+              "x": 64.12307659438126,
+              "z": -94.69915668673958,
+              "y": 3.4480005026413294
+            },
+            "length": 7.0000000000000036,
+            "gateWidth": 0,
+            "open": false,
+            "progress": 1,
+            "broken": false
+          },
+          {
+            "buildingId": "b1105",
+            "settlementId": "s1",
+            "topologyId": "s1:defense-screen",
+            "kind": "wall",
+            "from": {
+              "x": 69.11478584991382,
+              "z": -65.43812428254142,
+              "y": 3.2828084428441127
+            },
+            "to": {
+              "x": 68.73360869531156,
+              "z": -58.448510274829026,
+              "y": 3.132456593100694
+            },
+            "length": 7.000000000000003,
+            "gateWidth": 0,
+            "open": false,
+            "progress": 1,
+            "broken": false
+          }
+        ],
+        "byKind": {
+          "housing": 20,
+          "storage": 11,
+          "workshop": 8,
+          "farm": 13,
+          "power": 10,
+          "lab": 4,
+          "hub": 4,
+          "barracks": 3,
+          "range": 3,
+          "fabricator": 1,
+          "launcher": 1,
+          "brooder": 2,
+          "spitter": 2,
+          "wall": 6,
+          "gate": 2,
+          "tower": 1
+        },
+        "bySpecies": {
+          "human": 40,
+          "machine": 24,
+          "hive": 27
+        },
+        "minRadius": 14.950851033010338,
+        "maxRadius": 23.431971080212165
+      },
+      "terrain": {
+        "worldRadius": 180,
+        "resourceSites": 520,
+        "visibleResourceSites": 520,
+        "visibleResourceSiteDetails": 1498,
+        "impassableRidges": 2,
+        "tacticalPasses": 7,
+        "resourcePieces": 4631,
+        "visibleResourcePieces": 4494,
+        "visibleDecorativePieces": 1137,
+        "depletedSites": 6,
+        "activeWorksites": 3,
+        "resourceRevision": 51,
+        "decorativeChunks": 21,
+        "resourceBatches": 95,
+        "resourceDrawCalls": 95,
+        "clearingRevision": 21
+      },
+      "fog": {
+        "active": false,
+        "visibleCells": 0,
+        "exploredCells": 0,
+        "rememberedPlaces": 0,
+        "drawCalls": 0
+      },
+      "combat": {
+        "projectiles": 0,
+        "strikes": 0,
+        "impacts": 0,
+        "casualties": 0,
+        "retreats": 0,
+        "visibleEffects": 0,
+        "droppedEffects": 0,
+        "drawCallsEstimate": 0,
+        "events": 0,
+        "reusedFrame": true
+      }
+    },
+    "actualInstances": 483,
+    "meshes": [
+      {
+        "name": "Individuals human:overview:-2:-2",
+        "count": 70,
+        "visible": true
+      },
+      {
+        "name": "Individuals machine:overview:0:-2",
+        "count": 111,
+        "visible": true
+      },
+      {
+        "name": "Individuals human:overview:-2:1",
+        "count": 19,
+        "visible": true
+      },
+      {
+        "name": "Individuals human:overview:-1:1",
+        "count": 53,
+        "visible": true
+      },
+      {
+        "name": "Individuals human:overview:-1:-2",
+        "count": 12,
+        "visible": true
+      },
+      {
+        "name": "Individuals human:overview:-2:-1",
+        "count": 1,
+        "visible": true
+      },
+      {
+        "name": "Individuals human:overview:-1:-1",
+        "count": 0,
+        "visible": false
+      },
+      {
+        "name": "Individuals machine:overview:-2:-2",
+        "count": 0,
+        "visible": false
+      },
+      {
+        "name": "Individuals hive:overview:1:-1",
+        "count": 0,
+        "visible": false
+      },
+      {
+        "name": "Individuals human:overview:0:1",
+        "count": 0,
+        "visible": false
+      },
+      {
+        "name": "Individuals human:overview:0:0",
+        "count": 0,
+        "visible": false
+      },
+      {
+        "name": "Individuals machine:overview:-1:-2",
+        "count": 0,
+        "visible": false
+      },
+      {
+        "name": "Individuals human:overview:0:-2",
+        "count": 0,
+        "visible": false
+      },
+      {
+        "name": "Individuals machine:overview:0:0",
+        "count": 0,
+        "visible": false
+      },
+      {
+        "name": "Individuals hive:overview:0:1",
+        "count": 0,
+        "visible": false
+      },
+      {
+        "name": "Individuals hive:overview:1:0",
+        "count": 0,
+        "visible": false
+      },
+      {
+        "name": "Individuals machine:overview:1:0",
+        "count": 0,
+        "visible": false
+      },
+      {
+        "name": "Individuals hive:overview:-2:1",
+        "count": 0,
+        "visible": false
+      },
+      {
+        "name": "Individuals hive:overview:-1:1",
+        "count": 0,
+        "visible": false
+      },
+      {
+        "name": "Individuals human:overview:-2:0",
+        "count": 0,
+        "visible": false
+      },
+      {
+        "name": "Individuals human:overview:-1:0",
+        "count": 0,
+        "visible": false
+      },
+      {
+        "name": "Individuals hive:overview:1:-2",
+        "count": 0,
+        "visible": false
+      },
+      {
+        "name": "Individuals hive:overview:-2:2",
+        "count": 0,
+        "visible": false
+      },
+      {
+        "name": "Individuals human:overview:1:0",
+        "count": 0,
+        "visible": false
+      },
+      {
+        "name": "Individuals human:overview:1:1",
+        "count": 0,
+        "visible": false
+      },
+      {
+        "name": "Individuals machine:overview:1:1",
+        "count": 0,
+        "visible": false
+      },
+      {
+        "name": "Individuals human:overview:1:-1",
+        "count": 0,
+        "visible": false
+      },
+      {
+        "name": "Individuals machine:overview:-1:-1",
+        "count": 0,
+        "visible": false
+      },
+      {
+        "name": "Individuals machine:overview:-1:0",
+        "count": 0,
+        "visible": false
+      },
+      {
+        "name": "Individuals hive:overview:-2:0",
+        "count": 0,
+        "visible": false
+      },
+      {
+        "name": "Individuals hive:overview:0:0",
+        "count": 0,
+        "visible": false
+      },
+      {
+        "name": "Individuals hive:overview:1:1",
+        "count": 129,
+        "visible": true
+      },
+      {
+        "name": "Individuals machine:overview:-1:1",
+        "count": 0,
+        "visible": false
+      },
+      {
+        "name": "Individuals hive:overview:-1:-1",
+        "count": 0,
+        "visible": false
+      },
+      {
+        "name": "Individuals machine:overview:0:1",
+        "count": 0,
+        "visible": false
+      },
+      {
+        "name": "Individuals machine:overview:2:-1",
+        "count": 0,
+        "visible": false
+      },
+      {
+        "name": "Individuals hive:overview:2:-1",
+        "count": 0,
+        "visible": false
+      },
+      {
+        "name": "Individuals hive:overview:-1:0",
+        "count": 0,
+        "visible": false
+      },
+      {
+        "name": "Individuals hive:overview:-2:-1",
+        "count": 0,
+        "visible": false
+      },
+      {
+        "name": "Individuals machine:overview:1:-1",
+        "count": 0,
+        "visible": false
+      },
+      {
+        "name": "Individuals hive:overview:0:-1",
+        "count": 0,
+        "visible": false
+      },
+      {
+        "name": "Individuals machine:overview:1:-2",
+        "count": 88,
+        "visible": true
+      },
+      {
+        "name": "Individuals machine:overview:2:0",
+        "count": 0,
+        "visible": false
+      },
+      {
+        "name": "Individuals machine:overview:0:-1",
+        "count": 0,
+        "visible": false
+      },
+      {
+        "name": "Individuals hive:overview:0:-2",
+        "count": 0,
+        "visible": false
+      },
+      {
+        "name": "Individuals hive:overview:-1:-2",
+        "count": 0,
+        "visible": false
+      }
+    ],
+    "scale": "695 individuals · 483 models"
+  },
+  "status": "completed"
+}

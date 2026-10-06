@@ -58,11 +58,22 @@ function buildingRecord(state, home, kind, progress = 0, placement = null) {
   return b;
 }
 
-function refreshBuildings(home, f) {
+function refreshBuildings(state, home, f) {
   const completed = home.buildings.filter(b => b.progress >= 1 && !b.destroyed && (b.hp == null || b.hp > 0));
   home.housingCapacity = Math.min(MAX_POPULATION, Math.round((40 + completed.filter(b => b.kind === 'housing').length * 40) * modifier(f, 'capacity')));
   home.carryingCapacity = home.housingCapacity;
   home.capacity = Math.round((500 + completed.filter(b => b.kind === 'storage').length * 600) * modifier(f, 'capacity'));
+  const spoiled = emptyResources();
+  for (const kind of RESOURCES) {
+    spoiled[kind] = Math.max(0, (home.stock[kind] || 0) - home.capacity);
+    if (spoiled[kind]) { home.stock[kind] -= spoiled[kind]; ledgerAdd(state, kind, 'lost', spoiled[kind]); }
+  }
+  const storageLoss = Object.values(spoiled).reduce((sum, amount) => sum + amount, 0);
+  if (storageLoss > 0) {
+    home.storageLoss = { tick: state.tick, amounts: spoiled };
+    state.stats.storageSpoilage = (state.stats.storageSpoilage || 0) + storageLoss;
+    emit(state, 'loss', `${home.name} lost ${Math.round(storageLoss)} supplies after usable storage fell to ${home.capacity} per resource.`, f.id, { settlementId: home.id, storageLoss: spoiled });
+  }
   home.level = clamp(1 + Math.floor(Math.log2(Math.max(1, home.population / 100))), 1, 6);
   home.infrastructureWorkers = home.status === 'camp' ? 0 : Math.min(Math.floor(home.workers * .22), completed.filter(b => b.kind === 'power' || (b.kind === 'farm' && f.species !== 'machine')).length * 4);
 }
@@ -85,7 +96,7 @@ function makeSettlement(state, faction, point, population, founding = false) {
   const militia = founding ? 0 : 10 + Math.floor(faction.traits.aggression * 6);
   initializeMilitary(s, { infantry: militia - Math.floor(militia * .3), ranged: Math.floor(militia * .3) });
   s.startingMilitia = { ...s.military };
-  refreshBuildings(s, faction); s.lastCycleStock = { ...s.stock };
+  refreshBuildings(state, s, faction); s.lastCycleStock = { ...s.stock };
   return s;
 }
 
@@ -136,7 +147,7 @@ function updateAssignments(state) {
     a.training = trainingCount(home);
     let available = Math.max(0, home.workers - a.civilianAway - a.training);
     if (f && active(home)) {
-      refreshBuildings(home, f); a.infrastructure = Math.min(available, home.infrastructureWorkers || 0); available -= a.infrastructure;
+      refreshBuildings(state, home, f); a.infrastructure = Math.min(available, home.infrastructureWorkers || 0); available -= a.infrastructure;
       const researchHere = !home.occupiedBy && (!f.researchHomeId || f.researchHomeId === home.id);
       a.researchers = researchHere ? Math.min(researchers[f.id] || 0, 6 + buildingCount(home, 'lab') * 8, Math.max(0, available - 8)) : 0;
       researchers[f.id] -= a.researchers; available -= a.researchers;
@@ -402,7 +413,7 @@ function construction(state, home, f) {
     if (b.progress >= 1) {
       b.completedTick = state.tick; home.construction = null; state.stats.buildings++;
       if (state.tick - (home.lastBuildingEvent || -40) > 35) { emit(state, 'building', `${home.name} completed a ${MILITARY_BUILDINGS[b.kind]?.name || DEFENSE_STATS[b.kind]?.name || b.kind}; ${home.buildings.length} structures now occupy a ${Math.round(home.radius * 2)}-unit footprint.`, f.id, { settlementId: home.id, buildingId: b.id }); home.lastBuildingEvent = state.tick; }
-      refreshBuildings(home, f);
+      refreshBuildings(state, home, f);
     }
     return;
   }
@@ -521,7 +532,7 @@ function updateSummaries(state) {
     home.worksites = [...new Set(state.groups.filter(g => g.kind === 'worker' && g.originId === home.id && !g.refugees).map(g => g.targetId))];
     home.economyReasons = [ `${home.homePresent} individuals at home; ${home.assigned.workers || 0} harvesting, ${home.assigned.military || 0} soldiers deployed, ${home.assigned.colonists || 0} settlers travelling.`,
       `${home.assigned.infrastructure || 0} infrastructure workers; ${home.assigned.construction || 0} builders; ${home.assigned.researchers || 0} researchers; ${home.assigned.training || 0} trainees in paid courses.`,
-      home.status === 'camp' ? 'Displaced survivors depend on actual field harvests, returned cargo and relief to rebuild.' : `${home.buildings.filter(b => b.progress >= 1).length} completed buildings; housing for ${home.housingCapacity}; footprint radius ${Math.round(home.radius)}.`,
+      home.status === 'camp' ? 'Displaced survivors depend on actual field harvests, returned cargo and relief to rebuild.' : `${home.buildings.filter(b => b.progress >= 1 && !b.destroyed && (b.hp == null || b.hp > 0)).length} completed buildings; housing for ${home.housingCapacity}; footprint radius ${Math.round(home.radius)}.`,
       home.missingResources?.length ? `Insufficient ${home.missingResources.join(', ')}: growth is suspended and prolonged shortages cause deaths.` : 'Deposits are finite. Cargo enters stores only when teams reach home; farms and power infrastructure report separate production.' ];
     observeHome(state, f, home);
   }

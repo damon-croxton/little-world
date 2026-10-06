@@ -1,0 +1,239 @@
+{
+  "frozenAt": "2026-10-06T23:21:53.4502581Z",
+  "reason": "Immediate parent/user cloud handover",
+  "localProcess": "PID 77084 exited during exec-server recovery; confirmed absent twice. No task-owned audit PID remains; no unrelated processes touched.",
+  "completed": [
+    {
+      "seed": "first-light",
+      "ok": true,
+      "completedCycles": 2000,
+      "victory": {
+        "winnerId": "f1",
+        "name": "Relay Reclaimers",
+        "species": "machine",
+        "advantage": "lean-logistics",
+        "wonAt": 1599,
+        "tick": 1599,
+        "nominalWallSecondsAt2x": 799.5,
+        "withinTarget600To1200Cycles": false
+      },
+      "peakPopulation": 933,
+      "firstContact": 82,
+      "firstMobilisation": 100,
+      "firstBattle": 143,
+      "conflict": {
+        "contacts": 7,
+        "mobilisations": 18,
+        "battles": 22,
+        "attacks": 4486,
+        "projectiles": 2000,
+        "towerShots": 0,
+        "combatDeaths": 175,
+        "retreats": 8,
+        "raids": 7,
+        "sieges": 18,
+        "breaches": 16,
+        "captures": 16,
+        "capitulations": 3,
+        "surrenders": 110,
+        "structuresDestroyed": 26,
+        "structureDamage": 4255.256588176856
+      },
+      "deathCauses": {
+        "combat": 175,
+        "workerColonistFieldAttrition": 0,
+        "strategicFieldAttrition": 12,
+        "homeScarcity": 0,
+        "unclassified": 0
+      },
+      "error": null
+    },
+    {
+      "seed": "tidal-garden",
+      "ok": true,
+      "completedCycles": 2000,
+      "victory": {
+        "winnerId": "f1",
+        "name": "Arc Reclaimers",
+        "species": "machine",
+        "advantage": "citadel",
+        "wonAt": 627,
+        "tick": 627,
+        "nominalWallSecondsAt2x": 313.5,
+        "withinTarget600To1200Cycles": true
+      },
+      "peakPopulation": 2498,
+      "firstContact": 90,
+      "firstMobilisation": 100,
+      "firstBattle": 144,
+      "conflict": {
+        "contacts": 10,
+        "mobilisations": 7,
+        "battles": 10,
+        "attacks": 1848,
+        "projectiles": 887,
+        "towerShots": 0,
+        "combatDeaths": 85,
+        "retreats": 4,
+        "raids": 3,
+        "sieges": 8,
+        "breaches": 8,
+        "captures": 8,
+        "capitulations": 3,
+        "surrenders": 60,
+        "structuresDestroyed": 10,
+        "structureDamage": 1737.7996927331117
+      },
+      "deathCauses": {
+        "combat": 85,
+        "workerColonistFieldAttrition": 0,
+        "strategicFieldAttrition": 4,
+        "homeScarcity": 0,
+        "unclassified": 0
+      },
+      "error": null
+    },
+    {
+      "seed": "iron-valley",
+      "ok": true,
+      "completedCycles": 2000,
+      "victory": {
+        "winnerId": "f0",
+        "name": "Orchard Wardens",
+        "species": "human",
+        "advantage": "longwatch",
+        "wonAt": 988,
+        "tick": 988,
+        "nominalWallSecondsAt2x": 494,
+        "withinTarget600To1200Cycles": true
+      },
+      "peakPopulation": 2775,
+      "firstContact": 93,
+      "firstMobilisation": 100,
+      "firstBattle": 136,
+      "conflict": {
+        "contacts": 7,
+        "mobilisations": 11,
+        "battles": 11,
+        "attacks": 1716,
+        "projectiles": 791,
+        "towerShots": 0,
+        "combatDeaths": 80,
+        "retreats": 4,
+        "raids": 2,
+        "sieges": 10,
+        "breaches": 7,
+        "captures": 7,
+        "capitulations": 3,
+        "surrenders": 20,
+        "structuresDestroyed": 10,
+        "structureDamage": 1600
+      },
+      "deathCauses": {
+        "combat": 80,
+        "workerColonistFieldAttrition": 0,
+        "strategicFieldAttrition": 31,
+        "homeScarcity": 0,
+        "unclassified": 0
+      },
+      "error": null
+    },
+    {
+      "seed": "amber-dawn",
+      "ok": true,
+      "completedCycles": 2000,
+      "victory": {
+        "winnerId": "f1",
+        "name": "Copper Survey Mesh",
+        "species": "machine",
+        "advantage": "war-school",
+        "wonAt": 630,
+        "tick": 630,
+        "nominalWallSecondsAt2x": 315,
+        "withinTarget600To1200Cycles": true
+      },
+      "peakPopulation": 2534,
+      "firstContact": 95,
+      "firstMobilisation": 100,
+      "firstBattle": 148,
+      "conflict": {
+        "contacts": 7,
+        "mobilisations": 12,
+        "battles": 15,
+        "attacks": 2588,
+        "projectiles": 1148,
+        "towerShots": 0,
+        "combatDeaths": 150,
+        "retreats": 9,
+        "raids": 1,
+        "sieges": 9,
+        "breaches": 7,
+        "captures": 7,
+        "capitulations": 3,
+        "surrenders": 55,
+        "structuresDestroyed": 0,
+        "structureDamage": 165.84594798508056
+      },
+      "deathCauses": {
+        "combat": 150,
+        "workerColonistFieldAttrition": 0,
+        "strategicFieldAttrition": 4,
+        "homeScarcity": 0,
+        "unclassified": 0
+      },
+      "error": null
+    }
+  ],
+  "completedCount": 4,
+  "invariantPassed": 4,
+  "invariantFailed": 0,
+  "unverifiedRemainingSeeds": [
+    "winter-circuit",
+    "moss-and-machine",
+    "domination-01",
+    "domination-02",
+    "domination-03",
+    "domination-04",
+    "domination-05",
+    "domination-06",
+    "domination-07",
+    "domination-08",
+    "domination-09",
+    "domination-10",
+    "domination-11",
+    "domination-12",
+    "domination-13",
+    "domination-14"
+  ],
+  "requestedCycles": 2000,
+  "civCount": 4,
+  "auditEveryCycles": 10,
+  "stopAtVictory": false,
+  "postVictoryExtensions": [
+    {
+      "seed": "first-light",
+      "status": "not started",
+      "cycles": 3000
+    },
+    {
+      "seed": "tidal-garden",
+      "status": "not started",
+      "cycles": 3000
+    }
+  ],
+  "boundedTests": {
+    "replay": "2200 pulses / 60 irregular frames through crowds, entities, combat effects, terrain; 828 actual attacks; full state equal across chunk boundaries and render calls",
+    "failed": 0,
+    "receipt": "bounded-tests.txt",
+    "passed": 4,
+    "replayStateSha256": "5bde81f9e2627f954b997ce457eaace9d091493d7bf8516b27c2f0bdc4235023"
+  },
+  "simulationManifest": "simulation-source-manifest.json",
+  "simulationScopeUnchangedSinceManifest": true,
+  "changedSimulationFiles": [
+    null
+  ],
+  "sourceScopeNote": "Whole-src hash changed due root-confirmed UI-only tactical-strength label update around 23:14. Simulation manifest captured after seed 4 at 23:20:24Z; root confirmed simulation frozen before run.",
+  "hashingAlgorithm": "Sort recursive src filenames matching .js or .css; SHA-256 concatenation of each slash-normalized relative filename, NUL, then exact file bytes. Implementation: tests/knowledge-accounting-long-audit.mjs sourceHash().",
+  "resume": "Do not restart with the default output directory: runner truncates long-results.jsonl. Run only unverifiedRemainingSeeds into a new AI_AUDIT_DIR, then combine original and resumed JSONL rows with summarizeDomination, preserving all 20 seeds in denominator."
+}

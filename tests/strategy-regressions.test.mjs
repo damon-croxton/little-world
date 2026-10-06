@@ -142,8 +142,8 @@ function raidFixture(seed, civiliansAway = 0, carried = 0) {
 test('home militia strength excludes civilians physically away with field parties', () => {
   const defended = raidFixture('regression-physical-militia', 0);
   const evacuated = raidFixture('regression-physical-militia', 180);
-  stepStrategy(defended.state, 0);
-  stepStrategy(evacuated.state, 0);
+  stepStrategy(defended.state, .1);
+  stepStrategy(evacuated.state, .1);
   const defense = state => state.events.find(e => e.type === 'battle' && e.groupId === 'test-raider').defenderPower;
   assert.ok(defense(evacuated.state) > 0);
   assert.ok(defense(evacuated.state) < defense(defended.state) * .15, 'absent civilians still defend their home');
@@ -154,7 +154,7 @@ test('home militia strength excludes civilians physically away with field partie
 test('a settlement raid shares the same carrying limit as prior intercepted cargo', () => {
   const { state, army } = raidFixture('regression-raid-capacity', 0, 40);
   army.engagedDays = 4;
-  stepStrategy(state, 0);
+  stepStrategy(state, .1);
   assert.equal(state.stats.raids, 1);
   assert.equal(army.phase, 'returning');
   assert.ok(cargoTotal(army) <= army.size * 1.2 + 1e-8);
@@ -163,9 +163,21 @@ test('a settlement raid shares the same carrying limit as prior intercepted carg
 
 test('damage to an undefended settlement does not bank whole casualties for a future garrison', () => {
   const { state, target } = raidFixture('regression-defender-damage-backlog');
-  stepStrategy(state, 0);
+  stepStrategy(state, .1);
   assert.equal(target.soldiers, 0);
   assert.ok((target.combat?.wounds?.infantry || 0) < 1 && (target.combat?.wounds?.ranged || 0) < 1, 'undefended settlement banked damage against future recruits');
+  assertConserved(state);
+});
+
+test('an existing settlement contact cannot apply raid pressure or loot with zero elapsed time', () => {
+  const { state, target, army } = raidFixture('regression-paused-raid', 0, 40);
+  army.engagedDays = 4;
+  army.combat = { active: true, targetKind: 'settlement', targetId: target.id, holding: true };
+  const stock = { ...target.stock }, health = target.health, cargo = { ...army.carrying }, raids = state.stats.raids;
+  stepStrategy(state, 0);
+  assert.equal(target.health, health); assert.deepEqual(target.stock, stock); assert.deepEqual(army.carrying, cargo);
+  assert.equal(army.engagedDays, 4); assert.equal(state.stats.raids, raids);
+  assert.equal((state.pendingCombat || []).length, 0);
   assertConserved(state);
 });
 

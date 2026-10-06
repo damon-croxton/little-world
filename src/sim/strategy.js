@@ -103,7 +103,7 @@ function returnHome(s, g, reason, retreat = false) {
     siegeTarget.siege.endedTick = s.tick;
   }
   g.phase = retreat ? 'retreating' : 'returning';
-  if (g.combat) g.combat.active = false;
+  if (g.combat) { g.combat.active = false; g.combat.intent = retreat ? 'retreat' : 'return'; g.combat.reason = reason; }
   g.targetX = p.x;
   g.targetZ = p.z;
   const depot = g.stagingHomeId && s.settlements.find(h => h.id === g.stagingHomeId);
@@ -370,7 +370,6 @@ function arriveArmy(s, g, cycleBoundary) {
   }
   if (!visibleToGroup(s, g, target, 18)) { returnHome(s, g, 'The reported coordinates yielded no current local contact.'); return; }
   g.phase = 'engaging';
-  if (cycleBoundary) raid(s, g, target);
 }
 
 function updateGroups(s, dt, cycleBoundary) {
@@ -397,7 +396,6 @@ function updateGroups(s, dt, cycleBoundary) {
       if (g.finished) continue;
     }
     if (g.kind === 'army' && g.phase === 'engaging') {
-      if (cycleBoundary && (!g.combat?.active || g.combat.targetKind === 'settlement' && (g.combat.exchangeStartedAt != null || g.combat.holding && countMilitary(availableMilitary(s, s.settlements.find(p => p.id === g.targetId))) <= 0 || distance(g, s.settlements.find(p => p.id === g.targetId) || g) < 5))) arriveArmy(s, g, true);
       if (cycleBoundary) observe(s, g);
       continue;
     }
@@ -510,6 +508,26 @@ function dispatchScout(s, f, homes) {
   if (f.scoutCount <= 2 || f.scoutCount % 4 === 0) emit(s, 'scout', `${f.name} sent ${size} scouts beyond ${p.name}. They leave production until their report returns.`, f.id, { groupId: g.id, originId: p.id });
 }
 
+function expeditionPlanningWorld(s, f) {
+  const held = s.settlements.filter(home => settlementController(s, home) === f.id);
+  const sources = held.filter(home => alive(home) && (home.homePresent ?? home.population) > 0)
+    .map(home => ({ ...home, factionId: f.id, commandFactionId: f.id }));
+  for (const home of held) if (alive(home)) for (const building of home.buildings || []) {
+    if (building.kind === 'tower' && building.progress >= 1 && !building.destroyed && (building.hp ?? 1) > 0 && (building.crewAssigned ?? 1) > 0) sources.push({ ...building, factionId: f.id, commandFactionId: f.id });
+  }
+  const walls = [], add = (wall, ownerId) => {
+    if (!['wall', 'gate'].includes(wall.kind)) return;
+    if (ownerId === f.id || sources.some(source => visibleToGroup(s, source, wall))) walls.push({ ...wall, factionId: ownerId });
+  };
+  for (const home of s.settlements) for (const wall of home.buildings || []) add(wall, settlementController(s, home));
+  for (const wall of s.walls || []) add(wall, factionController(s, wall.factionId));
+  // Delivered settlement reports contain coordinates and estimates, not exact
+  // wall geometry. Only owned obstacles and current home sightings inform the
+  // capital's route/provision estimate. Unreturned scouts cannot share theirs.
+  // Real movement still collides with every wall and discovers it locally.
+  return { seed: s.seed, factions: s.factions, settlements: [], walls, navigationRevision: 0 };
+}
+
 function chooseExpedition(s, f, homes) {
   if (s.tick < 100 || s.groups.length >= MAX_GROUPS || s.groups.some(g => groupController(s, g) === f.id && g.kind === 'army')) return;
   const cooldown = 70 + Math.round((1 - f.traits.aggression) * 55);
@@ -560,8 +578,9 @@ function chooseExpedition(s, f, homes) {
   const stages = s.settlements.filter(h => h.id !== p.id && alive(h) && settlementController(s, h) === f.id && distance(p, h) < best.distanceTo * .85 && distance(h, k) < best.distanceTo * .85 && canPay(h, provisions(biology, size, true), 8));
   stages.sort((a, b) => distance(p, a) + distance(a, k) - distance(p, b) - distance(b, k));
   const stage = best.distanceTo > 125 ? stages[0] : null;
-  const route = findPath(s, p, stage || k, { factionId: f.id, arrival: .45 });
-  const onward = stage ? findPath(s, stage, k, { factionId: f.id, arrival: .45 }) : route;
+  const planning = expeditionPlanningWorld(s, f);
+  const route = findPath(planning, p, stage || k, { factionId: f.id, arrival: .45 });
+  const onward = stage ? findPath(planning, stage, k, { factionId: f.id, arrival: .45 }) : route;
   if (!route.reachable || !onward.reachable) { f.unreachableTargets ??= {}; f.unreachableTargets[k.id] = s.tick; f.intent = 'The reported rival has no traversable approach; another known route is needed.'; return; }
   const maxLeg = Math.max(route.length, onward.length), routeLength = stage ? route.length + onward.length : route.length;
   const expectedTravelCycles = Math.ceil(routeLength * 2 / (speed * .70 * modifier(f, 'movement')));
@@ -609,7 +628,15 @@ export function stepStrategy(s, dt = 0.1) {
   }
   updateGroups(s, dt, cycleBoundary);
   stepCombat(s, dt, { retreat: returnHome, hostility: recordHostility });
-  if (cycleBoundary) { fieldEncounters(s); updateConquest(s); }
+  if (cycleBoundary) {
+    // Resolve pressure/loot only after current local defenders can interrupt.
+    // A wall, worker, or field battle cannot remotely damage settlement stores.
+    for (const g of s.groups) if (dt > 0 && canFight(g) && g.phase === 'engaging' && g.combat?.targetKind === 'settlement' && g.combat.targetId === g.targetId) {
+      const town = s.settlements.find(p => p.id === g.targetId);
+      if (alive(town) && visibleToGroup(s, g, town, 18) && (g.combat.exchangeStartedAt != null || g.combat.holding && countMilitary(availableMilitary(s, town)) <= 0 || distance(g, town) < 5)) raid(s, g, town);
+    }
+    fieldEncounters(s); updateConquest(s);
+  }
   s.groups = s.groups.filter(g => g.kind === 'worker' || g.kind === 'colonist' || (!g.finished && g.size > 0));
   if (!cycleBoundary) return;
   for (const f of s.factions) {

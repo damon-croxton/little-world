@@ -1,0 +1,66 @@
+{
+  "capturedAt": "2026-10-06T23:20:24.7122068Z",
+  "scope": "Simulation plus world/config/shared; captured after seed 4. Root confirmed simulation source frozen before audit start; UI-only labels changed around audit start.",
+  "files": [
+    {
+      "path": "src/config.js",
+      "sha256": "8af8e0732fe4a2a0f98c55d07c95b9fead8b8948afd11e5373878357bcf02f37"
+    },
+    {
+      "path": "src/shared.js",
+      "sha256": "72bf540589d83609ca6b5c60a22bb2ad0f4afc477abd98801335a709ca00d095"
+    },
+    {
+      "path": "src/sim/combat.js",
+      "sha256": "c0c9fcee9606dbb7acaaa3c46712ef047e49fb6d4901a99fff067173e3a67244"
+    },
+    {
+      "path": "src/sim/conquest.js",
+      "sha256": "0e4e87b5feca7186801da0a5c3b18cb076f9882451fc6333255645e1214df398"
+    },
+    {
+      "path": "src/sim/control.js",
+      "sha256": "c1903da42808b92f7dc7d878860b8461182766d44005512d66442c6f56a532a8"
+    },
+    {
+      "path": "src/sim/core.js",
+      "sha256": "f73ecb19d1535874d7d447be2a81adc9944159a168c94a2000dffb03727008e5"
+    },
+    {
+      "path": "src/sim/defenses.js",
+      "sha256": "4d37f8825c707fabc264df72792cccdccbdeafd614e4986b6a99cd5773e953fc"
+    },
+    {
+      "path": "src/sim/economy.js",
+      "sha256": "6e82174e5d290ebf1b7606060c1fce1adeb55e538145496f3ad7c54f0d8c8d4f"
+    },
+    {
+      "path": "src/sim/formations.js",
+      "sha256": "5dfadad63a9b91958fef4879d0c1cc8401af127f1f9fb534545f5d0b1a3173dc"
+    },
+    {
+      "path": "src/sim/knowledge.js",
+      "sha256": "bf7b3748d4772c5732a14b9ca3b29f7c22aacd809bfd23db9efd92f56b980d42"
+    },
+    {
+      "path": "src/sim/military.js",
+      "sha256": "19a3f4a2204688fdd035b2b257ac5752b09c087c015f352867121af96f7ef9d6"
+    },
+    {
+      "path": "src/sim/navigation.js",
+      "sha256": "55751adf2e507bc778d03b12b477fc3843cc9e0144ed60f70f5b4a0da58d1247"
+    },
+    {
+      "path": "src/sim/progression.js",
+      "sha256": "6d726f465b4a17b29e41ce547a2d900f7c167f0c9f3ae7c0e5eb33fdf3538bbe"
+    },
+    {
+      "path": "src/sim/strategy.js",
+      "sha256": "b229c8eebc2bc7a1958ff18cfb1a913b97c9ed61c6cfde89eeec5c0b17ac4201"
+    },
+    {
+      "path": "src/world.js",
+      "sha256": "54545ddfb6849a51cd445fc5846ecce0968e7dc32f82a6d0bc93b5ca8a899e60"
+    }
+  ]
+}

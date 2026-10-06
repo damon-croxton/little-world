@@ -424,3 +424,10 @@ button.world-label.selected::after { content: ''; position: absolute; bottom: -5
 }
 
 .auxiliary-reading { color: var(--accent); font-size: 9px; line-height: 1.65; }
+.tactical-reading { margin: 14px 0; padding: 12px; background: #e2c88d0a; border: 1px solid var(--line); border-radius: 5px; }
+.tactical-reading .section-heading > strong { color: var(--accent); font-size: 10px; font-weight: 500; }
+.tactical-reading > p { margin: 9px 0; font-size: 11px; line-height: 1.6; }
+.tactical-balance { display: flex; gap: 14px; margin: 10px 0; }
+.tactical-balance > span { display: flex; flex: 1; flex-direction: column; gap: 5px; color: var(--muted); font-size: 9px; }
+.tactical-balance strong { color: var(--paper); font-size: 14px; }
+.tactical-reading > small { display: block; color: var(--muted); font-size: 9px; line-height: 1.6; }

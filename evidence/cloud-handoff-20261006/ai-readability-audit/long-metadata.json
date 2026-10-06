@@ -1,0 +1,32 @@
+{
+  "runtime": "v24.19.0",
+  "startedAt": "2026-10-06T23:13:59.370Z",
+  "sourceSha256": "2bb4404bb14245eab7286bc772e437b70af631a36c12a4178ef664e196416257",
+  "cycles": 2000,
+  "civCount": 4,
+  "auditEveryCycles": 10,
+  "requestedSeeds": [
+    "first-light",
+    "tidal-garden",
+    "iron-valley",
+    "amber-dawn",
+    "winter-circuit",
+    "moss-and-machine",
+    "domination-01",
+    "domination-02",
+    "domination-03",
+    "domination-04",
+    "domination-05",
+    "domination-06",
+    "domination-07",
+    "domination-08",
+    "domination-09",
+    "domination-10",
+    "domination-11",
+    "domination-12",
+    "domination-13",
+    "domination-14"
+  ],
+  "stopAtVictory": false,
+  "runtimeScope": "Same Node runtime only; Chrome outcomes must be checked separately."
+}

@@ -65,6 +65,15 @@ function segmentsDistance(a, b, c, d) {
 function wallAlive(wall) {
   return (wall.record.progress ?? 1) >= 1 && (wall.record.hp ?? wall.record.health ?? 1) > 0 && !wall.record.destroyed;
 }
+// Endpoints are authoritative for joined defenses; legacy center/yaw records
+// retain the same Three.js local +X -> world -Z orientation convention.
+export function wallGeometry(record) {
+  const nominalLength = Math.max(.1, record.length ?? 7), angle = record.rotation ?? 0;
+  const from = record.from ?? record.wallStart ?? record.a ?? { x: record.x - Math.cos(angle) * nominalLength * .5, z: record.z + Math.sin(angle) * nominalLength * .5 };
+  const to = record.to ?? record.wallEnd ?? record.b ?? { x: record.x + Math.cos(angle) * nominalLength * .5, z: record.z - Math.sin(angle) * nominalLength * .5 };
+  if (!finitePoint(from) || !finitePoint(to)) return null;
+  return { from, to, x: (from.x + to.x) * .5, z: (from.z + to.z) * .5, length: distance(from, to), rotation: -Math.atan2(to.z - from.z, to.x - from.x), width: record.width ?? 1 };
+}
 function refreshWalls(state) {
   const value = localState(state);
   const stamp = `${state.step ?? state.tick ?? 0}:${state.navigationRevision ?? 0}`;
@@ -73,17 +82,14 @@ function refreshWalls(state) {
   const walls = [];
   const add = (record, ownerId) => {
     if (!['wall', 'gate'].includes(record.kind) || (record.progress ?? 1) < 1 || (record.hp ?? record.health ?? 1) <= 0 || record.destroyed) return;
-    const length = Math.max(.1, record.length ?? 7), angle = record.rotation ?? 0;
-    // Three.js yaw rotates a local +X length axis toward world -Z.
-    const from = record.from ?? record.wallStart ?? record.a ?? { x: record.x - Math.cos(angle) * length * .5, z: record.z + Math.sin(angle) * length * .5 };
-    const to = record.to ?? record.wallEnd ?? record.b ?? { x: record.x + Math.cos(angle) * length * .5, z: record.z - Math.sin(angle) * length * .5 };
-    if (!finitePoint(from) || !finitePoint(to)) return;
-    walls.push({ id: record.id, record, ownerId: ownerId ?? record.factionId, from, to, width: record.width ?? 1, height: record.wallHeight ?? record.height ?? 3 });
+    const geometry = wallGeometry(record);
+    if (!geometry) return;
+    walls.push({ id: record.id, record, ownerId: ownerId ?? record.factionId, ...geometry, height: record.wallHeight ?? record.height ?? 3 });
   };
   for (const home of state.settlements ?? []) for (const record of home.buildings ?? []) add(record, state.factions ? settlementController(state, home) : home.occupiedBy || home.factionId);
   for (const record of state.walls ?? []) add(record, state.factions ? factionController(state, record.factionId) : record.factionId);
   const permissions = (state.factions ?? []).map(f => `${f.id}>${f.defeatedBy ?? ''}:${Object.entries(f.relations ?? {}).filter(([, relation]) => relation.status === 'allied').map(([id]) => id).sort().join(',')}`).join(';');
-  const signature = `${state.navigationRevision ?? 0}:${permissions}:` + walls.map(w => `${w.id}:${w.ownerId}:${pointKey(w.from)}:${pointKey(w.to)}:${w.width}:${!!(w.record.open || w.record.gateOpen)}:${!!w.record.isGate}`).join('|');
+  const signature = `${state.navigationRevision ?? 0}:${permissions}:` + walls.map(w => `${w.id}:${w.ownerId}:${pointKey(w.from)}:${pointKey(w.to)}:${w.width}:${w.record.kind}:${w.record.gateWidth ?? 5}:${!!(w.record.open || w.record.gateOpen)}:${!!w.record.isGate}`).join('|');
   value.walls = walls;
   if (signature !== value.wallSignature) {
     value.wallSignature = signature; value.version++; value.paths.clear();
@@ -120,6 +126,10 @@ function wallParts(state, wall, factionId) {
   if (!friendlyGate(state, wall, factionId)) return [[wall.from, wall.to]];
   const span = distance(wall.from, wall.to), gap = Math.min(span, wall.record.gateWidth ?? 5), halfGap = gap / Math.max(.001, span) * .5;
   return [[wall.from, { x: mix(wall.from.x, wall.to.x, .5 - halfGap), z: mix(wall.from.z, wall.to.z, .5 - halfGap) }], [{ x: mix(wall.from.x, wall.to.x, .5 + halfGap), z: mix(wall.from.z, wall.to.z, .5 + halfGap) }, wall.to]].filter(([a, b]) => distance(a, b) > .001);
+}
+export function blockingWallParts(state, record, ownerId, factionId) {
+  const geometry = wallGeometry(record);
+  return geometry ? wallParts(state, { record, ownerId, ...geometry }, factionId) : [];
 }
 function candidateWalls(state, from, to) {
   const nav = refreshWalls(state), walls = new Set();
@@ -257,6 +267,7 @@ export function findPath(state, from, to, options = {}) {
       if (closed[next]) continue;
       const nextPoint = cellPoint(next);
       if (wallsBlock(state, point, nextPoint, settings)) continue;
+      if (settings.radius > .16 && !terrainSegment(state.seed, point, nextPoint, settings.radius)) continue;
       const cost = costs[current] + NAV_CELL_SIZE * (dx && dz ? Math.SQRT2 : 1) / Math.max(.4, (nav.movement[current] + nav.movement[next]) * .5);
       if (cost >= costs[next]) continue;
       costs[next] = cost; parents[next] = current;
@@ -275,6 +286,53 @@ export function findPath(state, from, to, options = {}) {
     result = { reachable: true, waypoints, length, reason: 'routed', expansions };
   }
   return remember(result);
+}
+
+// A tactical estimate uses only geometry the caller already knows. Hidden
+// buildings cannot influence its choice; real movement still uses the complete
+// physical world. Removing a candidate must actually open a shorter route that
+// crosses it, and its damage cost must beat a reasonable detour.
+export function assessBreachRoute(state, from, goal, candidates = [], options = {}) {
+  const maxCandidates = clamp(Math.floor(options.maxCandidates ?? 3), 0, 6);
+  const maxExpansions = clamp(Math.floor(options.maxExpansions ?? 512), 1, 2048);
+  const factionId = state.factions ? factionController(state, options.factionId) : options.factionId;
+  const faction = state.factions?.find(f => f.id === factionId);
+  const known = candidates.map(candidate => {
+    const record = candidate.building ?? candidate.record ?? candidate;
+    const owner = candidate.home ? candidate.home.occupiedBy || candidate.home.factionId : candidate.ownerId ?? record.factionId;
+    const ownerId = state.factions ? factionController(state, owner) : owner;
+    const geometry = wallGeometry(record);
+    return { source: candidate, record, ownerId, geometry };
+  }).filter(w => w.record.id && ['wall', 'gate'].includes(w.record.kind) && w.geometry && (w.record.progress ?? 1) >= 1 && !w.record.destroyed && (w.record.hp ?? w.record.health ?? 1) > 0)
+    .sort((a, b) => String(a.record.id).localeCompare(String(b.record.id)));
+  const knownState = { seed: state.seed, factions: state.factions, settlements: [], walls: known.map(w => ({ ...w.record, factionId: w.ownerId })), navigationRevision: 0 };
+  const routeOptions = { factionId, radius: options.radius ?? .16, arrival: options.arrival ?? .5, maxExpansions };
+  const route = findPath(knownState, from, goal, routeOptions);
+  const result = { action: route.reachable ? (route.reason === 'direct' ? 'advance' : 'detour') : 'unreachable', wallId: null, wall: null, route,
+    detourLength: route.length, breachLength: Infinity, savedSeconds: 0, reason: route.reachable ? 'A usable route avoids unnecessary damage' : 'No known route found within the bounded search', assessedCandidates: 0, expansions: route.expansions ?? 0 };
+  if (!finitePoint(from) || !finitePoint(goal) || route.reason === 'direct' || route.reason === 'search-budget' || !(options.breachDps > 0)) return result;
+  const speed = Math.max(.1, options.speed ?? 2.8), minSaved = Math.max(0, options.minSavedSeconds ?? 3), maxDetourRatio = Math.max(1, options.maxDetourRatio ?? 1.22);
+  const relevant = known.filter(w => w.ownerId !== factionId && faction?.relations?.[w.ownerId]?.status !== 'allied' && !friendlyGate(knownState, { record: w.record, ownerId: w.ownerId }, factionId))
+    .sort((a, b) => segmentsDistance(from, goal, a.geometry.from, a.geometry.to) - segmentsDistance(from, goal, b.geometry.from, b.geometry.to) || pointSegmentDistance(from, a.geometry.from, a.geometry.to) - pointSegmentDistance(from, b.geometry.from, b.geometry.to) || String(a.record.id).localeCompare(String(b.record.id)))
+    .slice(0, maxCandidates);
+  for (const wall of relevant) {
+    result.assessedCandidates++;
+    const opened = findPath(knownState, from, goal, { ...routeOptions, ignoreWallId: wall.record.id });
+    result.expansions += opened.expansions ?? 0;
+    if (!opened.reachable) continue;
+    let previous = from, crosses = false;
+    for (const point of opened.waypoints) {
+      if (segmentsDistance(previous, point, wall.geometry.from, wall.geometry.to) <= wall.geometry.width * .5 + routeOptions.radius) crosses = true;
+      previous = point;
+    }
+    if (!crosses || (route.reachable && route.length <= opened.length * maxDetourRatio)) continue;
+    const breachSeconds = Math.max(0, wall.record.hp ?? wall.record.health ?? wall.record.maxHp ?? 300) / options.breachDps;
+    const savedSeconds = route.reachable ? (route.length - opened.length) / speed - breachSeconds : Infinity;
+    if (savedSeconds < minSaved || (result.wallId && savedSeconds <= result.savedSeconds)) continue;
+    Object.assign(result, { action: 'breach', wallId: wall.record.id, wall: wall.source, breachLength: opened.length, savedSeconds, breachSeconds,
+      reason: route.reachable ? 'Breaking this visible obstruction saves time over the detour' : 'This known obstruction seals the approach; breaking it opens a route' });
+  }
+  return result;
 }
 
 // Reserve a stable, small approach lane for a whole work party. This spreads
