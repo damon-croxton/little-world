@@ -56,6 +56,7 @@ button svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke
 .text-button svg { width: 11px; height: 11px; }
 .text-button:hover { color: var(--accent); }
 .faction-index { position: absolute; top: 166px; left: 30px; width: 191px; pointer-events: auto; border-radius: 4px; }
+@media (min-width: 801px) { .faction-index { max-height: calc(100dvh - 386px); overflow-y: auto; scrollbar-width: thin; } }
 .faction-index > .section-heading { margin-bottom: 12px; padding: 0 2px; text-shadow: 0 2px 10px #102b29; }
 .count-label { font-size: 9px; letter-spacing: .1em; color: var(--muted); }
 .faction-list { display: flex; flex-direction: column; gap: 3px; }
