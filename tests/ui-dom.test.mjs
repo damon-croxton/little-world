@@ -130,3 +130,12 @@ test('comparison chart updates a collapsed census and rebuilds cleanly after res
     assert.ok(!t.root.querySelector('.faction-entry[data-value="f3"]'));
   } finally { t.dispose(); }
 });
+
+
+test('balanced-district rules are visible in the home and deposit inspectors',()=>{
+  const t=setup();try{
+    assert.match(t.root.querySelector('.balanced-district').textContent,/0.80 fertility/);
+    const node=t.state.nodes.find(n=>n.balancedDistrict);t.view.selectedId=node.id;t.update();
+    assert.match(t.root.querySelector('.balanced-district').textContent,/matched stocks and replenishment/);
+  }finally{t.dispose();}
+});

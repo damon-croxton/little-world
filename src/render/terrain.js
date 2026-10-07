@@ -5,7 +5,8 @@ import { wallGeometry } from '../sim/navigation.js';
 // vertex-coloured templates and instanced, including undergrowth and wildlife.
 export function createTerrain(THREE, scene, seed = 'littleworld', options = {}) {
   const root = new THREE.Group(); root.name = 'LittleWorld landscape'; scene.add(root);
-  const { starts, nodes, obstacles, passes } = generateWorld(seed, options);
+  const world = generateWorld(seed, options), { starts, nodes, obstacles, passes } = world;
+  seed = world.terrainSeed;
   root.userData.terrainObstacles = obstacles; root.userData.terrainPasses = passes;
   const resourceZones = new Map();
   for (const node of nodes) {

@@ -56,10 +56,10 @@ export function createFog(THREE, scene) {
   function update(state, factionId = null, preparedView = null) {
     root.visible = !!factionId && factionId !== 'omniscient'; diagnostics.active = root.visible;
     if (!root.visible) { diagnostics.drawCalls = 0; remembered = []; return; }
-    if (seed !== state.seed) rebuildGround(state.seed);
+    if (seed !== (state.terrainSeed || state.seed)) rebuildGround((state.terrainSeed || state.seed));
     const f = state.factions.find(f => f.id === factionId), vision = f?.visibility;
     if (!vision) { root.visible = false; diagnostics.active = false; return; }
-    const view = preparedView || factionView(state, factionId), key = `${state.seed}:${factionId}:${vision.version}:${vision.reportVersion || 0}:${view.knownPlaces?.length || 0}`;
+    const view = preparedView || factionView(state, factionId), key = `${(state.terrainSeed || state.seed)}:${factionId}:${vision.version}:${vision.reportVersion || 0}:${view.knownPlaces?.length || 0}`;
     remembered = view.knownPlaces || [];
     if (key !== revision) {
       revision = key;

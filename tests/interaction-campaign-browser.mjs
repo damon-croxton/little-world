@@ -19,7 +19,7 @@ const observe = () => page.evaluate(() => ({ tick: littleworld.state.tick, persp
 async function shot(name) { const file = `${baseline ? 'before' : 'after'}-${name}.png`; await page.screenshot({ path: output(config, file) }); report.screenshots.push({ file, ...await observe() }); }
 async function pin(x, z, distance = 24, side = 1) {
   await page.evaluate(async ({ x, z, distance, side }) => {
-    const w = littleworld, { heightAt } = await import(new URL('./src/world.js', location.href).href), y = heightAt(x, z, w.state.seed);
+    const w = littleworld, { heightAt } = await import(new URL('./src/world.js', location.href).href), y = heightAt(x, z, w.state.terrainSeed || w.state.seed);
     w.actions.follow(null); w.camera.position.set(x + distance * .75 * side, y + distance * .8, z + distance * side); w.controls.target.set(x, y + 1, z); w.controls.update();
   }, { x, z, distance, side }); await settle();
 }

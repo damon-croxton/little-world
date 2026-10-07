@@ -71,7 +71,7 @@ async function screenshot(current, name) {
 async function pin(current, point, distance = 19, side = 1) {
   await current.evaluate(async ({ point, distance, side }) => {
     const w = littleworld, { heightAt } = await import(new URL('./src/world.js', location.href).href);
-    const y = heightAt(point.x, point.z, w.state.seed);
+    const y = heightAt(point.x, point.z, w.state.terrainSeed || w.state.seed);
     w.actions.follow(null);
     w.camera.position.set(point.x + distance * .7 * side, y + distance * .8, point.z + distance * side);
     w.controls.target.set(point.x, y + .6, point.z); w.controls.update();

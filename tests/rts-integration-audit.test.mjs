@@ -22,7 +22,7 @@ function clearSite(state) {
   for (let z = -72; z <= 72; z += 6) for (let x = -72; x <= 72; x += 6) {
     const points = [];
     for (let dz = -8; dz <= 8; dz += 2) for (let dx = -8; dx <= 8; dx += 2) points.push({ x: x + dx, z: z + dz });
-    if (points.every(p => terrainAt(p.x, p.z, state.seed).traversable) && lineOfSight(state, { x: x - 7, z }, { x: x + 7, z }, { fromHeight: .65, toHeight: .65 })) return { x, z };
+    if (points.every(p => terrainAt(p.x, p.z, state.terrainSeed || state.seed).traversable) && lineOfSight(state, { x: x - 7, z }, { x: x + 7, z }, { fromHeight: .65, toHeight: .65 })) return { x, z };
   }
   assert.fail('Fixture needs real traversable land and a clear firing lane');
 }
@@ -168,7 +168,7 @@ test('natural paid-unit worlds preserve role, trainee, civilian and resource cen
   for (let cycle = 0; cycle < 220; cycle++) {
     stepSimulation(state, 10); auditState(state);
     assert.equal(population(state), initial + state.stats.births - state.stats.deaths);
-    for (const g of state.groups) assert.ok(terrainAt(g.x, g.z, state.seed).traversable, `party ${g.id} entered impassable terrain`);
+    for (const g of state.groups) assert.ok(terrainAt(g.x, g.z, state.terrainSeed || state.seed).traversable, `party ${g.id} entered impassable terrain`);
   }
   assert.ok(state.stats.trained > 0, 'natural AI never completed a paid training course');
   assert.ok(RESOURCES.some(k => state.resourceLedger[k].training > 0), 'natural training spent no resources');
@@ -256,7 +256,7 @@ test('every actual formation body stays on connected terrain beside a solid wall
       const body = g.formationSlots[role][index - (role === 'ranged' ? units.infantry : 0)];
       assert.equal(p.x, body.x); assert.equal(p.z, body.z);
       assert.ok(p.x < center.x - .5, `actual ${role} body crossed a solid wall`);
-      assert.ok(terrainAt(p.x, p.z, state.seed).traversable, 'actual body entered impassable terrain');
+      assert.ok(terrainAt(p.x, p.z, state.terrainSeed || state.seed).traversable, 'actual body entered impassable terrain');
       assert.ok(isSegmentTraversable(state, { x: body.prevX, z: body.prevZ }, body, { factionId: g.factionId, radius: .08 }), 'body moved through an obstruction');
       assert.ok(Math.hypot(body.x - body.prevX, body.z - body.prevZ) <= .4 + 1e-8, 'individual formation body teleported');
     }

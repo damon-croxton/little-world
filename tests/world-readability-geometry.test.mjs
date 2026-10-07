@@ -51,7 +51,7 @@ for (const species of ['human', 'machine', 'hive']) test(`${species} connected w
     const from = new THREE.Vector3(-span.length / 2, 0, 0).applyMatrix4(matrix), to = new THREE.Vector3(span.length / 2, 0, 0).applyMatrix4(matrix);
     for (const [actual, expected] of [[from, span.from], [to, span.to]]) {
       assert.ok(Math.hypot(actual.x - expected.x, actual.z - expected.z) < 1e-5, 'mesh endpoints use authoritative topology');
-      assert.ok(Math.abs(actual.y - heightAt(expected.x, expected.z, state.seed) - .025) < 1e-5, 'base grades to shared ground elevation');
+      assert.ok(Math.abs(actual.y - heightAt(expected.x, expected.z, state.terrainSeed || state.seed) - .025) < 1e-5, 'base grades to shared ground elevation');
     }
   }
   assert.equal(castThrough(renderer, span, 0).length, 0, 'gate picking leaves center open');
@@ -93,7 +93,7 @@ test('readable landscape retains all harvestable deposits and biome silhouettes 
   terrain.update(0, state);
   const d = terrain.diagnostics;
   assert.equal(d.resourceSites, 160); assert.equal(d.visibleResourceSites, state.nodes.length);
-  assert.equal(d.resourcePieces, 1495, 'every deposit in the deliberately scarce seeded world retains its representation');
+  assert.equal(d.resourcePieces, 1523, 'every deposit in the deliberately scarce seeded world retains its representation');
   assert.equal(d.visibleResourcePieces, d.resourcePieces);
   assert.ok(d.visibleDecorativePieces < 1800 && d.visibleDecorativePieces > 650, `${d.visibleDecorativePieces} decorative pieces retain atmosphere without blanket noise`);
   assert.ok(d.visibleResourceSiteDetails < 1800, 'deposits no longer carry rings of random pebbles');

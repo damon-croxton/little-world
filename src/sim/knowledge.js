@@ -237,8 +237,8 @@ function sourceSightCache(state, source, blockers) {
   let cache = sensorCache.get(state); if (!cache) { cache = new Map(); sensorCache.set(state, cache); }
   const cacheKey = `${source.factionId}:${source.id}`;
   let record = cache.get(cacheKey);
-  if (!record || record.x !== source.x || record.z !== source.z || record.radius !== source.sightRadius || record.kind !== source.kind || record.factionId !== source.factionId || record.blockers !== blockers || record.seed !== state.seed) {
-    record = { x: source.x, z: source.z, radius: source.sightRadius, kind: source.kind, factionId: source.factionId, blockers, seed: state.seed, targets: new Map() }; cache.set(cacheKey, record);
+  if (!record || record.x !== source.x || record.z !== source.z || record.radius !== source.sightRadius || record.kind !== source.kind || record.factionId !== source.factionId || record.blockers !== blockers || record.seed !== (state.terrainSeed || state.seed)) {
+    record = { x: source.x, z: source.z, radius: source.sightRadius, kind: source.kind, factionId: source.factionId, blockers, seed: state.terrainSeed || state.seed, targets: new Map() }; cache.set(cacheKey, record);
     if (cache.size > 1024) cache.delete(cache.keys().next().value);
   }
   return record;
@@ -282,7 +282,7 @@ export function observationFor(state, faction, object, { sources = null } = {}) 
   const error = own || kind === 'resource' ? 1 : .84 + (hashSeed(`${state.seed}:${f?.id}:${object.id}:${state.tick}`) % 3201) / 10000;
   const o = { id: object.id, kind, x: object.x, z: object.z, ownerId, nativeOwnerId: object.factionId || null, observedTick: state.tick, observedTime: state.time ?? state.tick, reportedTick: null, confidence: own ? 1 : kind === 'resource' ? .98 : .88 };
   if (kind === 'terrain') Object.assign(o, { terrainKind: 'pass', passKind: object.kind, name: object.name || (object.kind === 'ford' ? 'Surveyed ford' : 'Surveyed mountain pass'), width: object.width, axis: object.axis, confidence: 1 });
-  else if (kind === 'resource') Object.assign(o, { resourceKind: object.kind, subtype: object.subtype, amountEstimate: Math.round(object.amount), abundanceEstimate: Math.round(object.amount), richnessEstimate: object.richness, regenerationEstimate: object.regeneration || 0, claimedBy: ownerId, claimSettlementId: object.claimSettlementId || null, radius: object.radius || 2.5 });
+  else if (kind === 'resource') Object.assign(o, { resourceKind: object.kind, subtype: object.subtype, balancedDistrict: object.balancedDistrict ?? null, foundingSite: object.foundingSite ? { ...object.foundingSite } : null, amountEstimate: Math.round(object.amount), abundanceEstimate: Math.round(object.amount), richnessEstimate: object.richness, regenerationEstimate: object.regeneration || 0, claimedBy: ownerId, claimSettlementId: object.claimSettlementId || null, radius: object.radius || 2.5 });
   else if (kind === 'settlement') Object.assign(o, { name: object.name, populationEstimate: Math.max(0, Math.round((nativeOwn ? object.population : visibleMilitary != null ? presentCensus(state, object).workers + visibleMilitary : presentCensus(state, object).population) * error)), soldiersEstimate: Math.max(0, Math.round((nativeOwn ? object.soldiers : visibleMilitary ?? presentCensus(state, object).soldiers) * error)), healthEstimate: Math.round(clamp(object.health * error, 0, 100)), status: object.status || 'active', occupiedBy: object.occupiedBy || null, controllerId: ownerId, radius: object.radius || 8, ownerSpecies: state.factions.find(a => a.id === ownerId)?.species, nativeSpecies: state.factions.find(a => a.id === object.factionId)?.species });
   else Object.assign(o, { groupKind: object.kind, unitType: object.unitType, sizeEstimate: Math.max(0, Math.round((visibleMilitary ?? object.size) * error)), phase: object.phase });
   return o;
@@ -502,7 +502,7 @@ export function factionView(state, factionId = null) {
     cache.set('omniscient', { signature, view }); return view;
   }
   const f = getFaction(state, factionId);
-  if (!f) return { seed: state.seed, tick: state.tick, step: state.step, time: state.time, config: state.config, season: state.season, bounds: state.bounds, factions: [], settlements: [], groups: [], soldiers: [], nodes: [], knownPlaces: [], events: [], projectiles: [], combatEffects: [], stats: {}, tradeOffers: [], renderWorldId: renderWorldId(state), viewer: { mode: 'faction', factionId, invalid: true } };
+  if (!f) return { seed: state.seed, terrainSeed: state.terrainSeed, tick: state.tick, step: state.step, time: state.time, config: state.config, season: state.season, bounds: state.bounds, factions: [], settlements: [], groups: [], soldiers: [], nodes: [], knownPlaces: [], events: [], projectiles: [], combatEffects: [], stats: {}, tradeOffers: [], renderWorldId: renderWorldId(state), viewer: { mode: 'faction', factionId, invalid: true } };
   const v = f.visibility || freshVisibility();
   const signature = `${state.step ?? state.tick}:${state.soldierRevision || 0}:${v.version}:${v.reportVersion || 0}:${state.combatEvents?.length || 0}:${censusRevision(state)}`;
   const cached = cache.get(f.id);
@@ -621,11 +621,11 @@ export function factionView(state, factionId = null) {
     combatEvents.push(cleanReferences(safe));
   }
   const view = {
-    seed: state.seed, tick: state.tick, step: state.step, time: state.time, config: state.config, bounds: state.bounds, season: state.season, outcome: state.outcome,
+    seed: state.seed, terrainSeed: state.terrainSeed, tick: state.tick, step: state.step, time: state.time, config: state.config, bounds: state.bounds, season: state.season, outcome: state.outcome,
     factions: state.factions.filter(a => identities.has(a.id)).map(a => a.id === f.id ? a : publicFaction(a)), settlements, groups, soldiers, nodes, knownPlaces,
     visibleNodeIds: nodes.map(n => n.id), combatEvents, projectiles: filterEffects(state.projectiles), combatEffects: filterEffects(state.combatEffects),
     events: (state.events || []).filter(e => e.factionId === f.id || e.defeatedId === f.id || e.type === 'victory' || (e.type === 'capture' && (e.previousControllerId === f.id || nativeHomeIds.has(e.settlementId))) || (e.otherFactionId === f.id && !e.pending && ['trade', 'diplomacy'].includes(e.type))),
-    tradeOffers: (state.tradeOffers || []).filter(o => o.factionId === f.id), stats: {}, terrain: { seed: state.seed }, renderWorldId: renderWorldId(state),
+    tradeOffers: (state.tradeOffers || []).filter(o => o.factionId === f.id), stats: {}, terrain: { seed: state.terrainSeed || state.seed }, renderWorldId: renderWorldId(state),
     viewer: { mode: 'faction', factionId, visibleCells, exploredCells, totalCells: CELL_COUNT, reportCount: knownReports(state, f).length, staleCount: knownPlaces.length, version: v.version, updatedTick: v.updatedTick },
   };
   cache.set(f.id, { signature, view });

@@ -21,7 +21,7 @@ function fixture(count = 12, role = 'ranged') {
   }
   if (!field) outer: for (let z = -72; z < 72; z += 6) for (let x = -72; x < 72; x += 6) {
     let clear = true;
-    for (let dz = -12; dz <= 12 && clear; dz += 2) for (let dx = -12; dx <= 12; dx += 2) if (!terrainAt(x + dx, z + dz, s.seed).traversable) { clear = false; break; }
+    for (let dz = -12; dz <= 12 && clear; dz += 2) for (let dx = -12; dx <= 12; dx += 2) if (!terrainAt(x + dx, z + dz, s.terrainSeed || s.seed).traversable) { clear = false; break; }
     if (clear && lineOfSight(s, { x: x - 8, z }, { x: x + 8, z }, { fromHeight: .6, toHeight: .6 })) { field = { x, z }; break outer; }
   }
   assert.ok(field);

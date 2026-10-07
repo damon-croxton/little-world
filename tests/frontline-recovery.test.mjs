@@ -106,7 +106,7 @@ test('funded small outposts choose accessible resources away from reported threa
   home.stock = { food: 1000, water: 1000, energy: 1000, materials: 1000 };
   let site;
   for (let angle = 0; angle < Math.PI * 2; angle += .2) {
-    const p = { x: home.x + Math.cos(angle) * 48, z: home.z + Math.sin(angle) * 48 }, t = terrainAt(p.x, p.z, s.seed);
+    const p = { x: home.x + Math.cos(angle) * 48, z: home.z + Math.sin(angle) * 48 }, t = terrainAt(p.x, p.z, s.terrainSeed || s.seed);
     if (t.traversable && t.height >= .4 && t.roughness <= .65 && findPath(s, home, p, { factionId: f.id }).reachable && lineOfSight(s, p, { x: p.x + 2, z: p.z })) { site = p; break; }
   }
   assert.ok(site);

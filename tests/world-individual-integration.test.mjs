@@ -42,7 +42,7 @@ function clearSite(state) {
   for (let z = -60; z <= 60; z += 6) for (let x = -60; x <= 60; x += 6) {
     const points = [];
     for (let dz = -8; dz <= 8; dz += 2) for (let dx = -8; dx <= 8; dx += 2) points.push({ x: x + dx, z: z + dz });
-    if (points.every(p => terrainAt(p.x, p.z, state.seed).traversable) && lineOfSight(state, { x: x - 7, z }, { x: x + 7, z }, { fromHeight: .65, toHeight: .65 })) return { x, z };
+    if (points.every(p => terrainAt(p.x, p.z, state.terrainSeed || state.seed).traversable) && lineOfSight(state, { x: x - 7, z }, { x: x + 7, z }, { fromHeight: .65, toHeight: .65 })) return { x, z };
   }
   assert.fail('Fixture requires real traversable land with clear sight');
 }

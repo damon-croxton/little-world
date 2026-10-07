@@ -129,7 +129,7 @@ function returnHome(s, g, reason, retreat = false) {
 }
 
 function move(s, g, dt) {
-  const f = factionOf(s, groupController(s, g)), ground = terrainAt(g.x, g.z, s.seed);
+  const f = factionOf(s, groupController(s, g)), ground = terrainAt(g.x, g.z, s.terrainSeed || s.seed);
   const pace = (g.speed ?? 2.8) * (g.kind === 'trader' && !g.v2Speed ? 5 : 1) * modifier(f, 'movement') *
     (g.kind === 'army' ? .75 + g.morale / 400 : 1);
   const arrived = moveAlongRoute(s, g, { x: g.targetX, z: g.targetZ }, { dt, speed: pace, factionId: groupController(s, g) });
@@ -237,8 +237,8 @@ function arriveTrader(s, g) {
 
 function power(s, f, size, supply, morale, terrain, defending = false) {
   const level = f.tech?.level ?? 0;
-  let adaptation = f.species === 'human' ? (terrain.biome === 'meadow' ? 1.14 : 1)
-    : f.species === 'hive' ? (terrain.biome === 'alien' ? 1.22 : 1.02) : 1.03 + level * 0.025;
+  let adaptation = f.species === 'human' ? (!terrain.balancedDistrict && terrain.biome === 'meadow' ? 1.14 : 1)
+    : f.species === 'hive' ? (!terrain.balancedDistrict && terrain.biome === 'alien' ? 1.22 : 1.02) : 1.03 + level * 0.025;
   if (defending) adaptation *= modifier(f, 'defense');
   const experience = 1 + Math.min(0.18, (f.experience.combat ?? 0) * 0.008);
   return size * adaptation * experience * (1 + level * 0.06) *
@@ -252,7 +252,7 @@ function soldiersAtSettlement(s, g, town, radius = 5) {
 
 function raid(s, g, town) {
   const f = factionOf(s, groupController(s, g)), defender = factionOf(s, settlementController(s, town));
-  const terrain = terrainAt(town.x, town.z, s.seed);
+  const terrain = terrainAt(town.x, town.z, s.terrainSeed || s.seed);
   const present = soldiersAtSettlement(s, g, town).length;
   if (!present) return;
   const garrison = countMilitary(availableMilitary(s, town));
@@ -509,7 +509,7 @@ function updateGroups(s, dt, cycleBoundary) {
     g.supply = clamp(g.supply ?? 90, 0, 100);
     g.morale = clamp(g.morale ?? 85, 0, 100);
     if (cycleBoundary) {
-      const ground = terrainAt(g.x, g.z, s.seed);
+      const ground = terrainAt(g.x, g.z, s.terrainSeed || s.seed);
       const drain = g.kind === 'army' ? 0.62 + g.size * 0.0014 + ground.roughness * 0.24 : 0.4;
       g.supply = g.kind === 'trader' && g.provisionCycles
         ? Math.max(0, 100 * (1 - ((s.time ?? s.tick) - g.createdTick) / g.provisionCycles))
@@ -611,7 +611,7 @@ function exploratoryTarget(s, f, p) {
   let x = p.x + Math.cos(bearing) * reach, z = p.z + Math.sin(bearing) * reach;
   const radius = Math.hypot(x, z);
   if (radius > WORLD_RADIUS * .88) { x *= WORLD_RADIUS * .88 / radius; z *= WORLD_RADIUS * .88 / radius; }
-  for (let i = 0; i < 12 && terrainAt(x, z, s.seed).height < -0.3; i++) { x *= 0.9; z *= 0.9; }
+  for (let i = 0; i < 12 && terrainAt(x, z, s.terrainSeed || s.seed).height < -0.3; i++) { x *= 0.9; z *= 0.9; }
   return { x, z };
 }
 
@@ -667,7 +667,7 @@ export function expeditionPlanningWorld(s, f, observer = null) {
   // wall geometry. Owned obstacles and actual home/scout sightings inform the
   // capital's route/provision estimate.
   // Real movement still collides with every wall and discovers it locally.
-  return { seed: s.seed, factions: s.factions, settlements: [], walls, navigationRevision: 0 };
+  return { seed: s.seed, terrainSeed: s.terrainSeed, factions: s.factions, settlements: [], walls, navigationRevision: 0 };
 }
 
 function homeDefense(s, f, home, reports) {

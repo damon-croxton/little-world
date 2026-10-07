@@ -21,7 +21,7 @@ export async function combatTargetScenarios({ moduleRoot = '/src/' } = {}) {
     if (!ground) outer: for (let z = -72; z < 72; z += 6) for (let x = -72; x < 72; x += 6) {
       const points = [];
       for (let dz = -10; dz <= 10; dz += 2) for (let dx = -10; dx <= 10; dx += 2) points.push({ x: x + dx, z: z + dz });
-      if (points.every(p => terrainAt(p.x, p.z, s.seed).traversable) && lineOfSight(s, { x: x - 7, z }, { x: x + 7, z }, { fromHeight: .6, toHeight: .6 })) { ground = { x, z }; break outer; }
+      if (points.every(p => terrainAt(p.x, p.z, s.terrainSeed || s.seed).traversable) && lineOfSight(s, { x: x - 7, z }, { x: x + 7, z }, { fromHeight: .6, toHeight: .6 })) { ground = { x, z }; break outer; }
     }
     check(ground, 'Combat target fixture has no suitable seeded ground');
     const center = { ...ground };

@@ -215,3 +215,41 @@ invalidation from [Screeps Memory](https://docs.screeps.com/global-objects.html)
 [CPU guidance](https://docs.screeps.com/cpu-limit.html), and its
 [community caching guide](https://docs.screeps.com/contributed/caching-overview.html).
 Those are programming principles; Screeps does not supply this game's strategy.
+
+
+### Balanced new-world districts
+
+New worlds keep their entered seed, visual biomes, species and scarce 160-site
+resource budget. Seed plus civilisation count deterministically defines local
+terrain clearings; changing the count rebuilds those clearings without changing
+the seed text or reset workflow. Existing open browser sessions need a reload or
+new world to use this generator version.
+
+Each start and its designated first expansion have a 20-unit radius of level
+usable ground. Four local deposits sit 16 physical route units from each centre.
+The expansion is 48 physical route units inward, on an eight-unit-wide clear
+approach that continues toward the shared centre. These are real terrain changes
+used consistently by rendering, movement, sight and planning. Scouting still has
+to observe an expansion deposit before its site can enter faction planning; no
+unseen supplies, enemies or routes are injected into faction intelligence.
+
+Inside the districts and their approaches, fertility is 0.80, terrain movement
+is 1.0, farms use a 1.15 base factor, power uses its ordinary base output, and
+species-specific biome research/siege bonuses are neutral. Species upkeep,
+production type, technology, weapons, personalities and seeded faction strengths
+remain distinct. Outside these areas normal biome rules remain active. The
+inspector and field guide explain the local rule; scenery is not recolored into
+grassland.
+
+Starter deposits hold food/water/energy/materials of 1400/1400/1800/1200; first
+expansions hold 1800/1800/2200/1600. All have richness 0.70 and replenish at base
+rates 0.40/1.60/0.60/0.085 per cycle, capped by their deposit capacity; global
+water seasonality still applies. These opening stocks cover at least 350 cycles
+of the maximum 112-person starting upkeep for every species, before local
+production, regeneration or extra construction/research costs. They still need
+actual workers, safe routes and deliveries. Normal finite and renewable outer
+deposits, scarcity, competition and population accounting remain unchanged.
+
+Fairness guarantees cover opening districts and designated first expansion
+access, not equal total regional wealth, uninterrupted survival or equal win
+rates. Further expansion, neighbouring terrain and enemy decisions remain varied.

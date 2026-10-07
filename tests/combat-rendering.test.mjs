@@ -22,7 +22,7 @@ function fixture() {
   outer: for (let z = -72; z < 72; z += 6) for (let x = -72; x < 72; x += 6) {
     const points = [];
     for (let dz = -10; dz <= 10; dz += 2) for (let dx = -10; dx <= 10; dx += 2) points.push({ x: x + dx, z: z + dz });
-    if (points.every(p => terrainAt(p.x, p.z, s.seed).traversable) && lineOfSight(s, { x: x - 7, z }, { x: x + 7, z }, { fromHeight: .6, toHeight: .6 })) { center = { x, z }; break outer; }
+    if (points.every(p => terrainAt(p.x, p.z, s.terrainSeed || s.seed).traversable) && lineOfSight(s, { x: x - 7, z }, { x: x + 7, z }, { fromHeight: .6, toHeight: .6 })) { center = { x, z }; break outer; }
   }
   assert.ok(center);
   initializeLedger(s); return { s, center, a, b, ha: s.settlements[0], hb: s.settlements[1] };
@@ -73,7 +73,7 @@ test('physical formation slots cannot walk through a standing wall during a turn
     updateCombatFormation(s, g, g.units, .1, { yaw: Math.PI / 2 + frame * .012 });
     for (const role of ['infantry', 'ranged']) for (const p of g.formationSlots[role]) {
       assert.ok(isSegmentTraversable(s, { x: p.prevX, z: p.prevZ }, p, { factionId: g.factionId, radius: .01 }), 'a real body crossed an impassable segment');
-      assert.ok(terrainAt(p.x, p.z, s.seed).traversable);
+      assert.ok(terrainAt(p.x, p.z, s.terrainSeed || s.seed).traversable);
       assert.ok(p.x < center.x - .49, 'a flank appeared through the wall');
     }
   }

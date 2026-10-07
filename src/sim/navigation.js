@@ -44,8 +44,8 @@ function staticNavigation(seed) {
 }
 function localState(state) {
   let value = stateCache.get(state);
-  if (!value || value.seed !== state.seed) {
-    value = { seed: state.seed, wallStamp: null, walls: [], wallBins: new Map(), version: 0, paths: new Map(), searches: 0, cacheHits: 0 };
+  if (!value || value.seed !== (state.terrainSeed || state.seed)) {
+    value = { seed: (state.terrainSeed || state.seed), wallStamp: null, walls: [], wallBins: new Map(), version: 0, paths: new Map(), searches: 0, cacheHits: 0 };
     stateCache.set(state, value);
   }
   return value;
@@ -156,7 +156,7 @@ function terrainSegment(seed, from, to, radius = 0) {
 }
 export function isSegmentTraversable(state, from, to, options = {}) {
   if (!finitePoint(from) || !finitePoint(to)) return false;
-  return terrainSegment(state.seed, from, to, options.radius ?? 0) && !wallsBlock(state, from, to, options);
+  return terrainSegment((state.terrainSeed || state.seed), from, to, options.radius ?? 0) && !wallsBlock(state, from, to, options);
 }
 export function isPointTraversable(state, point, options = {}) {
   return isSegmentTraversable(state, point, point, options);
@@ -230,7 +230,7 @@ function simplifyPath(state, start, points, options) {
 }
 export function findPath(state, from, to, options = {}) {
   if (!finitePoint(from) || !finitePoint(to)) return { reachable: false, waypoints: [], length: Infinity, reason: 'invalid-endpoint' };
-  const settings = { radius: .16, ...options }, nav = staticNavigation(state.seed), dynamic = refreshWalls(state);
+  const settings = { radius: .16, ...options }, nav = staticNavigation((state.terrainSeed || state.seed)), dynamic = refreshWalls(state);
   // All route types, including direct local hauling, are cached before any
   // terrain sampling. This is important when a town repeatedly scores the same
   // reported resource routes during its economic decisions.
@@ -267,7 +267,7 @@ export function findPath(state, from, to, options = {}) {
       if (closed[next]) continue;
       const nextPoint = cellPoint(next);
       if (wallsBlock(state, point, nextPoint, settings)) continue;
-      if (settings.radius > .16 && !terrainSegment(state.seed, point, nextPoint, settings.radius)) continue;
+      if (settings.radius > .16 && !terrainSegment((state.terrainSeed || state.seed), point, nextPoint, settings.radius)) continue;
       const cost = costs[current] + NAV_CELL_SIZE * (dx && dz ? Math.SQRT2 : 1) / Math.max(.4, (nav.movement[current] + nav.movement[next]) * .5);
       if (cost >= costs[next]) continue;
       costs[next] = cost; parents[next] = current;
@@ -305,7 +305,7 @@ export function assessBreachRoute(state, from, goal, candidates = [], options = 
     return { source: candidate, record, ownerId, geometry };
   }).filter(w => w.record.id && ['wall', 'gate'].includes(w.record.kind) && w.geometry && (w.record.progress ?? 1) >= 1 && !w.record.destroyed && (w.record.hp ?? w.record.health ?? 1) > 0)
     .sort((a, b) => String(a.record.id).localeCompare(String(b.record.id)));
-  const knownState = { seed: state.seed, factions: state.factions, settlements: [], walls: known.map(w => ({ ...w.record, factionId: w.ownerId })), navigationRevision: 0 };
+  const knownState = { seed: (state.terrainSeed || state.seed), factions: state.factions, settlements: [], walls: known.map(w => ({ ...w.record, factionId: w.ownerId })), navigationRevision: 0 };
   const routeOptions = { factionId, radius: options.radius ?? .16, arrival: options.arrival ?? .5, maxExpansions };
   const route = findPath(knownState, from, goal, routeOptions);
   const result = { action: route.reachable ? (route.reason === 'direct' ? 'advance' : 'detour') : 'unreachable', wallId: null, wall: null, route,
@@ -389,7 +389,7 @@ export function moveAlongRoute(state, group, target, options = {}) {
   const point = route.waypoints[route.index], remaining = distance(group, point);
   const sampleStep = state.step ?? Math.floor(now * 10);
   if (group.movementFactor == null || group.movementSampleStep == null || sampleStep < group.movementSampleStep || sampleStep - group.movementSampleStep >= 5) {
-    group.movementFactor = terrainAt(group.x, group.z, state.seed).movement; group.movementSampleStep = sampleStep;
+    group.movementFactor = terrainAt(group.x, group.z, (state.terrainSeed || state.seed)).movement; group.movementSampleStep = sampleStep;
   }
   const pace = Math.max(0, options.speed ?? group.speed ?? 2.8) * group.movementFactor;
   const amount = Math.min(remaining, pace * dt), fraction = remaining ? amount / remaining : 0;
@@ -417,7 +417,7 @@ export function lineOfSight(state, from, to, options = {}) {
   if (!finitePoint(from) || !finitePoint(to)) return false;
   const d = distance(from, to);
   if (d > (options.maxRange ?? Infinity)) return false;
-  const nav = staticNavigation(state.seed), fromY = (from.y ?? sightHeight(nav, from.x, from.z)) + (options.fromHeight ?? 1.4), toY = (to.y ?? sightHeight(nav, to.x, to.z)) + (options.toHeight ?? 1.2);
+  const nav = staticNavigation((state.terrainSeed || state.seed)), fromY = (from.y ?? sightHeight(nav, from.x, from.z)) + (options.fromHeight ?? 1.4), toY = (to.y ?? sightHeight(nav, to.x, to.z)) + (options.toHeight ?? 1.2);
   const steps = Math.max(1, Math.ceil(d / 1.1));
   for (let i = 1; i < steps; i++) {
     const t = i / steps, x = mix(from.x, to.x, t), z = mix(from.z, to.z, t), ground = sightHeight(nav, x, z);
@@ -428,14 +428,14 @@ export function lineOfSight(state, from, to, options = {}) {
     for (const [a, b] of wallParts(state, wall, options.factionId)) {
       if (segmentsDistance(from, to, a, b) > wall.width * .5) continue;
       const middle = { x: (a.x + b.x) * .5, z: (a.z + b.z) * .5 }, t = d ? clamp(((middle.x - from.x) * (to.x - from.x) + (middle.z - from.z) * (to.z - from.z)) / (d * d), 0, 1) : 0;
-      if (heightAt(middle.x, middle.z, state.seed) + wall.height > mix(fromY, toY, t)) return false;
+      if (heightAt(middle.x, middle.z, (state.terrainSeed || state.seed)) + wall.height > mix(fromY, toY, t)) return false;
     }
   }
   return true;
 }
 export function knownChokepoints(state, factionId, isExplored) {
   if (typeof isExplored !== 'function') return [];
-  const passes = state.terrain?.passes ?? terrainFeatures(state.seed).passes;
+  const passes = state.terrain?.passes ?? terrainFeatures((state.terrainSeed || state.seed)).passes;
   return passes.filter(pass => isExplored(state, factionId, pass)).map(pass => ({ ...pass }));
 }
 export function navigationDiagnostics(state) {

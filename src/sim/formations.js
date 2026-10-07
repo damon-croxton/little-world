@@ -306,7 +306,7 @@ export function updateCombatFormation(s, entity, units, dt = .1, options = {}) {
       body.yaw = Number.isFinite(facing) ? facing : yaw;
       if (remaining < .035) { world.records.get(body).movedStamp = world.stamp; changed = true; continue; }
       const pulse = s.step ?? s.tick ?? 0;
-      if (body.movementStep == null || pulse < body.movementStep || pulse - body.movementStep >= 5) { body.movementFactor = terrainAt(body.x, body.z, s.seed).movement; body.movementStep = pulse; }
+      if (body.movementStep == null || pulse < body.movementStep || pulse - body.movementStep >= 5) { body.movementFactor = terrainAt(body.x, body.z, s.terrainSeed || s.seed).movement; body.movementStep = pulse; }
       const pace = plan?.speed ?? (inContact ? spec.speed : (options.speed ?? entity.speed ?? spec.speed) + .9);
       const step = Math.min(remaining, Math.max(0, pace * Math.max(.18, body.movementFactor)) * Math.min(dt, .1));
       const candidates = [];

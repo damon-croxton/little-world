@@ -119,8 +119,8 @@ function observeHome(state, f, home, survey = false) {
 export function createSimulation(seed = 'littleworld', options = {}) {
   const config = normalizeConfig(options);
   const key = String(seed || 'littleworld').slice(0, 160), world = generateWorld(key, config);
-  const s = { seed: key, config, rng: hashSeed(key), tick: 0, step: 0, time: 0, nextId: 1, nextSettlementId: 0, factions: [], settlements: [], groups: [], nodes: world.nodes, bounds: world.bounds, events: [], tradeOffers: [],
-    stats: { births: 0, deaths: 0, discoveries: 0, reports: 0, raids: 0, battles: 0, retreats: 0, trades: 0, breakthroughs: 0, expeditions: 0, deliveries: 0, expansions: 0, abandonments: 0, refugeeTransfers: 0, rebuilt: 0, collapses: 0, buildings: 0, harvested: 0 }, terrain: { seed: key, obstacles: world.obstacles, passes: world.passes }, season: { name: 'Bloom', phase: 0, fertility: 1, water: 1 } };
+  const s = { seed: key, terrainSeed: world.terrainSeed, config, rng: hashSeed(key), tick: 0, step: 0, time: 0, nextId: 1, nextSettlementId: 0, factions: [], settlements: [], groups: [], nodes: world.nodes, bounds: world.bounds, events: [], tradeOffers: [],
+    stats: { births: 0, deaths: 0, discoveries: 0, reports: 0, raids: 0, battles: 0, retreats: 0, trades: 0, breakthroughs: 0, expeditions: 0, deliveries: 0, expansions: 0, abandonments: 0, refugeeTransfers: 0, rebuilt: 0, collapses: 0, buildings: 0, harvested: 0 }, terrain: { seed: world.terrainSeed, obstacles: world.obstacles, passes: world.passes, districts: world.districts }, season: { name: 'Bloom', phase: 0, fertility: 1, water: 1 } };
   s.factions = createFactions(s, config.civCount);
   const offset = hashSeed(key + ':settlement-geography') % world.starts.length;
   for (const [i, f] of s.factions.entries()) {
@@ -296,7 +296,7 @@ export function estimateJourneyCycles(state, from, route, speed, workCycles = 12
     for (let sample = 0; sample < samples; sample++) {
       const t = (sample + .5) / samples;
       const x = previous.x + (point.x - previous.x) * t, z = previous.z + (point.z - previous.z) * t;
-      const movement = Math.max(.15, terrainAt(x, z, state.seed).movement);
+      const movement = Math.max(.15, terrainAt(x, z, state.terrainSeed || state.seed).movement);
       travelCycles += length / samples / (speed * movement);
     }
     previous = point;
@@ -377,12 +377,12 @@ function infrastructure(state, home, f) {
   for (const b of home.buildings) b.workersAssigned = 0;
   if (!active(home) || (home.contestedUntil || 0) >= state.tick) return;
   let workers = home.assigned.infrastructure;
-  const terrain = terrainAt(home.x, home.z, state.seed), factor = .55 + (terrain.fertility || .5) * .75;
+  const terrain = terrainAt(home.x, home.z, state.terrainSeed || state.seed), factor = .55 + (terrain.fertility || .5) * .75;
   for (const b of home.buildings) {
     if (b.progress < 1 || b.destroyed || (b.hp != null && b.hp <= 0) || !['farm', 'power'].includes(b.kind) || workers <= 0) continue;
     const kind = b.kind === 'farm' ? 'food' : 'energy'; if (f.species === 'machine' && kind === 'food') continue;
     const crew = Math.min(4, workers); workers -= crew; b.workersAssigned = crew;
-    const desired = crew * (kind === 'food' ? .32 * factor * state.season.fertility : .35 * (terrain.biome === 'desert' ? 1.3 : 1)) * modifier(f, 'production');
+    const desired = crew * (kind === 'food' ? .32 * factor * state.season.fertility : .35 * (!terrain.balancedDistrict && terrain.biome === 'desert' ? 1.3 : 1)) * modifier(f, 'production');
     const perWater = kind === 'food' ? .16 : .015, paidFraction = Math.min(1, home.stock.water / Math.max(.01, crew * perWater));
     const amount = Math.min(home.capacity - home.stock[kind], desired * paidFraction); if (amount <= 0) continue;
     spend(state, home, { water: crew * perWater * amount / Math.max(.001, desired) }, 'consumed'); home.stock[kind] += amount; home.lastProduction[kind] += amount;
@@ -474,12 +474,13 @@ export function planFounding(state, home, f) {
   const knownHomes = knownReports(state, f, { kind: 'settlement', maxAge: 500, minConfidence: .2 });
   const threats = [...knownHomes.filter(k => k.ownerId !== f.id && !['allied', 'trade'].includes(f.relations[k.ownerId]?.status) && k.status !== 'ruin'), ...knownReports(state, f, { kind: 'group', maxAge: 20, minConfidence: .5 }).filter(k => k.groupKind === 'army' && f.relations[k.ownerId]?.status === 'hostile')];
   const candidates = [];
-  for (const k of reports) {
+  for (const report of reports) {
+    const k = report.foundingSite ? { ...report, x: report.foundingSite.x, z: report.foundingSite.z } : report;
     if (k.kind !== 'resource' || k.reportedTick == null || k.reportedTick > state.tick) continue;
     const d = distance(home, k); if (d < 35 || d > 95 || state.settlements.some(s => s.factionId === f.id && alive(s) && distance(s, k) < Math.max(32, s.radius + 15)) || knownHomes.some(s => s.ownerId !== f.id && s.status !== 'ruin' && distance(s, k) < Math.max(32, (s.radius || 8) + 15))) continue;
     if (threats.some(t => distance(t, k) < (t.kind === 'settlement' ? 42 : 26))) continue;
     if (state.groups.some(g => g.kind === 'colonist' && g.factionId === f.id && Math.hypot(g.targetX - k.x, g.targetZ - k.z) < 32)) continue;
-    const terrain = terrainAt(k.x, k.z, state.seed); if (!terrain.traversable || terrain.height < .4 || terrain.roughness > .65) continue;
+    const terrain = terrainAt(k.x, k.z, state.terrainSeed || state.seed); if (!terrain.traversable || terrain.height < .4 || terrain.roughness > .65) continue;
     const resources = reports.filter(n => distance(n, k) < 35), types = new Set(resources.map(n => n.resourceKind));
     if (!types.has('water') || !types.has('materials') || !types.has(profile(f).staple)) continue;
     const reported = Object.fromEntries(RESOURCES.map(kind => [kind, resources.filter(n => n.resourceKind === kind).reduce((sum, n) => sum + (n.amountEstimate ?? n.abundanceEstimate ?? 0), 0)]));

@@ -1,3 +1,34 @@
+# Balanced districts checkpoint and authorized worker-combat pass — 2026-10-07
+
+User approved balanced starts, then a ONE-LEAD improvement window from 10:40:29
+until 12:40:29 UTC. No agents, long sweeps, videos or redundant unchanged runs.
+Checkpoint balanced maps first; next priority is real worker-crew combat: attacks
+on exposed crews including empty crews, individual weapon clocks/damage, exact
+represented-worker casualties/cargo, escape and defender response, bounded
+pursuit and local threat assessment. Keep fog and survival/replacement economics.
+Halfway status around 11:40 UTC; stop new features at 12:40 UTC and report exact
+validated live SHA plus remaining limits. Development remains cloud-only.
+
+Balanced generation preserves public seed/RNG and biome art, with an explicit
+internal terrainSeed keyed by seed/count/version. Every terrain/render/route/sight
+consumer uses this key. Plain-seed terrain fixtures retain legacy physical ground.
+Home and first-expansion pads have radius 20; supplies at radius 16; expansion
+centre is 48 units inward on a real eight-unit-wide approach to the shared centre.
+All count settings 3–6 have deterministic physical districts. Fertility .8,
+movement 1, base farm factor 1.15, ordinary power and neutral biome research/siege
+bonuses apply locally. Species upkeep, weapons, tech, seeded advantages and outer
+biome rules remain. Guaranteed deposits have declared equal stocks, .7 richness
+and renewal; outer scarcity retains 160 total sites and normal finite deposits.
+Expansion coordinates travel only in actually observed resource reports. Existing
+browser worlds require reload/reset. Inspector/guide explain district rules.
+
+Static before/after and timed checks are under ignored screenshots/balanced-starts/.
+The original audit found 14–18 starter route lengths and unequal fertility. New
+static tests assert real 16-unit supply routes and 48-unit first expansion routes,
+350+ maximum starting-upkeep cycles in deposits, land clearance, population/cargo
+ledgers, count-key separation, fog and seed-reset determinism. These are opening
+access guarantees, not win-rate or whole-map equality evidence.
+
 # Strategic planner, enclosing walls and comparison — 2026-10-07
 
 Single cloud lead; no agents, videos, long sweeps or optional polish. This pass

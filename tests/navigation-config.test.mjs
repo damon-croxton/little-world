@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import { normalizeConfig, DEFAULT_CONFIG } from '../src/config.js';
-import { generateWorld, heightAt, terrainAt, terrainFeatures, startingPositions, isTerrainTraversable, WORLD_RADIUS, LAND_SCALE, WORLD_RESOURCE_SITES } from '../src/world.js';
+import { generateWorld, heightAt, terrainAt, terrainFeatures, startingPositions, worldTerrainSeed, isTerrainTraversable, WORLD_RADIUS, LAND_SCALE, WORLD_RESOURCE_SITES } from '../src/world.js';
 import { createSimulation } from '../src/sim/core.js';
 import { createTerrain } from '../src/render/terrain.js';
 import { findPath, moveAlongRoute, isPointTraversable, isSegmentTraversable, lineOfSight, invalidateNavigation, navigationDiagnostics, knownChokepoints, NAV_MAX_EXPANSIONS } from '../src/sim/navigation.js';
@@ -10,7 +10,7 @@ import { findPath, moveAlongRoute, isPointTraversable, isSegmentTraversable, lin
 const empty = seed => ({ seed, step: 0, tick: 0, time: 0, settlements: [], factions: [{ id: 'owner', relations: {} }, { id: 'enemy', relations: {} }] });
 const translated = (p, x, z) => ({ x: p.x + x, z: p.z + z });
 function enclosed(seed = 'navigation-room') {
-  const state = empty(seed), center = startingPositions(seed)[0];
+  const state = empty(seed), center = startingPositions(seed)[0]; state.terrainSeed = worldTerrainSeed(seed);
   state.walls = [
     { id: 'gate', kind: 'wall', factionId: 'owner', ...translated(center, 0, 6), length: 12, width: 1, rotation: 0, isGate: true, gateWidth: 5, progress: 1, hp: 100 },
     { id: 'south', kind: 'wall', factionId: 'owner', ...translated(center, 0, -6), length: 12, width: 1, rotation: 0, progress: 1, hp: 100 },
@@ -70,7 +70,7 @@ test('count-specific starts are deterministic, separated and evenly spread on co
         assert.ok(gap > Math.PI * 2 / civCount - .65 && gap < Math.PI * 2 / civCount + .65, `${seed}/${civCount}: unbalanced angular gap ${gap}`);
       }
       for (let i = 0; i < a.length; i++) {
-        assert.ok(terrainAt(a[i].x, a[i].z, seed).traversable);
+        assert.ok(terrainAt(a[i].x, a[i].z, generateWorld(seed, { civCount }).terrainSeed).traversable);
         for (let j = i + 1; j < a.length; j++) assert.ok(Math.hypot(a[i].x - a[j].x, a[i].z - a[j].z) > 45);
       }
       assert.deepEqual(heights, Array.from({ length: 24 }, (_, i) => heightAt(Math.cos(i) * 90, Math.sin(i) * 90, seed)));
@@ -81,12 +81,12 @@ test('count-specific starts are deterministic, separated and evenly spread on co
 test('every start has reachable survival supplies and every generated worksite is reachable', () => {
   const seed = 'navigation-supplies', state = empty(seed);
   for (const civCount of [3, 4, 5, 6]) {
-    const world = generateWorld(seed, { civCount });
+    const world = generateWorld(seed, { civCount }); state.terrainSeed = world.terrainSeed;
     for (const start of world.starts) for (const kind of ['food', 'water', 'energy', 'materials']) {
       const nearby = world.nodes.filter(n => n.kind === kind && Math.hypot(n.x - start.x, n.z - start.z) < 30);
       assert.ok(nearby.some(node => findPath(state, start, node).reachable), `count ${civCount} lacks reachable ${kind}`);
     }
-    // The frontier uses the same connected island for all four count settings.
+    // Each count keeps its generated worksites on the connected physical island.
     for (const node of world.nodes) assert.ok(findPath(state, world.starts[0], node).reachable, `count ${civCount}: ${node.id} unreachable`);
   }
 });
@@ -94,23 +94,23 @@ test('every start has reachable survival supplies and every generated worksite i
 test('deep river forces routes through real fords and cliff passes remain open', () => {
   const state = empty('navigation-river'), features = terrainFeatures(state.seed);
   for (const pass of features.passes) {
-    assert.ok(terrainAt(pass.x, pass.z, state.seed).traversable, `${pass.id} obstructed`);
+    assert.ok(terrainAt(pass.x, pass.z, state.terrainSeed || state.seed).traversable, `${pass.id} obstructed`);
     const axis = typeof pass.axis === 'number' ? pass.axis : 0;
     const a = { x: pass.x - Math.cos(axis) * 13, z: pass.z - Math.sin(axis) * 13 }, b = { x: pass.x + Math.cos(axis) * 13, z: pass.z + Math.sin(axis) * 13 };
     assert.ok(isSegmentTraversable(state, a, b), `${pass.id} does not connect its banks`);
   }
   const z = 33;
   let riverX = 0, low = Infinity;
-  for (let x = -30; x <= 20; x += .5) { const h = heightAt(x, z, state.seed); if (h < low) { low = h; riverX = x; } }
+  for (let x = -30; x <= 20; x += .5) { const h = heightAt(x, z, state.terrainSeed || state.seed); if (h < low) { low = h; riverX = x; } }
   const a = { x: riverX - 15, z }, b = { x: riverX + 15, z };
-  assert.equal(terrainAt(riverX, z, state.seed).blockedBy, 'deep-water');
+  assert.equal(terrainAt(riverX, z, state.terrainSeed || state.seed).blockedBy, 'deep-water');
   assert.equal(isSegmentTraversable(state, a, b), false);
   const path = findPath(state, a, b);
   assert.ok(path.reachable); assert.ok(path.length > 45, 'river route ignored the detour');
   assert.ok(path.expansions <= NAV_MAX_EXPANSIONS);
   let prior = a;
   for (const point of path.waypoints) { assert.ok(isSegmentTraversable(state, prior, point)); prior = point; }
-  for (const ridge of features.obstacles) assert.equal(terrainAt(ridge.x, ridge.z, state.seed).blockedBy, 'cliff');
+  for (const ridge of features.obstacles) assert.equal(terrainAt(ridge.x, ridge.z, state.terrainSeed || state.seed).blockedBy, 'cliff');
 });
 
 test('completed walls close hostile routes while gates let owners and allies escape', () => {
@@ -201,7 +201,7 @@ test('multiple harvesting parties reserve distinct reachable arrival lanes insid
 });
 
 test('nearby corner waypoints are reached before turning and routes store coordinates only', () => {
-  const state = empty('navigation-corner'), start = startingPositions(state.seed)[0];
+  const state = empty('navigation-corner'), start = startingPositions(state.seed)[0]; state.terrainSeed = worldTerrainSeed(state.seed);
   const corner = { x: Math.round(start.x / 3) * 3, z: Math.round(start.z / 3) * 3 };
   const home = { id: 'corner-home', ...translated(corner, 1.70852093133335, -13.20501506827865), privateStock: { materials: 1000 }, buildings: [] };
   state.walls = [{ id: 'corner-wall', kind: 'wall', factionId: 'owner', ...translated(corner, -3.43401461056123, -2.18551742998538), rotation: -.4366348584509465, length: 7, width: 1, progress: 1, hp: 300 }];

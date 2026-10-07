@@ -18,12 +18,13 @@ test('world seeds deterministically generate traversable starts and finite resou
   assert.equal(WORLD_RESOURCE_SITES, 160, 'scarce resource budget is deliberate');
   assert.equal(new Set(a.nodes.map(n => n.id)).size, a.nodes.length);
   for (const start of a.starts) {
-    assert.ok(terrainAt(start.x, start.z, 'qa-world').traversable);
+    assert.ok(terrainAt(start.x, start.z, a.terrainSeed).traversable);
     for (const kind of ['food', 'water', 'energy', 'materials']) assert.ok(a.nodes.some(n => n.kind === kind && Math.hypot(n.x - start.x, n.z - start.z) < 30), `start lacks nearby ${kind}`);
   }
   for (const node of a.nodes) {
     assert.ok(node.amount > 0 && node.amount <= node.maxAmount);
-    if (['ore', 'salvage', 'crystal'].includes(node.subtype)) assert.equal(node.regeneration, 0);
+    if (!node.balancedDistrict && ['ore', 'salvage', 'crystal'].includes(node.subtype)) assert.equal(node.regeneration, 0);
+    if (node.balancedDistrict) assert.ok(node.regeneration > 0, 'declared balanced supplies must replenish');
   }
 });
 

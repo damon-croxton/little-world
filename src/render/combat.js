@@ -51,8 +51,8 @@ export function createCombatEffects(THREE, scene) {
     time = Number.isFinite(time) ? time : state.time ?? state.tick;
     const events = state.combatEvents || [], key = `${state.step ?? state.tick}:${events.length}:${events.at(-1)?.id}`;
     if (lastState === state && lastTime === time && key === lastKey) { diagnostics.reusedFrame = true; return; }
-    if (lastState !== state || seed !== state.seed) groundCache.clear();
-    lastState = state; seed = state.seed; lastTime = time; lastKey = key; samples = [];
+    if (lastState !== state || seed !== (state.terrainSeed || state.seed)) groundCache.clear();
+    lastState = state; seed = (state.terrainSeed || state.seed); lastTime = time; lastKey = key; samples = [];
     for (const p of pools.values()) p.count = 0;
     for (const k of Object.keys(CAPS)) diagnostics[k] = 0;
     Object.assign(diagnostics, { visibleEffects: 0, droppedEffects: 0, drawCallsEstimate: 0, events: events.length, reusedFrame: false });

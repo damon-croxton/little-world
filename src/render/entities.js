@@ -717,10 +717,10 @@ export function createEntities(THREE, scene) {
   function updateHalo(state,time,selectedId) {
     const s=state.settlements.find(s=>s.id===selectedId);
     if(!s){halo.visible=false;haloKey='';return;}halo.visible=true;
-    const radius=Math.max(3,s.radius||8),key=`${state.seed}:${s.id}:${s.x}:${s.z}:${radius}`;
+    const radius=Math.max(3,s.radius||8),key=`${(state.terrainSeed || state.seed)}:${s.id}:${s.x}:${s.z}:${radius}`;
     if(key!==haloKey){
       haloKey=key;const points=[];
-      for(let i=0;i<128;i++){if(i%7===6)continue;for(const end of [0,.8]){const angle=(i+end)/128*Math.PI*2,x=s.x+Math.cos(angle)*radius,z=s.z+Math.sin(angle)*radius;points.push(x,heightAt(x,z,state.seed)+.085,z);}}
+      for(let i=0;i<128;i++){if(i%7===6)continue;for(const end of [0,.8]){const angle=(i+end)/128*Math.PI*2,x=s.x+Math.cos(angle)*radius,z=s.z+Math.sin(angle)*radius;points.push(x,heightAt(x,z,(state.terrainSeed || state.seed))+.085,z);}}
       halo.geometry.dispose();halo.geometry=new THREE.BufferGeometry();halo.geometry.setAttribute('position',new THREE.Float32BufferAttribute(points,3));
     }
     haloMaterial.opacity=.68+Math.sin(time*1.8)*.12;
@@ -741,7 +741,7 @@ export function createEntities(THREE, scene) {
       const dx=building.x-nearest.x,dz=building.z-nearest.z,rotation=Math.atan2(dx,dz),length=Math.max(.1,distance-1.65),pieces=Math.ceil(length/1.25);
       for(let i=0;i<pieces;i++){
         const f=(.8+(i+.5)*length/pieces)/distance,x=nearest.x+dx*f,z=nearest.z+dz*f;
-        segments.push({x,z,y:heightAt(x,z,state.seed)+.025,rotation,length:length/pieces+.02});
+        segments.push({x,z,y:heightAt(x,z,(state.terrainSeed || state.seed))+.025,rotation,length:length/pieces+.02});
       }
     }
     view.roads=segments;return segments;
@@ -749,13 +749,13 @@ export function createEntities(THREE, scene) {
 
   function update(state,time=0,selectedId=null,alpha=0) {
     if(disposed||!state)return;
-    if(lastSeed!==state.seed){lastSeed=state.seed;lastRevision='';buildingGround.clear();settlements.clear();haloKey='';}
+    if(lastSeed!==(state.terrainSeed || state.seed)){lastSeed=(state.terrainSeed || state.seed);lastRevision='';buildingGround.clear();settlements.clear();haloKey='';}
     updateHalo(state,time,selectedId);
     const camera=scene.userData.camera;
     const lodKey=camera?`${Math.round(camera.position.x/12)}:${Math.round(camera.position.y/12)}:${Math.round(camera.position.z/12)}`:'default';
     // Building work changes on simulation cycles. The small structural digest
     // also handles reset, refounding and direct inspection fixtures immediately.
-    const revision=`${state.seed}:${state.tick}:${lodKey}|`+state.settlements.map(s=>`${s.id}:${conditionOf(s)}:${s.radius}:${s.factionId}:${s.occupiedBy}:${s.controllerId||settlementController(state,s)}:`+(s.buildings||[]).map(b=>`${b.id}:${b.kind}:${b.x}:${b.z}:${b.rotation}:${b.progress}:${b.destroyed||b.hp<=0}:${b.hp}:${b.maxHp}:${b.length}:${b.width}:${b.from?.x}:${b.from?.z}:${b.to?.x}:${b.to?.z}:${b.gateWidth}:${b.open}:${b.gateOpen}:${b.topologyId}:${b.joins?.from}:${b.joins?.to}`).join(',')).join('|');
+    const revision=`${(state.terrainSeed || state.seed)}:${state.tick}:${lodKey}|`+state.settlements.map(s=>`${s.id}:${conditionOf(s)}:${s.radius}:${s.factionId}:${s.occupiedBy}:${s.controllerId||settlementController(state,s)}:`+(s.buildings||[]).map(b=>`${b.id}:${b.kind}:${b.x}:${b.z}:${b.rotation}:${b.progress}:${b.destroyed||b.hp<=0}:${b.hp}:${b.maxHp}:${b.length}:${b.width}:${b.from?.x}:${b.from?.z}:${b.to?.x}:${b.to?.z}:${b.gateWidth}:${b.open}:${b.gateOpen}:${b.topologyId}:${b.joins?.from}:${b.joins?.to}`).join(',')).join('|');
     if(revision===lastRevision)return;lastRevision=revision;
     for(const pool of pools.values())pool.count=0;
     for(const key of ['buildingRecords','completedBuildings','constructionSites','renderedBuildings','nearBuildings','farBuildings','ruinedBuildings','temporaryShelters','roadSegments','instances','drawCallsEstimate','camps','ruins','wallSegments','wallLength','wallJunctions','gatePassages','damagedBuildings'])diagnostics[key]=0;
@@ -765,7 +765,7 @@ export function createEntities(THREE, scene) {
     for(const s of state.settlements){
       const faction=factions.get(s.factionId)||factions.get(s.lastFactionId);if(!faction)continue;
       const species=['human','machine','hive'].includes(faction.species)?faction.species:'human',condition=conditionOf(s),color=new THREE.Color((factions.get(s.controllerId||settlementController(state,s))?.color)||faction.color||'#b9c09b');
-      const radius=Math.max(3,s.radius||8),base=ground(s.x,s.z,`settlement:${s.id}`,state.seed),distance=camera?camera.position.distanceTo(new THREE.Vector3(s.x,base,s.z)):100;
+      const radius=Math.max(3,s.radius||8),base=ground(s.x,s.z,`settlement:${s.id}`,(state.terrainSeed || state.seed)),distance=camera?camera.position.distanceTo(new THREE.Vector3(s.x,base,s.z)):100;
       const lod=distance>175?'far':'near';
       diagnostics.minRadius=Math.min(diagnostics.minRadius,radius);diagnostics.maxRadius=Math.max(diagnostics.maxRadius,radius);if(condition==='camp')diagnostics.camps++;if(condition==='ruin')diagnostics.ruins++;
       let view=settlements.get(s.id);if(!view){view={proxies:new Map(),roadKey:'',roads:[]};settlements.set(s.id,view);}live.add(s.id);
@@ -775,8 +775,8 @@ export function createEntities(THREE, scene) {
         if(building.kind==='housing'&&(building.destroyed||building.hp<=0))continue;
         const kind=KINDS.includes(building.kind)?building.kind:'housing',progress=clamp(Number.isFinite(building.progress)?building.progress:1,0,1),d=DIMENSIONS[kind];
         const shape=defensiveSpan(building),x=shape?.x??building.x,z=shape?.z??building.z,rotation=shape?.rotation??building.rotation??0;
-        const fromY=shape?ground(shape.from.x,shape.from.z,`defense:${s.id}:${building.id}:from`,state.seed):0,toY=shape?ground(shape.to.x,shape.to.z,`defense:${s.id}:${building.id}:to`,state.seed):0;
-        const y=(shape?(fromY+toY)/2:ground(x,z,`building:${s.id}:${building.id}`,state.seed))+.025,slope=shape?(toY-fromY)/shape.length:0;
+        const fromY=shape?ground(shape.from.x,shape.from.z,`defense:${s.id}:${building.id}:from`,(state.terrainSeed || state.seed)):0,toY=shape?ground(shape.to.x,shape.to.z,`defense:${s.id}:${building.id}:to`,(state.terrainSeed || state.seed)):0;
+        const y=(shape?(fromY+toY)/2:ground(x,z,`building:${s.id}:${building.id}`,(state.terrainSeed || state.seed)))+.025,slope=shape?(toY-fromY)/shape.length:0;
         diagnostics.buildingRecords++;diagnostics.byKind[kind]++;diagnostics.bySpecies[species]++;diagnostics.renderedBuildings++;diagnostics[lod==='near'?'nearBuildings':'farBuildings']++;
         const broken=building.destroyed||(building.hp!=null&&building.hp<=0),sx=DEFENSE_KINDS.includes(kind)?(shape?.length||building.length||d[0])/d[0]:1,sz=DEFENSE_KINDS.includes(kind)?(shape?.width||building.width||d[2])/d[2]:1;
         const health=Number.isFinite(building.hp)&&building.maxHp>0?clamp(building.hp/building.maxHp,0,1):1;
@@ -818,7 +818,7 @@ export function createEntities(THREE, scene) {
         const shelterCount=clamp(Math.ceil(s.population/30),1,4);
         for(let i=0;i<shelterCount;i++){
           const a=i/shelterCount*Math.PI*2+.5,x=s.x+Math.cos(a)*2.1,z=s.z+Math.sin(a)*2.1;
-          instance(getTemplate(species,'housing','near','shelter'),x,heightAt(x,z,state.seed),z,a,1,1,1,color);diagnostics.temporaryShelters++;
+          instance(getTemplate(species,'housing','near','shelter'),x,heightAt(x,z,(state.terrainSeed || state.seed)),z,a,1,1,1,color);diagnostics.temporaryShelters++;
         }
       }
       // An empty camp/ruin remains inspectable even if its building records were

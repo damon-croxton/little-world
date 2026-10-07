@@ -54,6 +54,7 @@ async function accept() {
     assert.equal(await page.title(), 'LittleWorld V2 — A living frontier');
     assert.equal(await page.locator('#app canvas').count(), 1);
     assert.equal(await page.locator('.faction-entry').count(), config.civCount);
+    assert.match(await page.locator('.balanced-district').innerText(), /0.80 fertility/);
     report.environment = await environment(page, browser, config);
     return report.environment;
   });
@@ -174,6 +175,20 @@ async function accept() {
     await page.setViewportSize({ width: 1280, height: 800 }); await rendered(); return bounds;
   });
   await page.screenshot({ path: output(config, 'smoke.png') });
+  await check('Changing civilisation count rebuilds balanced geometry while preserving the entered seed', async () => {
+    const before = await page.evaluate(() => ({ seed: littleworld.state.seed, terrainSeed: littleworld.state.terrainSeed }));
+    await button('settings').click(); await page.locator('#atlas-civs').selectOption('3');
+    await page.locator('.seed-form button[type="submit"]').click(); await rendered();
+    const facts = await page.evaluate(async () => {
+      const w = littleworld, { heightAt } = await import(new URL('./src/world.js', location.href).href);
+      return { seed: w.state.seed, terrainSeed: w.state.terrainSeed, count: w.state.config.civCount, factions: w.state.factions.length,
+        clearings: w.state.settlements.map(h => heightAt(h.x, h.z, w.state.terrainSeed)), terrainSites: w.diagnostics.terrain.resourceSites, step: w.state.step };
+    });
+    assert.equal(facts.seed, before.seed); assert.notEqual(facts.terrainSeed, before.terrainSeed);
+    assert.equal(facts.count, 3); assert.equal(facts.factions, 3); assert.equal(facts.terrainSites, 160);
+    assert.ok(facts.clearings.every(y => Math.abs(y - 2.2) < 1e-8)); assert.equal(facts.step, 0);
+    assert.equal(await page.locator('.faction-entry').count(), 3); return facts;
+  });
   await battleSmoke({ page, check, screenshotPath: output(config, 'battle-smoke.png') });
   await check('No runtime, module or HTTP errors', async () => assert.deepEqual(report.errors, []));
 }

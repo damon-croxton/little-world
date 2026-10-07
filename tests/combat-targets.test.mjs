@@ -23,7 +23,7 @@ function fixture() {
   outer: for (let z = -72; z < 72; z += 6) for (let x = -72; x < 72; x += 6) {
     const points = [];
     for (let dz = -10; dz <= 10; dz += 2) for (let dx = -10; dx <= 10; dx += 2) points.push({ x: x + dx, z: z + dz });
-    if (points.every(p => terrainAt(p.x, p.z, s.seed).traversable) && lineOfSight(s, { x: x - 7, z }, { x: x + 7, z }, { fromHeight: .6, toHeight: .6 })) { center = { x, z }; break outer; }
+    if (points.every(p => terrainAt(p.x, p.z, s.terrainSeed || s.seed).traversable) && lineOfSight(s, { x: x - 7, z }, { x: x + 7, z }, { fromHeight: .6, toHeight: .6 })) { center = { x, z }; break outer; }
   }
   assert.ok(center);
   for (const [i, home] of s.settlements.entries()) Object.assign(home, { x: center.x + 80 + i * 25, z: center.z + 60 });

@@ -242,15 +242,15 @@ function stepResearch(state, faction, homes) {
   if ((state.tick + phase) % 8 !== 0) return;
   debit(state, home, installment, 'research');
   for (const [kind, amount] of Object.entries(installment)) faction.tech.invested[kind] += amount;
-  const terrain = terrainAt(home.x, home.z, state.seed);
+  const terrain = terrainAt(home.x, home.z, state.terrainSeed || state.seed);
   // Different surroundings reward different experiments; no random winner roll.
-  const habitatFit = faction.species === 'human' ? (terrain.biome === 'meadow' ? 1.12 : terrain.biome === 'desert' && project.id === 'irrigation' ? 1.20 : 1)
+  const habitatFit = terrain.balancedDistrict ? 1 : faction.species === 'human' ? (terrain.biome === 'meadow' ? 1.12 : terrain.biome === 'desert' && project.id === 'irrigation' ? 1.20 : 1)
     : faction.species === 'machine' ? (terrain.biome === 'desert' ? 1.16 : 1)
     : terrain.biome === 'alien' ? 1.18 : terrain.fertility > .6 ? 1.10 : 1;
   const experienceBonus = 1 + Math.min(.20, experienceOf(faction) * .012);
   const work = (6 + faction.researchWorkers * 1.8 + faction.traits.industry * 4 + faction.traits.curiosity * 2) * habitatFit * experienceBonus * throughput;
   faction.tech.progress += work;
-  faction.tech.environment = `${terrain.biome}: ×${habitatFit.toFixed(2)} trial yield`;
+  faction.tech.environment = `${terrain.balancedDistrict ? "Balanced district" : terrain.biome}: ×${habitatFit.toFixed(2)} trial yield`;
   if (faction.tech.progress < faction.tech.requiredProgress) return;
   faction.tech.progress = 0;
   faction.tech.level++;

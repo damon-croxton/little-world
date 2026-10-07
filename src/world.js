@@ -1,9 +1,54 @@
 import { normalizeConfig } from './config.js';
 
-// Pure terrain contract: the surface depends only on the seed. Resource
-// placement also uses the selected start count; render time and simulation
-// random state never enter these functions.
+// Terrain is pure in its explicit terrain key (seed + count + map version).
+// The public seed and simulation RNG remain unchanged. Plain seed geometry is
+// retained for isolated terrain fixtures; generated worlds use the versioned key.
 const cache = new Map();
+const MAP_PREFIX = '@balanced-v1:';
+export const BALANCED_DISTRICT = Object.freeze({ radius: 20, shoulder: 10, starterRadius: 92, expansionRadius: 44, resourceDistance: 16, fertility: .8, movement: 1, approachWidth: 8 });
+export const BALANCED_SUPPLIES = Object.freeze({
+  start: { food: 1400, water: 1400, energy: 1800, materials: 1200 },
+  expansion: { food: 1800, water: 1800, energy: 2200, materials: 1600 },
+  regeneration: { food: .4, water: 1.6, energy: .6, materials: .085 }, richness: .7,
+});
+export function worldTerrainSeed(seed, options = {}) { return `${MAP_PREFIX}${normalizeConfig(options).civCount}:${String(seed)}`; }
+function terrainIdentity(value) {
+  const text = String(value), match = text.startsWith(MAP_PREFIX) && text.slice(MAP_PREFIX.length).match(/^([3-6]):([\s\S]*)$/);
+  return match ? { seed: match[2], civCount: Number(match[1]) } : { seed: text, civCount: null };
+}
+function balancedLayout(rotation, count) {
+  if (!count) return { districts: [], approaches: [], balanceBins: new Map() };
+  const districts = [], approaches = [], balanceBins = new Map();
+  const bin = (shape, minX, maxX, minZ, maxZ) => {
+    for (let x = Math.floor(minX / 32); x <= Math.floor(maxX / 32); x++) for (let z = Math.floor(minZ / 32); z <= Math.floor(maxZ / 32); z++) {
+      const key = `${x},${z}`; if (!balanceBins.has(key)) balanceBins.set(key, []); balanceBins.get(key).push(shape);
+    }
+  };
+  for (let i = 0; i < count; i++) {
+    const angle = i / count * Math.PI * 2 + Math.PI / 6 + rotation;
+    for (const kind of ['start', 'expansion']) {
+      const reach = kind === 'start' ? BALANCED_DISTRICT.starterRadius : BALANCED_DISTRICT.expansionRadius;
+      const area = { id: `${kind}-${i}`, kind, slot: i, x: Math.cos(angle) * reach, z: Math.sin(angle) * reach, angle, radius: BALANCED_DISTRICT.radius };
+      districts.push(area); bin(area, area.x - 30, area.x + 30, area.z - 30, area.z + 30);
+    }
+    const from = districts.at(-2), approach = { id: `approach-${i}`, kind: 'approach', x: from.x, z: from.z, dx: -from.x, dz: -from.z, length2: from.x ** 2 + from.z ** 2, radius: BALANCED_DISTRICT.approachWidth / 2 };
+    approaches.push(approach); bin(approach, Math.min(0, from.x) - 14, Math.max(0, from.x) + 14, Math.min(0, from.z) - 14, Math.max(0, from.z) + 14);
+  }
+  return { districts, approaches, balanceBins };
+}
+function balanceAt(x, z, p) {
+  let strongest = null;
+  for (const area of p.balanceBins.get(`${Math.floor(x / 32)},${Math.floor(z / 32)}`) || []) {
+    const t = area.kind === 'approach' ? clamp(((x - area.x) * area.dx + (z - area.z) * area.dz) / area.length2) : 0;
+    const d = Math.hypot(x - area.x - (area.dx || 0) * t, z - area.z - (area.dz || 0) * t);
+    if (d <= area.radius) return { area, weight: 1, core: true };
+    const weight = 1 - smooth(area.radius, area.radius + BALANCED_DISTRICT.shoulder, d);
+    if (weight > (strongest?.weight || 0)) strongest = { area, weight, core: d <= area.radius + 1e-8 };
+  }
+  return strongest;
+}
+export function balancedDistrictAt(x, z, seed) { const found = balanceAt(x, z, parameters(seed)); return found?.core ? found.area : null; }
+
 export const WORLD_RADIUS = 180;
 export const LAND_SCALE = 4;
 export const RESOURCE_RADIUS = WORLD_RADIUS * .88;
@@ -24,7 +69,7 @@ function randomGenerator(seed) {
 function parameters(seed) {
   const key = String(seed);
   if (cache.has(key)) return cache.get(key);
-  const hash = hashSeed(key), rand = randomGenerator(hash);
+  const identity = terrainIdentity(key), hash = hashSeed(identity.seed), rand = randomGenerator(hash);
   const phase = rand() * Math.PI * 2;
   const rotation = (rand() - .5) * .2;
   const starts = Array.from({ length: 6 }, (_, i) => {
@@ -46,7 +91,7 @@ function parameters(seed) {
     id: `${ridge.id}-pass-${i}`, kind: 'mountain-pass', x: ridge.x + Math.cos(ridge.angle) * along,
     z: ridge.z + Math.sin(ridge.angle) * along, width: 10, axis: ridge.angle + Math.PI / 2, obstacleId: ridge.id,
   })))];
-  const p = { hash, phase, starts, offset, rotation, ridges, fords, passes };
+  const p = { hash, phase, starts, offset, rotation, ridges, fords, passes, ...balancedLayout(rotation, identity.civCount) };
 
   if (cache.size > 16) cache.delete(cache.keys().next().value);
   cache.set(key, p);
@@ -87,7 +132,9 @@ export function biomeAt(x, z, seed = 'littleworld') {
 export function heightAt(x, z, seed = 'littleworld') {
   const worldX = x, worldZ = z;
   x /= LAND_SCALE; z /= LAND_SCALE;
-  const p = parameters(seed), r = Math.hypot(x, z), interior = r < 35.8;
+  const p = parameters(seed), balanced = balanceAt(worldX, worldZ, p);
+  if (balanced?.core) return 2.2;
+  const r = Math.hypot(x, z), interior = r < 35.8;
   const shore = interior ? 42.5 : Math.min(shoreRadius(Math.atan2(z, x), p), WORLD_RADIUS / LAND_SCALE - 2);
   if (r > shore + 3.5) return -3.8;
   const n1 = noise(x * .055 + p.offset, z * .055, p.hash);
@@ -114,7 +161,8 @@ export function heightAt(x, z, seed = 'littleworld') {
     h = mix(h, mix(-1.15, .13, ford) + n3 * .04, valley * riverLength);
   }
   for (const ridge of p.ridges) h += ridge.height * ridgeAmount(worldX, worldZ, ridge);
-  return interior ? h : mix(-3.8, h, 1 - smooth(shore - 3.2, shore + 3.5, r));
+  const surface = interior ? h : mix(-3.8, h, 1 - smooth(shore - 3.2, shore + 3.5, r));
+  return balanced ? mix(surface, 2.2, balanced.weight) : surface;
 }
 
 function passAt(x, z, p) {
@@ -127,19 +175,20 @@ function passAt(x, z, p) {
 }
 
 export function terrainAt(x, z, seed = 'littleworld') {
-  const p = parameters(seed), height = heightAt(x, z, seed), biome = biomeAt(x, z, seed);
+  const p = parameters(seed), height = heightAt(x, z, seed), biome = biomeAt(x, z, seed), balanced = balancedDistrictAt(x, z, seed);
   const dx = heightAt(x + .7, z, seed) - heightAt(x - .7, z, seed);
   const dz = heightAt(x, z + .7, seed) - heightAt(x, z - .7, seed);
   const slope = Math.hypot(dx, dz) / 1.4, roughness = clamp(slope / 1.9);
   const water = height < .32, deepWater = height < -.3;
-  const cliff = slope > 1.15 || p.ridges.some(ridge => ridgeAmount(x, z, ridge) > .12);
+  const cliff = !balanced && (slope > 1.15 || p.ridges.some(ridge => ridgeAmount(x, z, ridge) > .12));
   const blockedBy = Math.abs(x) >= WORLD_RADIUS || Math.abs(z) >= WORLD_RADIUS ? 'world-edge' : deepWater ? 'deep-water' : cliff ? 'cliff' : null;
   const pass = passAt(x, z, p);
   return {
     height, biome, roughness, slope, water, deepWater, cliff, blockedBy, traversable: blockedBy === null,
     passId: pass?.id ?? null,
-    movement: blockedBy ? 0 : clamp((water ? .61 : 1) - roughness * .46 - (biome === 'desert' ? .08 : 0), .32, 1),
-    fertility: water ? .12 : clamp(({ meadow: .83, desert: .22, alien: .66 }[biome]) - roughness * .28)
+    balancedDistrict: balanced ? { id: balanced.id, kind: balanced.kind } : null,
+    movement: blockedBy ? 0 : balanced ? BALANCED_DISTRICT.movement : clamp((water ? .61 : 1) - roughness * .46 - (biome === 'desert' ? .08 : 0), .32, 1),
+    fertility: balanced ? BALANCED_DISTRICT.fertility : water ? .12 : clamp(({ meadow: .83, desert: .22, alien: .66 }[biome]) - roughness * .28)
   };
 }
 
@@ -150,6 +199,8 @@ export function terrainAt(x, z, seed = 'littleworld') {
 export function isTerrainTraversable(x, z, seed = 'littleworld') {
   if (!Number.isFinite(x) || !Number.isFinite(z) || Math.abs(x) >= WORLD_RADIUS || Math.abs(z) >= WORLD_RADIUS) return false;
   const p = parameters(seed);
+  const balanced = balanceAt(x, z, p);
+  if (balanced) return balanced.core || terrainAt(x, z, seed).traversable;
   const safeInterior = 35.8 * LAND_SCALE - 1, riverMargin = 4.2 * LAND_SCALE + .7;
   let ordinary = x * x + z * z < safeInterior * safeInterior;
   ordinary &&= x < -7.5 * LAND_SCALE - riverMargin || x > 2.9 * LAND_SCALE + riverMargin || Math.abs(x - riverX(z / LAND_SCALE, p) * LAND_SCALE) > riverMargin;
@@ -172,6 +223,7 @@ export function terrainFeatures(seed = 'littleworld') {
   return {
     obstacles: p.ridges.map(r => ({ ...r, gaps: [...r.gaps] })),
     passes: p.passes.map(p => ({ ...p })),
+    districts: p.districts.map(p => ({ ...p })),
   };
 }
 
@@ -184,54 +236,16 @@ function usableWorksite(x, z, seed) {
   return true;
 }
 
-function clearSegment(from, to, seed) {
-  const d = Math.hypot(to.x - from.x, to.z - from.z), steps = Math.max(1, Math.ceil(d / 1.2));
-  for (let i = 0; i <= steps; i++) {
-    const t = i / steps;
-    if (!terrainAt(mix(from.x, to.x, t), mix(from.z, to.z, t), seed).traversable) return false;
-  }
-  return true;
-}
-
-// Count-specific starts use the same physical island. A natural clearing is
-// chosen near each evenly spaced bearing, instead of taking adjacent sites
-// from the old six-start array. Every candidate fits a real settlement disk.
+// Count-specific balanced clearings are part of the physical terrain key.
 export function startingPositions(seed = 'littleworld', options = {}) {
-  const p = parameters(seed), { civCount } = normalizeConfig(options), starts = [];
-  for (let i = 0; i < civCount; i++) {
-    const bearing = i / civCount * Math.PI * 2 + Math.PI / 6 + p.rotation;
-    let best = null;
-    for (const turn of [0, .07, -.07, .14, -.14, .21, -.21, .28, -.28]) for (const radius of [92, 98, 86, 104, 80, 110]) {
-      const x = Math.cos(bearing + turn) * radius, z = Math.sin(bearing + turn) * radius;
-      if (starts.some(s => Math.hypot(s.x - x, s.z - z) < 52)) continue;
-      let valid = true, roughness = 0;
-      for (let j = 0; j < 17; j++) {
-        const r = j === 16 ? 0 : 13, a = j / 16 * Math.PI * 2;
-        const ground = terrainAt(x + Math.cos(a) * r, z + Math.sin(a) * r, seed);
-        if (!ground.traversable || ground.height < .65 || ground.slope > .4) { valid = false; break; }
-        roughness += ground.roughness;
-      }
-      if (!valid) continue;
-      const score = Math.abs(turn) * 18 + Math.abs(radius - 92) * .08 + roughness;
-      if (!best || score < best.score) best = { x, z, score };
-    }
-    // Wide angular search is a deterministic fallback for unusual shoreline
-    // noise; it never fabricates a point on water or a steep face.
-    if (!best) for (let attempt = 0; attempt < 240; attempt++) {
-      const angle = bearing + ((attempt % 15) - 7) * .035, radius = 76 + Math.floor(attempt / 15) * 2;
-      const candidate = { x: Math.cos(angle) * radius, z: Math.sin(angle) * radius };
-      if (starts.some(s => Math.hypot(s.x - candidate.x, s.z - candidate.z) < 45)) continue;
-      if (Array.from({ length: 16 }, (_, j) => ({ x: candidate.x + Math.cos(j / 16 * Math.PI * 2) * 12, z: candidate.z + Math.sin(j / 16 * Math.PI * 2) * 12 })).every(point => terrainAt(point.x, point.z, seed).traversable && heightAt(point.x, point.z, seed) > .65)) { best = candidate; break; }
-    }
-    if (!best) throw new Error(`Unable to place civilization ${i + 1} on seed ${seed}`);
-    starts.push({ x: best.x, z: best.z });
-  }
-  return starts;
+  const p = parameters(worldTerrainSeed(seed, options));
+  return p.districts.filter(d => d.kind === 'start').map(({ x, z }) => ({ x, z }));
 }
 
 export function generateWorld(seed = 'littleworld', options = {}) {
-  const config = normalizeConfig(options), p = parameters(seed), rand = randomGenerator(p.hash ^ 0x4C1F0123);
-  const nodes = [], starts = startingPositions(seed, config);
+  const config = normalizeConfig(options), p = parameters(worldTerrainSeed(seed, config)), rand = randomGenerator(p.hash ^ 0x4C1F0123);
+  const nodes = [], starts = startingPositions(seed, config), terrainSeed = worldTerrainSeed(seed, config);
+  const districts = parameters(terrainSeed).districts;
   const kinds = ['food', 'water', 'energy', 'materials'];
   const subtypeFor = (kind, biome) => {
     if (kind === 'water') return 'spring';
@@ -241,7 +255,7 @@ export function generateWorld(seed = 'littleworld', options = {}) {
     return biome === 'meadow' && choice < .55 ? 'forest' : choice > .68 ? 'salvage' : 'ore';
   };
   const add = (kind, x, z, nearHome = false, subtype = null) => {
-    const biome = biomeAt(x, z, seed);
+    const biome = biomeAt(x, z, terrainSeed);
     const affinity = (kind === 'food' && biome === 'meadow') || (kind === 'energy' && biome === 'alien') || (kind === 'materials' && biome === 'desert');
     const richness = Math.min(1, .35 + rand() * .45 + (affinity ? .18 : 0));
     subtype ||= subtypeFor(kind, biome);
@@ -249,16 +263,16 @@ export function generateWorld(seed = 'littleworld', options = {}) {
     const regeneration = ({ forest: .17, crop: .8, biomass: .9, spring: 3.4, solar: 1.2, ore: 0, crystal: 0, salvage: 0 }[subtype]) * (.65 + richness * .65) * .45;
     nodes.push({ id: `n${nodes.length}`, kind, subtype, x, z, amount: maxAmount, maxAmount, richness, biome, regeneration, radius: 2.2 + richness * 2.3 });
   };
-  for (const start of starts) {
-    for (let j = 0; j < 4; j++) {
-      let x, z, placed = false;
-      for (let attempt = 0; attempt < 120; attempt++) {
-        const angle = j / 4 * Math.PI * 2 + rand() * .4 + attempt * .381, radius = (j < 4 ? 14 : 20) + rand() * 3.8;
-        x = start.x + Math.cos(angle) * radius; z = start.z + Math.sin(angle) * radius;
-        if (heightAt(x, z, seed) > .55 && Math.hypot(x, z) < RESOURCE_RADIUS && usableWorksite(x, z, seed) && clearSegment(start, { x, z }, seed)) { placed = true; break; }
-      }
-      if (!placed) { const angle = j / 4 * Math.PI * 2; x = start.x + Math.cos(angle) * 9; z = start.z + Math.sin(angle) * 9; }
-      add(kinds[j % 4], x, z, true);
+  // Matched resource sets have the same yield/replenishment despite their
+  // biome-specific art. Energy covers machine upkeep; food covers hive upkeep.
+  // Starter nodes remain first, preserving stable starter-node ordering.
+  for (const kind of ['start', 'expansion']) for (const area of districts.filter(d => d.kind === kind)) {
+    for (const [j, resource] of kinds.entries()) {
+      const angle = area.angle + j / 4 * Math.PI * 2, x = area.x + Math.cos(angle) * BALANCED_DISTRICT.resourceDistance, z = area.z + Math.sin(angle) * BALANCED_DISTRICT.resourceDistance;
+      const subtype = subtypeFor(resource, biomeAt(x, z, terrainSeed)), amount = BALANCED_SUPPLIES[kind][resource];
+      nodes.push({ id: `n${nodes.length}`, kind: resource, subtype, x, z, amount, maxAmount: amount, richness: BALANCED_SUPPLIES.richness,
+        biome: biomeAt(x, z, terrainSeed), regeneration: BALANCED_SUPPLIES.regeneration[resource], radius: 2.2 + BALANCED_SUPPLIES.richness * 2.3,
+        balancedDistrict: area.id, foundingSite: kind === 'expansion' ? { id: area.id, x: area.x, z: area.z } : null });
     }
   }
   // Rich frontier clusters make travel and shared borders meaningful. Their
@@ -274,12 +288,12 @@ export function generateWorld(seed = 'littleworld', options = {}) {
       const cluster = clusters[Math.floor(rand() * clusters.length)], spread = Math.sqrt(rand()) * 20;
       x = cluster.x + Math.cos(angle) * spread; z = cluster.z + Math.sin(angle) * spread;
     }
-    if (!terrainAt(x, z, seed).traversable || heightAt(x, z, seed) < .6 || Math.hypot(x, z) > RESOURCE_RADIUS || starts.some(s => Math.hypot(s.x - x, s.z - z) < 12)) continue;
+    if (!terrainAt(x, z, terrainSeed).traversable || heightAt(x, z, terrainSeed) < .6 || Math.hypot(x, z) > RESOURCE_RADIUS || districts.some(d => Math.hypot(d.x - x, d.z - z) < (d.kind === 'start' ? 36 : 28))) continue;
     // Keep the whole worksite on connected, usable ground, rather than placing
     // deposits on a tiny bank ledge that a route cannot physically approach.
-    if (!usableWorksite(x, z, seed)) continue;
+    if (!usableWorksite(x, z, terrainSeed)) continue;
     if (nodes.some(n => Math.hypot(n.x - x, n.z - z) < 5.3)) continue;
     add(kinds[Math.floor(rand() * kinds.length)], x, z);
   }
-  return { nodes, starts, config, ...terrainFeatures(seed), bounds: { minX: -WORLD_RADIUS, maxX: WORLD_RADIUS, minZ: -WORLD_RADIUS, maxZ: WORLD_RADIUS } };
+  return { nodes, starts, config, terrainSeed, ...terrainFeatures(terrainSeed), bounds: { minX: -WORLD_RADIUS, maxX: WORLD_RADIUS, minZ: -WORLD_RADIUS, maxZ: WORLD_RADIUS } };
 }

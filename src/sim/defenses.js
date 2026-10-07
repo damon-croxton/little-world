@@ -101,7 +101,7 @@ function segmentDistance(point, from, to) {
   return Math.hypot(point.x - from.x - dx * t, point.z - from.z - dz * t);
 }
 function footprintClear(state, home, plan) {
-  if (plan.kind === 'tower') return terrainAt(plan.x, plan.z, state.seed).traversable && !home.buildings.some(b => !b.destroyed && distance(b, plan) < 3.5);
+  if (plan.kind === 'tower') return terrainAt(plan.x, plan.z, state.terrainSeed || state.seed).traversable && !home.buildings.some(b => !b.destroyed && distance(b, plan) < 3.5);
   // Check the full wall footprint, not just its center on a riverbank.
   if (!isSegmentTraversable(state, plan.from, plan.to, { radius: .8, ignoreWalls: true })) return false;
   return !home.buildings.some(b => !b.destroyed && b.topologyId !== plan.topologyId && segmentDistance(b, plan.from, plan.to) < (DEFENSE_STATS[b.kind] ? 2.5 : 3.5));
@@ -135,7 +135,7 @@ function perimeterBlueprint(state, home, faction, objective, civicRadius) {
       let vertex = null;
       for (const inset of [0, -2, 2, -4, 4]) {
         const reach = Math.max(civicRadius + 4, radius + inset), point = { x: home.x + Math.cos(turn) * reach, z: home.z + Math.sin(turn) * reach };
-        if (!terrainAt(point.x, point.z, state.seed).traversable || home.buildings.some(b => !b.destroyed && !DEFENSE_STATS[b.kind] && distance(b, point) < 4)) continue;
+        if (!terrainAt(point.x, point.z, state.terrainSeed || state.seed).traversable || home.buildings.some(b => !b.destroyed && !DEFENSE_STATS[b.kind] && distance(b, point) < 4)) continue;
         if (vertices.length && !isSegmentTraversable(state, vertices.at(-1), point, { radius: .8, ignoreWalls: true })) continue;
         vertex = point; break;
       }
