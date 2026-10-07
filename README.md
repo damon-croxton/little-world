@@ -191,6 +191,8 @@ crew size, carrying capacity and proportional cargo once; damaged crews flee
 toward home or take a reachable sidestep around a visible attacker. Their badge
 and inspector show the survivors. Raiders interrupt for defenders, consider
 nearby support and towers, and stop unproductive or overlong worker pursuits.
+Surviving field parties can select a freshly reported larger civilian crew;
+reported escorts and garrisons determine protection rather than civilian count.
 The pursuit limit is ten simulation seconds, with an earlier stop after 3.5
 seconds without closing or causing damage. Futile harassment parties return home.
 Rallying forces keep their march and can fire at exposed crews already in weapon
@@ -201,6 +203,8 @@ and small emergency harvest fallback still govern recovery.
 Soldiers check their complete endpoint footprint near banks and cliffs. Group
 movement uses the same clearance as replanning, and shared route history retains
 turns and gates for lagging survivors without individual global path searches.
+Repeated footprint checks cache immutable terrain at exact coordinates; walls
+and gate permissions are still checked against current physical control.
 
 Enclosing perimeters supersede the former front-only screens. A cached terrain-checked
 blueprint surrounds the current civic footprint; construction remains staged and

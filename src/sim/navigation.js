@@ -10,6 +10,7 @@ const GRID_COUNT = GRID_SIDE * GRID_SIDE;
 const SIGHT_SIDE = WORLD_RADIUS * 4 + 1, SIGHT_OFFSET = WORLD_RADIUS * 2;
 const SAMPLE_SPACING = .85;
 const staticCache = new Map();
+const footprintCaches = new Map();
 const stateCache = new WeakMap();
 const directions = [[1, 0], [0, 1], [-1, 0], [0, -1], [1, 1], [-1, 1], [-1, -1], [1, -1]];
 const footprintDirections = [[1, 0], [-1, 0], [0, 1], [0, -1], [.70710678, .70710678], [-.70710678, .70710678], [.70710678, -.70710678], [-.70710678, -.70710678]];
@@ -145,15 +146,27 @@ function wallsBlock(state, from, to, options) {
   }
   return false;
 }
+function terrainFootprint(seed, point, radius) {
+  let cache = footprintCaches.get(seed);
+  if (!cache) {
+    footprintCaches.set(seed, cache = new Map());
+    if (footprintCaches.size > 8) footprintCaches.delete(footprintCaches.keys().next().value);
+  }
+  // Exact coordinates, not rounded cells: banks can change within one step.
+  // Local steering tests the same starting footprint in several directions;
+  // static route edges likewise share endpoints. Cache only immutable terrain.
+  const key = `${point.x}:${point.z}:${radius}`;
+  if (cache.has(key)) return cache.get(key);
+  const clear = footprintDirections.every(([dx, dz]) => isTerrainTraversable(point.x + dx * radius, point.z + dz * radius, seed));
+  cache.set(key, clear);
+  if (cache.size > 8192) cache.delete(cache.keys().next().value);
+  return clear;
+}
 function terrainSegment(seed, from, to, radius = 0) {
   // A body occupies the same footprint when stationary or changing direction.
   // The former sideways-only strip could end with its toes over a bank and
   // then reject every turn, stranding a real soldier after the squad moved on.
-  if (radius > 0) for (const point of [from, to]) {
-    for (const [dx, dz] of footprintDirections) {
-      if (!isTerrainTraversable(point.x + dx * radius, point.z + dz * radius, seed)) return false;
-    }
-  }
+  if (radius > 0 && (!terrainFootprint(seed, from, radius) || !terrainFootprint(seed, to, radius))) return false;
   const d = distance(from, to), steps = Math.max(1, Math.ceil(d / SAMPLE_SPACING));
   const nx = d ? -(to.z - from.z) / d * radius : radius, nz = d ? (to.x - from.x) / d * radius : 0;
   for (let i = 0; i <= steps; i++) {

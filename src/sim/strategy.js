@@ -366,12 +366,21 @@ function continueCampaign(s, g, captured) {
   return true;
 }
 
+function reportedWorkerProtection(s, f, worker, reports, size) {
+  return reports.some(report => report.ownerId && relation(f, report.ownerId).status === 'hostile' && s.tick >= report.observedTick &&
+    (report.kind === 'group' && report.groupKind === 'army' && report.sizeEstimate > 0 && s.tick - report.observedTick <= 24 && distance(worker, report) < 20 ||
+      report.kind === 'settlement' && !['camp', 'ruin'].includes(report.status) && report.soldiersEstimate >= Math.max(4, size * .65) && s.tick - report.observedTick <= 80 && distance(worker, report) < 24));
+}
+
 function continueFieldObjective(s, g, f) {
   if (g.supply < 60 || g.morale < 65 || g.size < 4) return false;
   const reports = [...(g.observations || []), ...knownReports(s, f, { maxAge: 80, minConfidence: .4, includeOwn: false })];
   const candidates = reports.filter(k => k.id !== g.targetId && k.ownerId && k.ownerId !== f.id && relation(f, k.ownerId).status === 'hostile' &&
-    s.tick - k.observedTick <= 80 && distance(g, k) < 35 &&
-    (k.kind === 'group' && k.groupKind === 'worker' && k.sizeEstimate <= g.size || k.kind === 'settlement' && !['camp', 'ruin'].includes(k.status) && (k.soldiersEstimate ?? Infinity) < g.size * .65))
+    s.tick >= k.observedTick && s.tick - k.observedTick <= 80 && distance(g, k) < 35 &&
+    // Civilian headcount is an economic target's value, not defending military
+    // strength. Require fresh activity and evaluate reported protection instead.
+    (k.kind === 'group' && k.groupKind === 'worker' && k.sizeEstimate > 0 && k.sizeEstimate <= 24 && s.tick - k.observedTick <= 18 && !reportedWorkerProtection(s, f, k, reports, g.size) ||
+      k.kind === 'settlement' && !['camp', 'ruin'].includes(k.status) && (k.soldiersEstimate ?? Infinity) < g.size * .65))
     .sort((a, b) => distance(g, a) - distance(g, b));
   for (const k of candidates) {
     const route = findPath(expeditionPlanningWorld(s, f, g), g, k, { factionId: f.id, arrival: .45, maxExpansions: 800 });
@@ -756,16 +765,15 @@ export function dispatchHarassment(s, f, homes) {
   if (s.tick < 70 || s.tick - (f.lastHarassment ?? -40) < 40 || s.groups.length >= MAX_GROUPS ||
     s.groups.filter(g => g.kind === 'army' && !g.finished && groupController(s, g) === f.id).length >= 4 ||
     s.groups.some(g => g.missionKind === 'harassment' && !g.finished && groupController(s, g) === f.id)) return;
-  const reported = knownReports(s, f, { kind: 'group', maxAge: 18, minConfidence: .5, includeOwn: false });
-  const workers = reported.filter(k => k.groupKind === 'worker' && k.sizeEstimate > 0 && k.sizeEstimate <= 24 && relation(f, k.ownerId).status === 'hostile' &&
-    !reported.some(other => other.groupKind === 'army' && other.ownerId === k.ownerId && distance(k, other) < 20));
+  const reported = knownReports(s, f, { maxAge: 80, minConfidence: .5, includeOwn: false });
+  const workers = reported.filter(k => k.kind === 'group' && k.groupKind === 'worker' && s.tick - k.observedTick <= 18 && k.sizeEstimate > 0 && k.sizeEstimate <= 24 && relation(f, k.ownerId).status === 'hostile');
   for (const home of homes) {
     const defense = homeDefense(s, f, home, []);
     if (defense.observedThreat || defense.deployable < 6) continue;
-    const target = workers.filter(k => distance(home, k) < 48).sort((a, b) => distance(home, a) - distance(home, b))[0];
-    if (!target) continue;
     const units = allocateMilitary(s, home, Math.min(8, defense.deployable)), size = countMilitary(units);
     if (size < 4) continue;
+    const target = workers.filter(k => distance(home, k) < 48 && !reportedWorkerProtection(s, f, k, reported, size)).sort((a, b) => distance(home, a) - distance(home, b))[0];
+    if (!target) continue;
     const biology = { ...f, species: factionOf(s, home.factionId)?.species || f.species }, speed = 2.9;
     const route = campaignRoute(s, f, home, target, size, speed); if (!route || route.provisionFactor > 2) continue;
     const costs = Object.fromEntries(Object.entries(provisions(biology, size, true)).map(([key, value]) => [key, value * route.provisionFactor]));

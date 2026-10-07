@@ -1,5 +1,31 @@
 # Cloud worker-combat follow-up — 2026-10-07
 
+Follow-up cdd8181469e16da45de0454e369b421e3b7e06c9 is now published and verified.
+Actions 37616857626 completed green: 372 tests (177.19s), 21 built browser checks
+(89.79s), 21 public checks (88.08s). The public marker matched exactly and pinned
+Chromium 153.0.8010.12 booted WebGL without errors. Verified public artifact
+11480198085 / file_00000000ac0c820b89f5129f30ba1d7c, digest
+e500ac8dc9085802c9c50ce5d1fa7e6f5955a06c3b8de3904ad88c53abd01863. Receipt and
+same-camera worker before/after images: screenshots/worker-combat/cdd8181-public-ci/.
+
+Fresh 250-cycle observation of cdd8181: 222 deliveries, one colony, 25 passing
+accounting checkpoints, no shortages and no invalid group/soldier footing.
+Every returning army was moving at the final checkpoint. A subsequent 50-cycle
+continuation reached 269 deliveries; the new colony briefly ran short at 260 and
+recovered by 270. Five more accounting checkpoints passed. No natural worker
+casualties occurred through 300; do not substitute controlled combat for that fact.
+
+Next narrow correction removes civilian-count-as-military-strength from field
+opportunity selection: four supplied survivors may select a reported twelve-worker
+crew, while stale activity, recent escorts and reported garrisons veto it. Home
+dispatch shares the protection check and retains its 48-unit range, reserves and
+paid supply limits. A bounded exact-coordinate cache avoids repeated immutable
+terrain-footprint work; gates/walls remain dynamic. Replaying the same 50 cycles
+matched the complete simulation state exactly (8.91s cached vs 9.33s uncached in
+one Node comparison; not browser or GPU performance evidence). 50 focused checks
+pass, including navigation, physical troops, worker combat and economy. Final
+exact-source CI and publication must still be verified for this next correction.
+
 Published worker-combat checkpoint: 3f8bfbd63ad3ab825ee6d69288915d2418b3fb03.
 Actions 37613137184 build/deploy/live-qa passed: 362 tests (89.72s), 21 built
 browser checks (51.56s), 21 public checks (82.70s). Public build.json matched that

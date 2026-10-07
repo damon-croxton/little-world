@@ -153,6 +153,22 @@ test('a dedicated raid keeps attacking after looting but returns physically when
   assert.ok(s.groups.includes(raider), 'ending a raid teleported its survivors home');
 });
 
+test('field survivors assess reported guards rather than treating twelve civilians as twelve soldiers', () => {
+  for (const condition of ['exposed', 'escort', 'garrison', 'stale', 'unfunded']) {
+    const { s, a, b, army, p } = fixture(); s.tick = 100; s.time = 100; s.step = 1000;
+    const raider = army(4, 'infantry', undefined, { targetId: 'ended-objective', targetX: p().x, targetZ: p().z, supply: condition === 'unfunded' ? 50 : 100 });
+    a.knowledge.crew = { id: 'reported-twelve', kind: 'group', groupKind: 'worker', ownerId: b.id, ...p(18), sizeEstimate: 12, observedTick: condition === 'stale' ? 70 : 100, reportedTick: 100, confidence: 1 };
+    if (condition === 'escort') a.knowledge.guard = { id: 'reported-escort', kind: 'group', groupKind: 'army', ownerId: b.id, ...p(17), sizeEstimate: 8, observedTick: 100, reportedTick: 100, confidence: 1 };
+    if (condition === 'garrison') a.knowledge.guard = { id: 'reported-home', kind: 'settlement', ownerId: b.id, ...p(19), soldiersEstimate: 12, status: 'active', observedTick: 100, reportedTick: 100, confidence: 1 };
+    s.step++; s.time = s.step / 10; stepStrategy(s, .1);
+    if (condition === 'exposed') {
+      assert.equal(raider.targetId, 'reported-twelve'); assert.equal(raider.missionKind, 'harassment');
+      assert.equal(raider.targetX, p(18).x); assert.equal(raider.phase, 'outbound');
+      assert.ok(!s.groups.some(g => g.id === 'reported-twelve'), 'fixture must use a report, not a privately resolved live crew');
+    } else assert.equal(raider.phase, 'returning', condition);
+  }
+});
+
 test('travelling workers flee a visible single attacker and avoid running through it toward home', () => {
   const { s, crew, army, hb, p } = fixture(); Object.assign(hb, p(-12));
   const worker = crew({ ...p(), prevX: p().x, prevZ: p().z, phase: 'outbound', targetX: p(12).x, targetZ: p(12).z });
