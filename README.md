@@ -1,5 +1,9 @@
 # LittleWorld
 
+**Debugging a world:** open Settings → Download debug report. It saves a bounded,
+local diagnostic file containing recent decisions and a full-world snapshot;
+nothing is uploaded automatically. See [report fields, limits and privacy](DEBUG-REPORT.md).
+
 An observer-first domination simulation of human settlers, scavenger machines and alien hives. Civilisations gather physical resources, grow settlements, train infantry and ranged forces, build defenses, scout through fog of war, and compete to control the world. Each resource crew appears as one worker with its actual count, such as 11×. Soldiers remain individual bodies; housing and census totals represent home inhabitants; temporary falling markers depict recorded deaths.
 
 All architecture, terrain, characters and effects are original procedural geometry. Built with vanilla JavaScript and Three.js 0.160.1; no downloaded artwork is required.

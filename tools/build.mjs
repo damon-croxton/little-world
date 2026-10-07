@@ -20,4 +20,5 @@ await writeFile(path.join(out, '.nojekyll'), '');
 let commit = process.env.GITHUB_SHA;
 if (!commit) { try { commit = execFileSync('git', ['rev-parse', 'HEAD'], {cwd:root, encoding:'utf8'}).trim(); } catch { commit = 'local'; } }
 await writeFile(path.join(out, 'build.json'), JSON.stringify({version:'0.2.0', commit}, null, 2));
+await writeFile(path.join(out, 'src/build-info.js'), `export const BUILD_INFO = Object.freeze(${JSON.stringify({version:'0.2.0', commit})});\n`);
 console.log('Built self-contained static site in dist/ (relative URLs support GitHub Pages project paths).');

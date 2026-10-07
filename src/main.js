@@ -19,6 +19,8 @@ import {settlementController} from './sim/control.js';
 import {createFog} from './render/fog.js';
 import {createCombatEffects} from './render/combat.js';
 import {SimulationClock,SIM_DT} from './clock.js';
+import {createDebugRecorder,encodeDebugReport} from './debug-report.js';
+import {BUILD_INFO} from './build-info.js';
 
 const root=document.getElementById('app'), labelRoot=document.getElementById('world-labels');
 const viewport=()=>({width:Math.max(1,root.clientWidth||innerWidth),height:Math.max(1,root.clientHeight||window.visualViewport?.height||innerHeight)});
@@ -28,6 +30,11 @@ const initialQuality=params.get('quality')==='low'||((innerWidth<=800||innerHeig
 let state=createSimulation(params.get('seed')||'first-light',normalizeConfig({civCount:params.get('civs')??undefined,biome:params.get('biome')??undefined}));
 let shownState=state;
 const view={victoryObserved:null,outcomeDismissed:false,worldGeneration:0,perspective:'omniscient',perspectiveOptions:[],speed:2,paused:false,selectedId:'s0',followId:null,overlay:'none',cinematic:false,quality:initialQuality,fps:0,diagnostics:{},advancing:null};
+const debugRecorder=createDebugRecorder();
+let debugFile=null,debugURL=null,debugRequest=0;
+debugRecorder.reset(state,view);
+window.addEventListener('error',event=>debugRecorder.recordError(state,'runtime',event.error,{line:event.lineno,column:event.colno}));
+window.addEventListener('unhandledrejection',event=>debugRecorder.recordError(state,'promise',event.reason));
 let renderedPerspective=null;
 const scene=new THREE.Scene();
 scene.userData.crowdViewport={...initialViewport};
@@ -72,6 +79,7 @@ function reset(seed,options=state.config){
   advanceGeneration++;selectionMemory.clear();view.worldGeneration++;view.advancing=null;view.victoryObserved=null;view.outcomeDismissed=false;renderedPerspective=null;
   const next=String(seed||'first-light').trim().slice(0,80)||'first-light';
   state=createSimulation(next,normalizeConfig(options));simClock.reset();
+  debugRequest++;if(debugURL)URL.revokeObjectURL(debugURL);debugURL=null;debugFile=null;view.debugExport=null;debugRecorder.reset(state,view);
   if(view.perspective!=='omniscient'&&!state.factions.some(f=>f.id===view.perspective))view.perspective='omniscient';
   terrain.dispose();entities.dispose();crowds.dispose();fog.dispose();combatEffects.dispose();
   terrain=createTerrain(THREE,scene,state.seed,state.config);entities=createEntities(THREE,scene);crowds=createCrowds(THREE,scene);fog=createFog(THREE,scene);combatEffects=createCombatEffects(THREE,scene);
@@ -108,12 +116,38 @@ const actions={
   inspectFaction(id){if(!state.factions.some(f=>f.id===id))return;actions.setPerspective(id);const target=factionFocusTarget(shownState,id);if(target)focus(target.id,true);else actions.overview();},
   setOverlay(mode){view.overlay=mode;overlayKey='';refreshUI();},
   setCinematic(value){view.cinematic=Boolean(value);if(view.cinematic)focus(view.selectedId||state.settlements[0].id,true);else actions.overview();refreshUI();},
-  setQuality
+  setQuality,downloadDebugReport,shareDebugReport
 };
 ui=createUI(document.getElementById('ui'),actions);
+async function downloadDebugReport(){
+  if(view.debugExport?.status==='preparing')return;
+  const request=++debugRequest;
+  if(debugURL)URL.revokeObjectURL(debugURL);debugURL=null;debugFile=null;
+  view.debugExport={status:'preparing'};refreshUI();
+  try{
+    // Synchronous copy at one completed simulation boundary; compression yields only after the copy.
+    const report=debugRecorder.capture(state,view,BUILD_INFO),file=await encodeDebugReport(report);
+    if(request!==debugRequest)return;
+    debugFile=new File([file.blob],file.name,{type:file.blob.type});debugURL=URL.createObjectURL(debugFile);
+    let canShare=false;try{canShare=typeof navigator.canShare==='function'&&navigator.canShare({files:[debugFile]});}catch{}
+    view.debugExport={status:'ready',url:debugURL,name:file.name,bytes:file.blob.size,jsonBytes:file.jsonBytes,encoding:file.encoding,
+      captureMs:report.recorder.captureMs,canShare};
+    refreshUI();
+    const link=document.createElement('a');link.href=debugURL;link.download=file.name;link.hidden=true;document.body.appendChild(link);
+    try{link.click();}catch(error){debugRecorder.recordError(state,'export',error);}finally{link.remove();}
+  }catch(error){
+    if(request!==debugRequest)return;
+    debugRecorder.recordError(state,'export',error);view.debugExport={status:'error'};refreshUI();
+  }
+}
+async function shareDebugReport(){
+  if(!debugFile||!view.debugExport?.canShare)return;
+  try{await navigator.share({files:[debugFile],title:'LittleWorld debug report'});}
+  catch(error){if(error?.name!=='AbortError'){debugRecorder.recordError(state,'export',error);view.debugExport={...view.debugExport,shareFailed:true};refreshUI();}}
+}
 function readDiagnostics(rendererPart){return typeof rendererPart.diagnostics==='function'?rendererPart.diagnostics():rendererPart.diagnostics||{};}
 function diagnostics(){const c=readDiagnostics(crowds),b=readDiagnostics(entities),t=readDiagnostics(terrain);return {fps:view.fps,frameMs:view.frameMs||0,performance:view.performance||null,performanceMode:view.advancing?'advancing':view.paused?'paused':'active',simulationSpeed:view.speed,simulationTime:state.time,simulationStep:state.step,drawCalls:renderer.info.render.calls,calls:renderer.info.render.calls,triangles:renderer.info.render.triangles,geometries:renderer.info.memory.geometries,textures:renderer.info.memory.textures,observationMode:view.perspective,viewer:shownState.viewer||null,groups:shownState.groups.length,totalPopulation:c.totalPopulation??shownState.settlements.reduce((n,s)=>n+s.population,0),visibleIndividuals:c.visibleIndividuals,representedIndividuals:c.representedIndividuals,drawnModels:c.drawnModels??c.instances,visibleWorkerIndividuals:c.visibleWorkerIndividuals,drawnWorkerModels:c.drawnWorkerModels,visibleMilitaryIndividuals:c.visibleMilitaryIndividuals,crowds:c,buildings:b,terrain:t,fog:readDiagnostics(fog),combat:readDiagnostics(combatEffects)};}
-function refreshUI(){if(!ui)return;syncShownState();reconcileSelection();view.perspectiveOptions=state.factions.map(({id,name,species,color})=>({id,name,species,color}));view.outcome=state.outcome;view.victorySummary=state.outcome?.status==='victory'?{battles:state.stats.battles||0,captures:state.stats.captures||0,combatDeaths:state.stats.combatDeaths||0}:null;view.diagnostics=diagnostics();view.diagnosticsScope=renderedPerspective;ui.update(shownState,view);labelOccluders=[...document.querySelectorAll('.atlas-brand,.time-console,.faction-index,.inspector,.world-chronicle,.observation-tools,.atlas-settings,.field-guide,.first-light-note,.scale-reading,.mobile-toolbar,.mobile-gesture-hint,.world-outcome')].filter(el=>el.getClientRects().length).map(el=>el.getBoundingClientRect());}
+function refreshUI(){if(!ui)return;debugRecorder.recordSettings(state,view);syncShownState();reconcileSelection();view.perspectiveOptions=state.factions.map(({id,name,species,color})=>({id,name,species,color}));view.outcome=state.outcome;view.victorySummary=state.outcome?.status==='victory'?{battles:state.stats.battles||0,captures:state.stats.captures||0,combatDeaths:state.stats.combatDeaths||0}:null;view.diagnostics=diagnostics();view.diagnosticsScope=renderedPerspective;ui.update(shownState,view);labelOccluders=[...document.querySelectorAll('.atlas-brand,.time-console,.faction-index,.inspector,.world-chronicle,.observation-tools,.atlas-settings,.field-guide,.first-light-note,.scale-reading,.mobile-toolbar,.mobile-gesture-hint,.world-outcome')].filter(el=>el.getClientRects().length).map(el=>el.getBoundingClientRect());}
 function clearOverlay(){for(const o of [...overlayGroup.children]){overlayGroup.remove(o);o.geometry?.dispose();o.material?.dispose();}}
 function updateOverlay(){
   const state=shownState;
@@ -184,6 +218,7 @@ function frame(now){
   timingTotals.simulationMs+=afterSimulation-cpuStart;timingTotals.sceneUpdateMs+=afterUpdates-afterSimulation;timingTotals.renderSubmitMs+=afterRender-afterUpdates;timingTotals.cpuMs+=afterRender-cpuStart;timingTotals.simulationPulses+=state.step-stepBefore;
   uiTimer+=dt;frameCount++;fpsTime+=dt;if(fpsTime>=1){view.fps=Math.round(frameCount/fpsTime);view.frameMs=fpsTime/frameCount*1000;view.performance={mode,speed:view.speed,quality:view.quality,sampledFrames:frameCount,sampledSeconds:fpsTime,simulationPulses:timingTotals.simulationPulses,simulationCyclesPerSecond:timingTotals.simulationPulses*.1/fpsTime,simulationMs:timingTotals.simulationMs/frameCount,sceneUpdateMs:timingTotals.sceneUpdateMs/frameCount,renderSubmitMs:timingTotals.renderSubmitMs/frameCount,cpuMs:timingTotals.cpuMs/frameCount,gpuTiming:false,backlogSeconds:simClock.remainder,droppedRequestedSeconds:simClock.droppedRequestedSeconds};frameCount=0;fpsTime=0;for(const metric in timingTotals)timingTotals[metric]=0;}
   if(uiTimer>.25){refreshUI();uiTimer=0;}
+  debugRecorder.sample(state,view);
 }
 window.littleworld={
   get state(){return state;},get shownState(){return syncShownState();},view,actions,reset,select,advance,

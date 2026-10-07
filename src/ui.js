@@ -78,6 +78,7 @@ export function createUI(root, actions) {
       <section id="atlas-settings" class="atlas-settings glass" hidden aria-label="World settings">
         <form class="seed-form"><label class="eyebrow" for="atlas-seed">Grow a different world</label><div class="seed-input-row"><input id="atlas-seed" name="seed" type="text" value="littleworld" maxlength="64" autocomplete="off" spellcheck="false" aria-label="World seed"><button type="submit" title="Start a new world with this seed">${icon('seed')}<span>Reset</span></button></div><div class="civ-setting"><label for="atlas-civs">Starting civilisations <output for="atlas-civs" data-slot="civ-count">4</output></label><input id="atlas-civs" name="civs" type="range" min="${MIN_CIV_COUNT}" max="${MAX_CIV_COUNT}" step="1" value="4" aria-label="Starting civilisations"><p>3–5 is a good starting range. Four is the default.</p></div><div class="perspective-setting"><label for="atlas-biome">Whole-world biome</label><select id="atlas-biome" aria-label="Whole-world biome">${Object.entries(BIOME_LABELS).map(([value,label])=>`<option value="${value}">${label}</option>`).join('')}</select><p data-slot="world-biome"></p></div><p>Seed, civilisation count and biome repeat the same world. Reset applies all three at cycle zero.</p></form><div class="perspective-setting"><label for="atlas-perspective">Observer perspective</label><select id="atlas-perspective" aria-label="Observer perspective"><option value="omniscient">Whole world</option></select><p data-slot="perspective-note">All societies still act from their own limited knowledge.</p></div>
         <div class="quality-setting"><label for="atlas-quality">Render quality</label><select id="atlas-quality" aria-label="Render quality"><option value="high">High</option><option value="low">Performance</option></select></div>
+        <div class="debug-report-control"><button data-action="download-debug">Download debug report</button><p>Recent decisions and a full-world snapshot, including hidden game information. Kept in this tab; nothing is uploaded. This is not a saved game or replay.</p><p data-slot="debug-status" role="status" aria-live="polite"></p><a data-slot="debug-download" hidden>Save prepared report</a><button data-action="share-debug" hidden>Share or save report…</button></div>
         <div class="render-accounting" data-slot="render-accounting"></div>
         <div class="render-reading"><span data-slot="performance">Measuring the view…</span><button data-action="help" class="text-button">Field guide</button></div>
       </section>
@@ -199,6 +200,8 @@ export function createUI(root, actions) {
       case 'inspect-faction': actions.inspectFaction?.(value); break;
       case 'select-resource': (actions.selectResource || actions.select)?.(value); break;
       case 'develop': developWorld(); break;
+      case 'download-debug': actions.downloadDebugReport?.(); break;
+      case 'share-debug': actions.shareDebugReport?.(); break;
       case 'diagnostics': settings.hidden = false; guide.hidden = true; setMobilePanel(null); root.querySelector('.settings-toggle').setAttribute('aria-expanded', 'true'); break;
       case 'follow': actions.follow?.(view.followId === value ? null : value); break;
       case 'focus': actions.select?.(value); actions.follow?.(value); break;
@@ -631,6 +634,13 @@ export function createUI(root, actions) {
     perspectiveInput.value = view.perspective || 'omniscient';
     slots['perspective-note'].textContent = state.viewer?.mode === 'faction' ? 'Bright ground is visible now. Muted ground is explored memory. Hidden opponents and supplies are not revealed.' : 'The whole-world view is for you. Each society still acts from its own limited knowledge.';
     if (document.activeElement !== qualityInput) qualityInput.value = view.quality || 'high';
+    const debug = view.debugExport, debugButton = root.querySelector('[data-action="download-debug"]');
+    debugButton.disabled = debug?.status === 'preparing'; debugButton.setAttribute('aria-busy', String(debugButton.disabled));
+    const debugStatus = root.querySelector('[data-slot="debug-status"]'), debugLink = root.querySelector('[data-slot="debug-download"]');
+    debugStatus.textContent = debug?.status === 'preparing' ? 'Preparing report…' : debug?.status === 'ready' ? `${Math.ceil(debug.bytes / 1024)} KB report ready. If the download did not start, use Save prepared report.${debug.shareFailed ? ' Sharing was unavailable; use the save link.' : ''}` : debug?.status === 'error' ? 'Could not prepare the report. Try downloading again.' : '';
+    debugLink.hidden = debug?.status !== 'ready';
+    if (!debugLink.hidden) { debugLink.href = debug.url; debugLink.download = debug.name; } else { debugLink.removeAttribute('href'); debugLink.removeAttribute('download'); }
+    root.querySelector('[data-action="share-debug"]').hidden = !(debug?.status === 'ready' && debug.canShare);
     slots.performance.textContent = n(view.fps) > 0 ? `${Math.round(n(view.fps))} fps · ${num(list(state.groups).length)} travelling parties` : `${num(list(state.groups).length)} travelling parties`;
     root.querySelector('.first-light-note').hidden = dismissedGuide || n(state.tick) > 20;
     const outcome = view.outcome || state.outcome;

@@ -52,6 +52,17 @@ test('observer perspective uses explicit action and never silently changes the s
   const t=setup();try{const count=t.state.factions.length;t.root.querySelector('#atlas-perspective').value='f1';t.fire('#atlas-perspective','change');assert.deepEqual(t.calls.at(-1),{action:'perspective',value:'f1'});assert.equal(t.state.factions.length,count);assert.equal(t.root.querySelector('#atlas-civs').value,'4');}finally{t.dispose();}
 });
 
+test('diagnostic download control reports busy, ready, fallback and reset without inserting snapshot data',()=>{
+  let clicks=0;const t=setup({actions:{downloadDebugReport(){clicks++;}}});try{
+    t.fire('[data-action="download-debug"]');assert.equal(clicks,1);
+    t.view.debugExport={status:'preparing'};t.update();assert.equal(t.root.querySelector('[data-action="download-debug"]').disabled,true);
+    t.view.debugExport={status:'ready',url:'blob:local-report',name:'test.json',bytes:2048,canShare:true};t.update();
+    assert.match(t.root.querySelector('[data-slot="debug-status"]').textContent,/2 KB report ready/);assert.equal(t.root.querySelector('[data-slot="debug-download"]').getAttribute('download'),'test.json');
+    assert.equal(t.root.querySelector('[data-action="share-debug"]').hidden,false);assert.match(t.root.querySelector('.debug-report-control').textContent,/hidden game information/);
+    t.view.debugExport=null;t.update();assert.equal(t.root.querySelector('[data-slot="debug-download"]').hidden,true);assert.equal(t.root.querySelector('[data-slot="debug-download"]').hasAttribute('href'),false);
+  }finally{t.dispose();}
+});
+
 test('settings and field guide stay mutually exclusive through repeated opens',()=>{
   const t=setup();try{t.fire('[data-action="settings"]');assert.equal(t.root.querySelector('#atlas-settings').hidden,false);t.fire('.render-reading [data-action="help"]');assert.equal(t.root.querySelector('.field-guide').hidden,false);assert.equal(t.root.querySelector('#atlas-settings').hidden,true);t.fire('[data-action="settings"]');assert.equal(t.root.querySelector('#atlas-settings').hidden,false);assert.equal(t.root.querySelector('.field-guide').hidden,true);t.fire('[data-action="diagnostics"]');assert.equal(t.root.querySelector('.field-guide').hidden,true);}finally{t.dispose();}
 });

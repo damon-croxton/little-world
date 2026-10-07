@@ -52,6 +52,10 @@ button svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke
 .quality-setting { display: flex; align-items: center; justify-content: space-between; padding-top: 14px; border-top: 1px solid var(--line); font-size: 11px; }
 .quality-setting select { background: #172b2e; color: var(--paper); border: 1px solid var(--line); padding: 5px 7px; border-radius: 3px; font-size: 10px; }
 .render-reading { margin-top: 17px; display: flex; justify-content: space-between; align-items: center; font-size: 9px; color: var(--dim); }
+.debug-report-control { margin-top: 17px; padding-top: 14px; border-top: 1px solid #afc8bd22; }
+.debug-report-control > button, .debug-report-control > a { display: block; width: 100%; min-height: 42px; padding: 11px 9px; margin-top: 7px; border: 1px solid #afc8bd44; border-radius: 3px; color: var(--accent); text-align: center; font-size: 11px; }
+.debug-report-control > p { font-size: 10px; line-height: 1.5; color: var(--dim); }
+.debug-report-control [hidden] { display: none; }
 .text-button { display: inline-flex; align-items: center; gap: 4px; padding: 0; font-size: 9px; line-height: 1.5; color: #d6d9ba; white-space: nowrap; }
 .text-button svg { width: 11px; height: 11px; }
 .text-button:hover { color: var(--accent); }

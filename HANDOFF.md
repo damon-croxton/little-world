@@ -1,3 +1,29 @@
+# Local debug report — 2026-10-07
+
+User approved a narrow cloud-only Download debug report feature at 22:07 UTC.
+One lead, no agents, long sweeps or videos. Settings now prepares a local gzip
+JSON report (plain JSON fallback), with an explicit save link and optional native
+file share. No telemetry or automatic transmission. Schema and omission rules
+are documented in DEBUG-REPORT.md. Full-world hidden information is confined to
+the downloaded report; existing faction projection remains unchanged.
+
+Read-only decisions sample at most every two wall seconds; movement every ten.
+History caps at 768 records/512 KiB. Snapshot rows cap at 3 MiB and final JSON at
+4 MiB, with per-collection truncation. Soldier rosters are read only on export.
+No simulation source or RNG behavior changed. Errors omit messages, stacks and
+URLs. Reset clears history and revokes prepared downloads even for the same seed.
+
+Focused parsing, identity/health, current versus stale knowledge, bounds, reset,
+no-roster-scan and exact-state invariance checks pass. One six-faction 200-cycle
+fixture contained 685 people, 233 roster records and 43 groups: diagnostic samples
+averaged 0.318 ms (p95 0.500 ms), snapshot 9.652 ms; candidate JSON 649,872 bytes /
+gzip 71,494 bytes. Later visibility-field corrections retain the same sampling
+path; final public file measurements come from the exact-source browser gate.
+Local actual desktop gzip and touch-emulated mobile JSON/manual save downloads
+passed without export HTTP requests, runtime errors or state changes in 42.81s.
+Local system Chromium is diagnostic; pinned CI and exact live build verification
+remain the release authority, recorded under screenshots/debug-report/.
+
 # Late offensive and production-rally follow-up — 2026-10-07
 
 The 56cd83fc647d673cd3e251a0516c9e1d2a7389db biome/protection release completed
