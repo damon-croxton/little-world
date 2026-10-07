@@ -109,13 +109,13 @@ export function createDebugRecorder({ now = () => performance.now() } = {}) {
     };
     const homes = (state.settlements || []).slice(0, limits.homes);
     const factions = rows('factions', state.factions || [], limits.factions, f => ({ ...pick(f, 'id name species status defeatedBy intent'),
-      controllerId: factionController(state, f), economy: pick(f.economy, 'population soldiers workers settlements'), strategy: { ...pick(f.strategy, 'mode targetId chosenAt observedTick intelAge nextReview reason'), operation: rally(f.strategy?.operation) },
+      controllerId: factionController(state, f), economy: pick(f.economy, 'population soldiers workers settlements sovereignSettlements controlledSettlements controlledPopulation training fieldWorkers camps'), strategy: { ...pick(f.strategy, 'mode targetId chosenAt observedTick intelAge nextReview reason'), operation: rally(f.strategy?.operation) },
       campaignOrders: rows(`orders:${f.id}`, Object.values(f.campaignOrders || {}), 32, order),
       relations: Object.entries(f.relations || {}).slice(0, limits.factions).map(([id, v]) => ({ id, ...pick(v, 'status trust') })) }));
     const settlements = rows('settlements', state.settlements || [], limits.homes, h => ({ ...homeDecision(state, h),
       ...pick(h, 'factionId nativeSpecies name x z status population homePresent soldiers workers availableWorkers health capacity housingCapacity shortageDays starvation wellbeing'),
       stock: resources(h.stock), net: resources(h.net), production: resources(h.lastProduction), consumption: resources(h.lastConsumption), missingResources: (h.missingResources || []).slice(0, 4).map(scalar),
-      assigned: pick(h.assigned, 'workers scouts traders colonists army military training construction research infrastructure'),
+      assigned: pick(h.assigned, 'workers scouts traders colonists military civilianAway researchers construction infrastructure training towerCrew'),
       training: rows(`training:${h.id}`, h.trainingQueue || [], 32, j => pick(j, 'id role size buildingId progress remaining')) }));
     const groups = rows('groups', state.groups || [], limits.groups, g => ({ ...groupDecision(state, g),
       ...pick(g, 'x z targetX targetZ missionTargetX missionTargetZ size initialSize civilianWounds health maxHealth supply morale speed capacity cargoCapacity travelled stuck stuckTime provisionCycles createdTick workProgress workRemaining extractedTotal'),

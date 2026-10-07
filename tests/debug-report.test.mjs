@@ -9,7 +9,7 @@ const fixture = () => createSimulation('debug-report', { civCount: 3 });
 
 test('diagnostic snapshot is coherent, roundtrips gzip, includes native and actual command identities, and never mutates simulation', async () => {
   const s = fixture(), home = s.settlements[0]; home.occupiedBy = 'f1';
-  home.assigned = {workers:11,scouts:2,traders:3,colonists:4,military:20};home.missingResources=['water','food'];
+  home.assigned = {workers:11,scouts:2,traders:3,colonists:4,military:20,civilianAway:20,researchers:3,construction:4,infrastructure:5,training:6,towerCrew:2};home.missingResources=['water','food'];
   const body = home.soldierRoster[0]; body.hp = 37; body.commandFactionId = 'f1'; body.order = { role: 'recover', objectiveId: home.id };
   const crew = { id: 'crew', kind: 'worker', factionId: 'f0', originId: home.id, size: 11, civilianWounds: 9, x: home.x, z: home.z, targetId: 'n1', carrying: { food: 40 }, provisions: { water: 3 }, soldierIds: [] };
   s.groups.push(crew); s.factions[0].campaignOrders = { army: { groupId: 'army', originId: home.id, size: 20, issuedTick: 12, expiresTick: 90, missionKind: 'campaign' } };
