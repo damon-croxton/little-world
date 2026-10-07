@@ -177,7 +177,7 @@ async function accept() {
   await page.screenshot({ path: output(config, 'smoke.png') });
   await check('Changing civilisation count rebuilds balanced geometry while preserving the entered seed', async () => {
     const before = await page.evaluate(() => ({ seed: littleworld.state.seed, terrainSeed: littleworld.state.terrainSeed }));
-    await button('settings').click(); await page.locator('#atlas-civs').selectOption('3');
+    await button('settings').click(); await page.locator('#atlas-civs').focus(); await page.keyboard.press('Home');
     await page.locator('.seed-form button[type="submit"]').click(); await rendered();
     const facts = await page.evaluate(async () => {
       const w = littleworld, { heightAt } = await import(new URL('./src/world.js', location.href).href);
