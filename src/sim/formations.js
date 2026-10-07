@@ -263,8 +263,13 @@ export function updateCombatFormation(s, entity, units, dt = .1, options = {}) {
   // This is shared physical history, not a route search for each soldier.
   if (!entity.formationTrail || (dt > 0 && distance(entity.formationTrail.at(-1), center) >= .45)) {
     entity.formationTrail ??= [];
-    entity.formationTrail.push({ ...center });
-    if (entity.formationTrail.length > 48) entity.formationTrail.shift();
+    const trail = entity.formationTrail, before = trail.at(-2);
+    // Compress short straight stretches while retaining real turns and gates.
+    // Widely separated survivors still need the entrance after their route
+    // anchor reaches home; dropping everything beyond 22 units lost that path.
+    if (before && distance(before, center) <= 6 && isSegmentTraversable(s, before, center, physical)) trail[trail.length - 1] = { ...center };
+    else trail.push({ ...center });
+    if (trail.length > 128) trail.shift();
   }
   const world = physicalWorld(s);
   if (!sameMembership) for (const role of MILITARY_ROLES) {

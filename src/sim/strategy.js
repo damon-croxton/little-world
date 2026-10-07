@@ -418,7 +418,7 @@ function arriveArmy(s, g, cycleBoundary) {
   }
   if (g.missionKind === 'harassment') {
     const worker = s.groups.find(other => other.id === g.targetId);
-    if (worker && !worker.finished && visibleToGroup(s, g, worker, 18) && worker.size > 0 && relation(f, groupController(s, worker)).status === 'hostile' && (worker.raidedUntil ?? 0) <= (s.time ?? s.tick)) {
+    if (worker && !worker.finished && visibleToGroup(s, g, worker, 18) && worker.size > 0 && relation(f, groupController(s, worker)).status === 'hostile') {
       g.phase = 'engaging'; return;
     }
     if (!continueFieldObjective(s, g, f)) returnHome(s, g, 'The reported work party is no longer exposed; returning with current observations.');
@@ -522,9 +522,9 @@ function updateGroups(s, dt, cycleBoundary) {
       if (g.finished) continue;
     }
     if (g.kind === 'army' && g.phase === 'engaging') {
-      if (cycleBoundary && g.missionKind === 'harassment') {
-        const worker = s.groups.find(other => other.id === g.targetId);
-        if (!worker || !visibleToGroup(s, g, worker, 18) || worker.finished || (worker.raidedUntil ?? 0) > (s.time ?? s.tick)) {
+      if (cycleBoundary && g.missionKind === 'harassment' && g.combat?.targetKind === 'worker') {
+        const worker = s.groups.find(other => other.id === g.combat.targetId);
+        if (!worker || !visibleToGroup(s, g, worker, 18) || worker.finished) {
           if (!continueFieldObjective(s, g, f)) returnHome(s, g, 'The exposed work-party objective has ended.');
         }
       }
@@ -615,6 +615,30 @@ function exploratoryTarget(s, f, p) {
   return { x, z };
 }
 
+export function economicSurveyTarget(s, f, home, active = []) {
+  const reports = knownReports(s, f, { maxAge: 140, minConfidence: .5, includeOwn: false });
+  const workers = reports.filter(k => k.kind === 'group' && k.groupKind === 'worker' && k.sizeEstimate > 0 && s.tick - k.observedTick >= 18 && s.tick - k.observedTick <= 100 && relation(f, k.ownerId).status === 'hostile');
+  const resources = knownReports(s, f, { kind: 'resource', maxAge: 180, minConfidence: .5 });
+  const candidates = [];
+  for (const report of workers) {
+    const site = resources.filter(k => distance(k, report) <= 10 && (k.amountEstimate ?? 0) > 20).sort((a, b) => distance(a, report) - distance(b, report) || a.id.localeCompare(b.id))[0];
+    // A known worksite is persistent; a vanished party's exact old position is
+    // not a useful destination for repeated long reconnaissance trips.
+    if (!site || active.some(g => g.surveyTargetId === site.id) || s.tick - (f.economicSurveys?.[site.id] ?? -200) < 100) continue;
+    const d = distance(home, site); if (d < 30 || d > 150) continue;
+    const point = { x: site.x + (home.x - site.x) / d * 12, z: site.z + (home.z - site.z) / d * 12 };
+    const danger = reports.some(k => k.ownerId !== f.id && !['allied', 'trade'].includes(relation(f, k.ownerId).status) &&
+      (k.kind === 'group' && k.groupKind === 'army' && s.tick - k.observedTick <= 24 && distance(k, point) < 22 || k.kind === 'settlement' && (k.soldiersEstimate ?? 0) >= 4 && !['camp', 'ruin'].includes(k.status) && distance(k, point) < 24));
+    if (!danger) candidates.push({ ...point, id: site.id, observedTick: report.observedTick, score: Math.min(16, report.sizeEstimate) - d * .08 - (s.tick - report.observedTick) * .05 });
+  }
+  candidates.sort((a, b) => b.score - a.score || a.id.localeCompare(b.id));
+  for (const candidate of candidates.slice(0, 3)) {
+    const path = findPath(expeditionPlanningWorld(s, f), home, candidate, { factionId: f.id, maxExpansions: 800 });
+    if (path.reachable && path.length <= 165) return candidate;
+  }
+  return null;
+}
+
 function dispatchScout(s, f, homes) {
   const active = s.groups.filter(g => groupController(s, g) === f.id && g.kind === 'scout');
   const interval = 24 + Math.round((1 - f.traits.curiosity) * 24);
@@ -635,12 +659,15 @@ function dispatchScout(s, f, homes) {
   const rivals = knownReports(s, f, { kind: 'settlement', minConfidence: .1, includeOwn: true }).filter(k => !['camp', 'ruin'].includes(k.status) && !active.some(g => g.surveyTargetId === k.id));
   rivals.sort((a, b) => a.observedTick - b.observedTick || distance(p, a) - distance(p, b));
   const refresh = rivals[0] && s.tick - rivals[0].observedTick > 70 ? rivals[0] : null;
-  const target = refresh ? { x: refresh.x, z: refresh.z } : exploratoryTarget(s, f, p);
+  const economic = !refresh && f.scoutCount % 2 === 0 ? economicSurveyTarget(s, f, p, active) : null;
+  const target = refresh ? { x: refresh.x, z: refresh.z } : economic || exploratoryTarget(s, f, p);
   const g = { id: 'g' + s.nextId++, factionId: p.factionId, commandFactionId: f.id, originId: p.id, kind: 'scout',
     x: p.x, z: p.z, prevX: p.x, prevZ: p.z, targetX: target.x, targetZ: target.z, targetId: null, phase: 'outbound',
     size, initialSize: size, supply: 100, morale: 88, speed: biology.species === 'hive' ? 4.0 : 4.2,
     carrying: emptyCargo(), observations: [], createdTick: s.tick, createdTime: s.time ?? s.tick,
-    surveyTargetId: refresh?.id ?? null, reason: refresh ? 'Revisiting a reported rival position and sharing live local sight.' : 'Surveying and sharing live sight within this scout’s actual vision and line of sight.' };
+    surveyTargetId: refresh?.id ?? economic?.id ?? null, surveyPurpose: economic ? 'economic' : 'exploration',
+    reason: refresh ? 'Revisiting a reported rival position and sharing live local sight.' : economic ? 'Checking a previously observed enemy worksite from its near side; only actual scout sight can refresh worker activity.' : 'Surveying and sharing live sight within this scout’s actual vision and line of sight.' };
+  if (economic) (f.economicSurveys ||= {})[economic.id] = s.tick;
   s.groups.push(g);
   p.availableWorkers = Math.max(0, (p.availableWorkers || 0) - size);
   if (p.assigned) { p.assigned.scouts = (p.assigned.scouts || 0) + size; p.assigned.civilianAway = (p.assigned.civilianAway || 0) + size; }

@@ -259,7 +259,7 @@ function startEngagement(s, g, target, hooks) {
       }
     }
   }
-  if (cs.targetKind === 'structure') hooks.hostility?.(s, factionOf(s, groupController(s, g)), factionOf(s, groupController(s, target)));
+  if (['structure', 'worker'].includes(cs.targetKind)) hooks.hostility?.(s, factionOf(s, groupController(s, g)), factionOf(s, ownerOf(s, target)));
   if (cs.targetKind === 'settlement') {
     target.contestedUntil = s.tick + 2;
     hooks.hostility?.(s, factionOf(s, groupController(s, g)), factionOf(s, settlementController(s, target)));
@@ -383,6 +383,12 @@ function acquire(s, g, hooks) {
     if (now - chase.since > 10 || now - chase.progressAt > 3.5 || distance(g, chase) > 20) {
       cs.ignoredWorkerId = target.id; cs.ignoreWorkerUntil = now + 18; cs.workerPursuit = null;
       target = null; intent = 'advance'; reason = 'The crew escaped the useful raid window; resuming the supplied objective.';
+      if (g.missionKind === 'harassment') {
+        reason = 'The worker raid made no further useful progress; preserving the force and returning with its observations.';
+        if (hooks.retreat) hooks.retreat(s, g, reason, false);
+        else { const home = homeOf(s, g); g.phase = 'returning'; if (home) { g.targetX = home.x; g.targetZ = home.z; } }
+        clearEngagement(g); cs.intent = 'return'; cs.reason = reason; return null;
+      }
     }
   } else cs.workerPursuit = null;
   if (target?.kind === 'scout') {
@@ -484,7 +490,7 @@ function raidWorker(s, source, worker) {
   s.stats.raids = (s.stats.raids || 0) + 1; s.stats.workerRaids = (s.stats.workerRaids || 0) + 1;
   emit(s, 'raid', `${source.faction.name} seized ${Math.round(loot)} supplies from a field crew; ${worker.size} workers are fleeing toward home.`, source.faction.id, { groupId: g.id, otherGroupId: worker.id, loot });
 }
-function attackWorker(s, source, worker) {
+function attackWorker(s, source, worker, hooks) {
   const { body, context, spec, ordinal } = source;
   if (worker.finished || !worker.size || !permittedTarget(s, context.entity, worker) || distance(body, worker) > spec.range) return false;
   if (!lineOfSight(s, body, worker, { fromHeight: .6, toHeight: .45, factionId: context.faction.id, blockWater: true })) return false;
@@ -496,7 +502,9 @@ function attackWorker(s, source, worker) {
     aim.z += (worker.z - (worker.prevZ ?? worker.z)) * 10 * travel;
   }
   const shot = { from: { x: body.x, z: body.z, height: .6 }, to: aim, sourceIndex: ordinal, sourceSoldierId: body.id, shooterSoldierId: body.id };
-  return queueStrike(s, context, { id: worker.id, entity: worker }, body.role, [shot], spec.damage * fireScale(context), body.role === 'ranged' ? 'projectile' : 'melee', { targetKind: 'worker', sourceSoldierId: body.id });
+  const fired = queueStrike(s, context, { id: worker.id, entity: worker }, body.role, [shot], spec.damage * fireScale(context), body.role === 'ranged' ? 'projectile' : 'melee', { targetKind: 'worker', sourceSoldierId: body.id });
+  if (fired && !hostile(s, context.faction.id, ownerOf(s, worker))) hooks.hostility?.(s, context.faction, factionOf(s, ownerOf(s, worker)));
+  return fired;
 }
 function interceptScout(s, source, scout, hooks) {
   const home = homeOf(s, scout);
@@ -537,6 +545,12 @@ function scoutOpportunities(s, hooks) {
       const observed = physicalObservation(s, scout, other, 18);
       return observed.visible && countMilitary(observed.units) > 0 || (other.buildings || []).some(b => b.kind === 'tower' && liveStructure(b) && sees(s, scout, b, 18));
     });
+    if (danger && scout.surveyPurpose === 'economic') {
+      restore(); const home = homeOf(s, scout), reason = 'Visible defenders make this economic survey unsafe; preserving the scout and its observations.';
+      if (hooks.retreat) hooks.retreat(s, scout, reason, false);
+      else if (home) Object.assign(scout, { phase: 'returning', targetX: home.x, targetZ: home.z, reason });
+      continue;
+    }
     if (danger || scout.supply < 55 || scout.morale < 65 || clock(s) < (scout.nextHarassAt ?? 0)) { restore(); continue; }
     const worker = s.groups.filter(g => g.kind === 'worker' && !g.finished && g.size > 0 && g.size <= 2 && permittedTarget(s, scout, g) && sees(s, scout, g, 8))
       .sort((a, b) => distance(scout, a) - distance(scout, b))[0];
@@ -627,13 +641,18 @@ export function stepCombat(s, dt = .1, hooks = {}) {
     const context = combatant(s, entity, 'population' in entity); if (!context) continue;
     const cs = status(entity), dx = entity.x - (entity.prevX ?? entity.x), dz = entity.z - (entity.prevZ ?? entity.z);
     if (!cs.active) cs.yaw = Math.hypot(dx, dz) > .0001 ? Math.atan2(dx, dz) : Math.atan2((entity.targetX ?? entity.x) - entity.x, (entity.targetZ ?? entity.z) - entity.z);
-    context.objective = objectives.get(entity.id); contexts.push(context);
+    context.objective = objectives.get(entity.id);
+    // A rally order preserves the march, but does not make an exposed crew
+    // already inside a soldier's weapon reach untouchable. These contacts never
+    // become pursuit goals and cannot bypass the normal individual weapon clock.
+    if (entity.strategicHold && canFight(entity)) context.workerContacts = s.groups.filter(worker => worker.kind === 'worker' && !worker.finished && worker.size > 0 && permittedTarget(s, entity, worker) && sees(s, entity, worker, 16));
+    contexts.push(context);
   }
   const field = stepIndividualCombat(s, contexts, dt, {
     permitted: (source, target) => permittedTarget(s, source.entity, target.entity), structureContact,
     damageScale: fireScale,
     attack: (source, target) => soldierAttack(s, source, target), attackStructure: (source, target) => assaultStructure(s, source, target),
-    attackWorker: (source, target) => attackWorker(s, source, target),
+    attackWorker: (source, target) => attackWorker(s, source, target, hooks),
   });
   for (const [g, { target }] of engagements) {
     const source = combatant(s, g); if (!source || !canFight(g)) continue;

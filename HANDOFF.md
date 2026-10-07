@@ -1,3 +1,34 @@
+# Cloud worker-combat follow-up — 2026-10-07
+
+Published worker-combat checkpoint: 3f8bfbd63ad3ab825ee6d69288915d2418b3fb03.
+Actions 37613137184 build/deploy/live-qa passed: 362 tests (89.72s), 21 built
+browser checks (51.56s), 21 public checks (82.70s). Public build.json matched that
+exact SHA; pinned Chromium 153.0.8010.12 booted WebGL with no browser errors.
+Public artifact 11479571207 / file_000000004ac881fabc4b2aa3e391d8f4, preserved in
+screenshots/worker-combat/public-ci/ with release-receipt.json. Library's required
+prepared-upload helper failed its hosted tools/list request with a network error;
+no Library image IDs were created. The downloadable evidence remains available.
+
+The next source follow-up adds in-range worker fire during rallies, physical
+return after a futile harassment chase, continued attacks after a loot transfer,
+and hostility on actual campaign worker attacks so defenders can respond. Funded
+economic scouts revisit observed worksites using delivered reports, avoid known
+defenders and return when they actually see danger. No hidden worker tracking.
+
+Short natural observations (200 then 250 cycles) retained exact accounting and
+no shortages, but produced no natural worker casualties. Economic surveys did
+dispatch naturally; a scout saw defenders and returned with six observations and
+over 92% supply. Controlled tactical/browser fixtures separately prove attacks,
+losses, escape, defense response and count badges. These are not win-rate tests.
+
+Observation also found a riverbank footing bug: sideways strip movement could
+leave a soldier unable to turn, and group movement used less clearance than its
+replan. Full endpoint footprint checks and equal movement/planning clearance now
+prevent those invalid steps. Shared route breadcrumbs compress straight segments
+and retain more actual turns/gates for lagging survivors; no per-body A* or
+teleport recovery was added. Final follow-up acceptance and exact publication
+receipt must be checked before treating this revision as the live checkpoint.
+
 # Balanced districts checkpoint and authorized worker-combat pass — 2026-10-07
 
 Balanced map release 65211a77c485dded5bad962479ca29597268d0bd is live and

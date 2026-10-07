@@ -43,6 +43,38 @@ test('fast physical ground checks exactly match full terrain classification', ()
   }
 });
 
+test('riverbank movement cannot end on footing that becomes blocked when a soldier turns', () => {
+  const s = empty('first-light'); s.terrainSeed = worldTerrainSeed(s.seed);
+  const bank = { x: -24.640708939723947, z: -68.16649897618065 }, radius = .16;
+  assert.ok(isPointTraversable(s, bank, { radius: 0 }));
+  assert.ok(!isPointTraversable(s, bank, { radius }));
+  let accepted = 0, rejected = 0;
+  for (let x = -.8; x <= .8; x += .2) for (let z = -.8; z <= .8; z += .2) for (let i = 0; i < 8; i++) {
+    const from = translated(bank, x, z), to = translated(from, Math.cos(i * Math.PI / 4) * .12, Math.sin(i * Math.PI / 4) * .12);
+    if (isSegmentTraversable(s, from, to, { radius })) {
+      accepted++;
+      assert.ok(isPointTraversable(s, from, { radius }));
+      assert.ok(isPointTraversable(s, to, { radius }), 'accepted step stranded its footprint at the endpoint');
+      assert.ok(isSegmentTraversable(s, to, from, { radius }), 'reversing a legal step changed its footing');
+    } else rejected++;
+  }
+  assert.ok(accepted > 0 && rejected > 0);
+});
+
+test('a cached group route cannot step into footing too narrow for its next replan', () => {
+  const s = empty('first-light'); s.terrainSeed = worldTerrainSeed(s.seed);
+  const from = { x: -23.410132099989195, z: -68.90644036682251 }, bank = translated(from, .2, 0);
+  const goal = translated(from, 2, 0), topology = navigationDiagnostics(s).topologyVersion;
+  assert.ok(isPointTraversable(s, from, { radius: .16 }));
+  assert.ok(isSegmentTraversable(s, from, bank, { radius: .12 }));
+  assert.ok(!isPointTraversable(s, bank, { radius: .16 }));
+  const g = { id: 'bank-route', factionId: 'owner', ...from, movementFactor: 1, movementSampleStep: 0,
+    navigation: { key: `0.02:owner:${topology}:`, goal, reachable: true, waypoints: [bank, goal], index: 0, replanAfter: 1 } };
+  assert.equal(moveAlongRoute(s, g, goal, { dt: .1, speed: 2, arrival: .02 }), false);
+  assert.equal(g.x, from.x); assert.equal(g.z, from.z);
+  assert.ok(isPointTraversable(s, g, { radius: .16 }));
+});
+
 test('the larger island adds usable, supplied frontier rather than empty sea', () => {
   assert.equal(WORLD_RADIUS, 180); assert.equal(LAND_SCALE, 4);
   const world = generateWorld('expanded-frontier');

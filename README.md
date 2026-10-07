@@ -178,6 +178,10 @@ visible scouts; a lone scout caught at physical contact loses its undelivered
 observations. Small paid harassment parties use fresh delivered worker reports,
 keep a home reserve, and interrupt raids for defenders. Funded armies can continue
 to a suitable nearby reported objective with sufficient existing supplies.
+Some funded scouts revisit previously observed enemy worksites from the near side
+to refresh economic intelligence. Recent reported defenders, repeat visits and
+duplicate assignments rule out unsuitable surveys; visible defenders trigger a
+physical return with collected observations.
 
 Exposed worker crews are military targets even when empty. Every real soldier
 uses its own weapon clock, range, line of sight and damage; a count badge is not
@@ -188,9 +192,15 @@ toward home or take a reachable sidestep around a visible attacker. Their badge
 and inspector show the survivors. Raiders interrupt for defenders, consider
 nearby support and towers, and stop unproductive or overlong worker pursuits.
 The pursuit limit is ten simulation seconds, with an earlier stop after 3.5
-seconds without closing or causing damage. Returning and rallying forces keep
-their protected orders. Existing housing, paid replacement training, food needs
+seconds without closing or causing damage. Futile harassment parties return home.
+Rallying forces keep their march and can fire at exposed crews already in weapon
+reach without starting a chase. Attacking a campaign rival's workers establishes
+hostility so its defenders can respond. Existing housing, paid replacement training, food needs
 and small emergency harvest fallback still govern recovery.
+
+Soldiers check their complete endpoint footprint near banks and cliffs. Group
+movement uses the same clearance as replanning, and shared route history retains
+turns and gates for lagging survivors without individual global path searches.
 
 Enclosing perimeters supersede the former front-only screens. A cached terrain-checked
 blueprint surrounds the current civic footprint; construction remains staged and

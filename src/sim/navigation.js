@@ -12,6 +12,7 @@ const SAMPLE_SPACING = .85;
 const staticCache = new Map();
 const stateCache = new WeakMap();
 const directions = [[1, 0], [0, 1], [-1, 0], [0, -1], [1, 1], [-1, 1], [-1, -1], [1, -1]];
+const footprintDirections = [[1, 0], [-1, 0], [0, 1], [0, -1], [.70710678, .70710678], [-.70710678, .70710678], [.70710678, -.70710678], [-.70710678, -.70710678]];
 const distance = (a, b) => Math.hypot(a.x - b.x, a.z - b.z);
 const clamp = (x, lo, hi) => Math.max(lo, Math.min(hi, x));
 const mix = (a, b, t) => a + (b - a) * t;
@@ -145,6 +146,14 @@ function wallsBlock(state, from, to, options) {
   return false;
 }
 function terrainSegment(seed, from, to, radius = 0) {
+  // A body occupies the same footprint when stationary or changing direction.
+  // The former sideways-only strip could end with its toes over a bank and
+  // then reject every turn, stranding a real soldier after the squad moved on.
+  if (radius > 0) for (const point of [from, to]) {
+    for (const [dx, dz] of footprintDirections) {
+      if (!isTerrainTraversable(point.x + dx * radius, point.z + dz * radius, seed)) return false;
+    }
+  }
   const d = distance(from, to), steps = Math.max(1, Math.ceil(d / SAMPLE_SPACING));
   const nx = d ? -(to.z - from.z) / d * radius : radius, nz = d ? (to.x - from.x) / d * radius : 0;
   for (let i = 0; i <= steps; i++) {
@@ -394,7 +403,9 @@ export function moveAlongRoute(state, group, target, options = {}) {
   const pace = Math.max(0, options.speed ?? group.speed ?? 2.8) * group.movementFactor;
   const amount = Math.min(remaining, pace * dt), fraction = remaining ? amount / remaining : 0;
   const next = { x: mix(group.x, point.x, fraction), z: mix(group.z, point.z, fraction) };
-  if (amount > 0 && isSegmentTraversable(state, group, next, { factionId, radius: .12, ignoreWallId: options.ignoreWallId })) {
+  // Movement and replanning need identical footing. A narrower movement body
+  // could enter a bank sliver that every subsequent .16-radius route rejected.
+  if (amount > 0 && isSegmentTraversable(state, group, next, { factionId, radius: .16, ignoreWallId: options.ignoreWallId })) {
     group.x = next.x; group.z = next.z; group.travelled = (group.travelled || 0) + amount; group.stuck = 0; group.stuckTime = 0;
     if (remaining <= amount + .001 && route.index < route.waypoints.length - 1) route.index++;
   } else {

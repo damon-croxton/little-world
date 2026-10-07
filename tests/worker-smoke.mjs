@@ -37,6 +37,10 @@ export async function workerSmoke({ page, check, screenshotBefore, screenshotAft
       return { population: hb.population, size: worker.size, health: civilians.civilianHealth(worker), source: 'Controlled stationary crew; real military weapons and renderer. Not a natural match.' };
     });
     await page.waitForFunction(() => littleworld.getMotionSamples().some(p => p.groupId === 'qa-worker-crew' && p.visible && p.badgeText === '12×'));
+    await page.waitForFunction(() => {
+      const w = littleworld, worker = window.workerCombatFixture.worker;
+      return Math.abs(w.camera.position.x - worker.x - 13.5) < .08 && Math.abs(w.camera.position.z - worker.z - 18) < .08;
+    });
     await waitForRenderedFrames(page, { minimumFrames: 3 });
     await page.screenshot({ path: screenshotBefore });
     const after = await page.evaluate(() => {

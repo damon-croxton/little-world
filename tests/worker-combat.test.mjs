@@ -24,6 +24,7 @@ function fixture() {
       ...p(3), prevX: p(3).x, prevZ: p(3).z, targetId: 'worksite', targetX: p(3).x, targetZ: p(3).z, speed: 2.65,
       capacity: 72, cargoCapacity: 72, carrying: emptyResources(), supply: 100, provisionCycles: 100, createdTick: 0, morale: 100,
       observations: [], extractedTotal: 0, workTime: 0, ...extras };
+    worker.prevX = extras.prevX ?? worker.x; worker.prevZ = extras.prevZ ?? worker.z;
     s.groups.push(worker); return worker;
   };
   const army = (count = 4, role = 'infantry', home = ha, extras = {}) => {
@@ -68,6 +69,16 @@ test('one real ranged weapon wounds an empty twelve-worker crew once without cou
   assert.equal(s.stats.attacks, 1); assert.ok(shooter.attackReadyAt > s.time); assert.equal(worker.phase, 'returning'); conserved(s);
 });
 
+test('rallying troops fire on a crew already in weapon reach without abandoning their march', () => {
+  const { s, crew, army, p } = fixture(), worker = crew({ ...p(4) }), raider = army(2, 'ranged', undefined, { strategicHold: 'rally', targetId: 'reported-capital', operationId: 'rally-one' });
+  const orders = { x: raider.targetX, z: raider.targetZ, target: raider.targetId, operation: raider.operationId };
+  pulse(s, 5);
+  assert.ok(civilianHealth(worker) < 384); assert.equal(raider.phase, 'outbound'); assert.equal(raider.strategicHold, 'rally');
+  assert.equal(raider.combat.active, false); assert.equal(raider.combat.workerPursuit, null);
+  assert.deepEqual({ x: raider.targetX, z: raider.targetZ, target: raider.targetId, operation: raider.operationId }, orders);
+  assert.equal(s.stats.attacks, 2, 'rally contact bypassed the canonical ranged cooldown');
+});
+
 test('individual melee strikes progressively kill represented workers and release no extra population', () => {
   const { s, crew, army, hb, p } = fixture(), raider = army(5), worker = crew({ ...p(1.2), carrying: { ...emptyResources(), food: 48 } });
   initializeLedger(s); const before = hb.population;
@@ -107,12 +118,39 @@ test('visible escorts interrupt a labor attack and superior protection forces wi
   assert.equal(guard.combat.targetId, raider.id);
 });
 
+test('a declared campaign against neutral labor establishes hostility so visible defenders can respond', () => {
+  const { s, a, b, hb, crew, army, p } = fixture();
+  a.relations[b.id].status = 'neutral'; b.relations[a.id].status = 'neutral';
+  const worker = crew({ ...p(3) }), raider = army(4, 'ranged', undefined, { campaign: true, missionEnemyId: b.id, targetId: hb.id });
+  s.step++; s.time = s.step / 10; stepStrategy(s, .1);
+  assert.equal(a.relations[b.id].status, 'hostile'); assert.equal(b.relations[a.id].status, 'hostile');
+  const guard = army(18, 'infantry', hb, { ...p(7), id: 'responding-guard' });
+  s.step++; s.time = s.step / 10; stepStrategy(s, .1);
+  assert.equal(guard.combat.targetId, raider.id); assert.equal(raider.phase, 'retreating'); assert.equal(raider.combat.active, false);
+  assert.ok(!s.combatEvents.some(e => e.sourceId === raider.id && e.targetId === worker.id && e.time === s.time && ['melee', 'projectile'].includes(e.type)));
+});
+
 test('a crew pursuit without closing or damage ends and retains the original mission', () => {
   const { s, crew, army, p } = fixture(), raider = army(1, 'infantry', undefined, { speed: 0, targetId: 'original-order' }), worker = crew({ ...p(14) });
   const body = getSoldiers(s, raider)[0];
   for (let i = 0; i < 40; i++) { Object.assign(body, p()); pulse(s); }
   assert.equal(raider.combat.ignoredWorkerId, worker.id); assert.ok(raider.combat.ignoreWorkerUntil > s.time);
   assert.equal(raider.targetId, 'original-order'); assert.equal(raider.phase, 'outbound');
+});
+
+test('a dedicated raid keeps attacking after looting but returns physically when its pursuit expires', () => {
+  const { s, crew, army, p, ha } = fixture(), worker = crew({ ...p(1), carrying: { food: 40, water: 0, energy: 0, materials: 0 } });
+  const raider = army(4, 'infantry', undefined, { missionKind: 'harassment', targetId: worker.id });
+  for (let i = 0; i < 20; i++) { s.step++; s.time = s.step / 10; s.tick = Math.floor(s.time); stepStrategy(s, .1); }
+  assert.ok(worker.raidedUntil > s.time); assert.ok(worker.size < 12, 'loot cooldown prevented actual follow-up combat');
+  assert.notEqual(raider.phase, 'returning');
+  Object.assign(worker, p(14)); worker.prevX = worker.x; worker.prevZ = worker.z; raider.speed = 0;
+  for (let i = 0; i < 50 && raider.phase !== 'returning'; i++) {
+    for (const body of getSoldiers(s, raider)) Object.assign(body, p());
+    pulse(s);
+  }
+  assert.equal(raider.phase, 'returning'); assert.equal(raider.targetX, ha.x); assert.equal(raider.targetZ, ha.z);
+  assert.ok(s.groups.includes(raider), 'ending a raid teleported its survivors home');
 });
 
 test('travelling workers flee a visible single attacker and avoid running through it toward home', () => {
