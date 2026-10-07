@@ -6,7 +6,8 @@ import { createFactions, stepProgression } from './progression.js';
 import { stepStrategy, expeditionPlanningWorld } from './strategy.js';
 import { initializeSoldierPositions } from './combat.js';
 import { settlementController, groupController } from './control.js';
-import { moveAlongRoute, findPath, isPointTraversable } from './navigation.js';
+import { moveAlongRoute, findPath, isPointTraversable, isSegmentTraversable } from './navigation.js';
+import { getSoldiers } from './soldiers.js';
 import { initializeKnowledge, stepKnowledge, visibleToGroup, observationFor, reportObservations, knownReports, knownResourceNodes } from './knowledge.js';
 import { DEFENSE_STATS, defenseCost, defenseBuildingPlan, assignDefenses, canCompleteDefense } from './defenses.js';
 import { initializeMilitary, syncMilitary, refreshExileBases, militaryContext, trainingCount, advanceTraining, planTraining, militaryBuildingPlan, MILITARY_BUILDINGS, applyHomeCasualties, demobilizeMilitary, cancelTraining } from './military.js';
@@ -186,15 +187,37 @@ function returnWorker(state, g, home) {
 function visibleResourceThreat(state, group, controllerId) {
   const hostile = otherId => otherId && otherId !== controllerId && !['allied', 'trade'].includes(state.factions.find(f => f.id === controllerId)?.relations?.[otherId]?.status);
   for (const army of state.groups) {
-    if (army.kind !== 'army' || army.finished || army.surrendered || army.size < 4) continue;
+    if (army.kind !== 'army' || army.finished || army.surrendered || army.size < 1) continue;
     const owner = groupController(state, army);
-    if (hostile(owner) && visibleToGroup(state, group, army)) return { controllerId: owner, groupId: army.id, settlementId: army.originId };
+    if (!hostile(owner) || army.size < 4 && state.factions.find(f => f.id === controllerId)?.relations?.[owner]?.status !== 'hostile') continue;
+    const witness = getSoldiers(state, army).find(body => visibleToGroup(state, group, body));
+    if (witness) return { controllerId: owner, groupId: army.id, settlementId: army.originId, x: witness.x, z: witness.z };
   }
   for (const town of state.settlements) {
     const owner = settlementController(state, town); if (!hostile(owner) || distance(group, town) > (town.radius || 12) + 12) continue;
-    for (const tower of town.buildings) if (tower.kind === 'tower' && tower.operational && tower.progress >= 1 && tower.hp > 0 && visibleToGroup(state, group, tower)) return { controllerId: owner, buildingId: tower.id, settlementId: town.id };
+    for (const tower of town.buildings) if (tower.kind === 'tower' && tower.operational && tower.progress >= 1 && tower.hp > 0 && visibleToGroup(state, group, tower)) return { controllerId: owner, buildingId: tower.id, settlementId: town.id, x: tower.x, z: tower.z };
   }
   return null;
+}
+
+function fleeWorker(state, group, home, threat) {
+  returnWorker(state, group, home);
+  group.activity = 'fleeing'; group.reason = 'This crew saw hostile troops and is moving toward home protection.';
+  group.escapeWaypoint = null;
+  const homeDistance = distance(group, home), danger = distance(group, threat), controller = settlementController(state, home);
+  // Prefer home unless that first step heads directly into the observed enemy.
+  const forward = homeDistance > 0 ? { x: group.x + (home.x - group.x) / homeDistance * Math.min(6, homeDistance), z: group.z + (home.z - group.z) / homeDistance * Math.min(6, homeDistance) } : group;
+  if (distance(forward, threat) >= danger - .8 && isSegmentTraversable(state, group, forward, { factionId: controller, radius: .15 })) return;
+  const candidates = [];
+  for (let i = 0; i < 12; i++) {
+    const angle = i * Math.PI / 6, point = { x: group.x + Math.cos(angle) * 6, z: group.z + Math.sin(angle) * 6 };
+    if (!isSegmentTraversable(state, group, point, { factionId: controller, radius: .15 })) continue;
+    const midpoint = { x: (group.x + point.x) / 2, z: (group.z + point.z) / 2 };
+    if (distance(midpoint, threat) < danger - .5) continue;
+    candidates.push({ ...point, score: Math.min(14, distance(point, threat)) * 2 - distance(point, home) * .65 });
+  }
+  candidates.sort((a, b) => b.score - a.score);
+  if (candidates.length) group.escapeWaypoint = { x: candidates[0].x, z: candidates[0].z, until: state.time + 3 };
 }
 
 function claimResource(state, node, controllerId, homeId, securedBy = null) {
@@ -221,7 +244,7 @@ function processWorkers(state, indexes) {
   for (const g of state.groups) {
     if (g.kind !== 'worker' && g.kind !== 'colonist') continue;
     const home = indexes.homes.get(g.originId), f = indexes.factions.get(g.factionId);
-    if (!home || !f || home.population <= 0) { discardCargo(state, g); remove.add(g.id); continue; }
+    if (g.finished || g.size <= 0 || !home || !f || home.population <= 0) { discardCargo(state, g); remove.add(g.id); continue; }
     g.movementFactionId = settlementController(state, home);
     const missionAge = state.time - g.createdTick;
     g.supply = g.provisionCycles ? Math.max(0, 100 * (1 - missionAge / g.provisionCycles)) : Math.max(0, g.supply - .12 * SIM_DT);
@@ -244,7 +267,24 @@ function processWorkers(state, indexes) {
       else if (g.stuckTime > 18 || state.time - g.createdTick > 300) { g.phase = 'returning'; g.reason = 'The founding route became unsafe; settlers are returning with their supplies.'; }
       continue;
     }
+    if (g.kind === 'worker' && (g.lastSecurityCheck == null || state.step % 10 === 0)) {
+      g.lastSecurityCheck = state.step;
+      const threat = visibleResourceThreat(state, g, settlementController(state, home));
+      if (threat) {
+        const node = indexes.nodes.get(g.targetId);
+        if (node && g.phase === 'working') {
+          claimResource(state, node, threat.controllerId, threat.settlementId, threat.groupId || threat.buildingId);
+          g.resourceDispute = { nodeId: node.id, controllerId: threat.controllerId, observedTick: state.tick };
+          state.stats.resourceDisputes = (state.stats.resourceDisputes || 0) + 1;
+        }
+        fleeWorker(state, g, home, threat);
+      }
+    }
     if (g.phase === 'returning') {
+      if (g.escapeWaypoint && state.time <= g.escapeWaypoint.until && distance(g, home) > Math.min(3, home.radius * .28)) {
+        if (!move(state, g, g.escapeWaypoint, .4)) continue;
+      }
+      g.escapeWaypoint = null;
       if (!move(state, g, home, Math.min(3, home.radius * .28))) continue;
       const delivered = depositCargo(state, home, g); if (g.observations?.length) reportWorker(state, g, f);
       if (delivered > .1) {
@@ -260,18 +300,6 @@ function processWorkers(state, indexes) {
       g.phase = 'working'; g.activity = `harvesting ${node.subtype || node.kind}`; g.workTime = 0;
     }
     if (g.phase === 'working') {
-      // A paper claim is not an invisible force field. Only a physically seen
-      // armed rival can turn these civilians back from a contested worksite.
-      if (g.lastSecurityCheck == null || state.step % 10 === 0) {
-        g.lastSecurityCheck = state.step;
-        const threat = visibleResourceThreat(state, g, settlementController(state, home));
-        if (threat) {
-          claimResource(state, node, threat.controllerId, threat.settlementId, threat.groupId || threat.buildingId);
-          g.resourceDispute = { nodeId: node.id, controllerId: threat.controllerId, observedTick: state.tick };
-          state.stats.resourceDisputes = (state.stats.resourceDisputes || 0) + 1;
-          returnWorker(state, g, home); g.reason = 'A locally visible armed rival secured the resource; this crew is carrying its observations home.'; continue;
-        }
-      }
       const rate = g.size * (.52 + node.richness * .18) * (.8 + f.traits.industry * .5) * (1 + (f.tech.level || 0) * .06) * (f.advantages?.gathering || 1);
       const load = RESOURCES.reduce((n, k) => n + (g.carrying[k] || 0), 0), extracted = Math.max(0, Math.min(node.amount, g.capacity - load, rate * SIM_DT));
       if (extracted > 0 && !node.claimedBy) claimResource(state, node, settlementController(state, home), home.id);

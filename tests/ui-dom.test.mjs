@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import { parseHTML } from 'linkedom';
 import { createUI } from '../src/ui.js';
 import { createSimulation } from '../src/sim/core.js';
+import { applyCivilianDamage } from '../src/sim/civilians.js';
 
 // DOM logic tests, not browser/layout/WebGL evidence. Linkedom does not implement
 // HTMLSelectElement's standard value setter; supply that one DOM adapter here.
@@ -26,6 +27,17 @@ function setup(options={}) {
   const fire=(selector,type='click')=>{const element=root.querySelector(selector);assert.ok(element,selector);element.dispatchEvent(new window.Event(type,{bubbles:true,cancelable:true}));};
   return {document,window,root,ui,view,calls,actions,fire,get state(){return state;},update(next=state){ui.update(next,view);},dispose(){ui.dispose();delete globalThis.document;}};
 }
+
+test('worker inspection follows actual crew injuries and reduced surviving headcount',()=>{
+  const t=setup();try{
+    const home=t.state.settlements[0], group={id:'wounded-crew',kind:'worker',factionId:home.factionId,originId:home.id,size:12,x:home.x,z:home.z,capacity:72,carrying:{food:24},phase:'working'};
+    t.state.groups.push(group);t.view.selectedId=group.id;t.update();
+    assert.match(t.root.querySelector('.crew-health').textContent,/12 surviving workers.*384 \/ 384/);
+    applyCivilianDamage(t.state,group,69);t.update();
+    assert.match(t.root.querySelector('.crew-health').textContent,/10 surviving workers.*315 \/ 320/);
+    assert.match(t.root.querySelector('.party-phase').textContent,/10 travellers/);
+  }finally{t.dispose();}
+});
 
 test('observer settings show four starts and edited seed/count survive refresh and blur',()=>{
   const t=setup();try{

@@ -162,7 +162,7 @@ function plan(s, record, index, adapter) {
     }
   } else if (context.objective && entity.combat.active && reason !== 'pursuit-refused') {
     const objective = context.objective, to = objective.kind === 'structure' ? adapter.structureContact(objective, body) : objective;
-    const reach = objective.kind === 'structure' ? spec.range * .8 : 1.2;
+    const reach = ['structure', 'worker'].includes(objective.kind) ? spec.range * .8 : 1.2;
     const d = distance(body, to);
     goal = d > reach ? { x: to.x + (body.x - to.x) / Math.max(.01, d) * reach, z: to.z + (body.z - to.z) / Math.max(.01, d) * reach } : body;
     action = d > reach ? 'advance' : 'hold'; reason = objective.kind === 'structure' ? 'structure-assault' : 'squad-objective';
@@ -210,6 +210,8 @@ export function stepIndividualCombat(s, contexts, dt, adapter) {
       if (adapter.attack(p, target)) { body.attackReadyAt = now(s) + spec.cooldown; body.lastAttackTime = now(s); metrics.attacks++; }
     } else if (!body.withdrawing && !['retreating', 'returning'].includes(context.entity.phase) && context.objective?.kind === 'structure') {
       if (adapter.attackStructure(p, context.objective)) { body.attackReadyAt = now(s) + spec.cooldown; body.lastAttackTime = now(s); metrics.attacks++; }
+    } else if (!target && !body.withdrawing && !['retreating', 'returning'].includes(context.entity.phase) && context.objective?.kind === 'worker') {
+      if (adapter.attackWorker?.(p, context.objective)) { body.attackReadyAt = now(s) + spec.cooldown; body.lastAttackTime = now(s); metrics.attacks++; }
     }
     body.cooldown = Math.max(0, (body.attackReadyAt ?? 0) - now(s));
   }

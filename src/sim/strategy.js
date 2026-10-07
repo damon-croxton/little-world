@@ -888,7 +888,7 @@ export function stepStrategy(s, dt = 0.1) {
     }
     fieldEncounters(s); updateConquest(s);
   }
-  s.groups = s.groups.filter(g => g.kind === 'worker' || g.kind === 'colonist' || (!g.finished && g.size > 0));
+  s.groups = s.groups.filter(g => !g.finished && g.size > 0);
   if (!cycleBoundary) return;
   for (const f of s.factions) {
     if (f.defeatedBy || s.outcome?.status === 'victory') continue;

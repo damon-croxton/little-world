@@ -179,6 +179,19 @@ observations. Small paid harassment parties use fresh delivered worker reports,
 keep a home reserve, and interrupt raids for defenders. Funded armies can continue
 to a suitable nearby reported objective with sufficient existing supplies.
 
+Exposed worker crews are military targets even when empty. Every real soldier
+uses its own weapon clock, range, line of sight and damage; a count badge is not
+a single hit point and does not multiply incoming damage. Each represented
+worker has 32 health. Whole-person casualties reduce the native population,
+crew size, carrying capacity and proportional cargo once; damaged crews flee
+toward home or take a reachable sidestep around a visible attacker. Their badge
+and inspector show the survivors. Raiders interrupt for defenders, consider
+nearby support and towers, and stop unproductive or overlong worker pursuits.
+The pursuit limit is ten simulation seconds, with an earlier stop after 3.5
+seconds without closing or causing damage. Returning and rallying forces keep
+their protected orders. Existing housing, paid replacement training, food needs
+and small emergency harvest fallback still govern recovery.
+
 Enclosing perimeters supersede the former front-only screens. A cached terrain-checked
 blueprint surrounds the current civic footprint; construction remains staged and
 paid. Gates follow known extraction routes, and towers cover completed gates

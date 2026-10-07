@@ -580,7 +580,7 @@ export function factionView(state, factionId = null) {
     const result = {};
     for (const [key, item] of Object.entries(value)) {
       if (['soldierRoster', 'soldierIds', 'formationSlots', 'crewSoldierIds'].includes(key) || key.startsWith('_')) continue;
-      if ((key.endsWith('SoldierId') || ['soldierId', 'targetId', 'sourceId', 'ignoredTargetId', 'killedById'].includes(key)) && typeof item === 'string') result[key] = knownIds.has(item) ? item : null;
+      if ((key.endsWith('SoldierId') || ['soldierId', 'targetId', 'sourceId', 'ignoredTargetId', 'ignoredWorkerId', 'ignoredScoutId', 'lastAttackerId', 'killedById'].includes(key)) && typeof item === 'string') result[key] = knownIds.has(item) ? item : null;
       else result[key] = cleanReferences(item);
     }
     return result;

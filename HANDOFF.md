@@ -1,5 +1,30 @@
 # Balanced districts checkpoint and authorized worker-combat pass — 2026-10-07
 
+Balanced map release 65211a77c485dded5bad962479ca29597268d0bd is live and
+verified: Actions 37611246460 build/deploy/live-qa green; 350 tests; 20 built
+and 20 public browser checks, pinned Chromium 153.0.8010.12. Exact public marker
+and WebGL boot are in screenshots/balanced-starts/release-receipt.json. Public
+artifact 11477728467 / file_000000002b1481faa8a467016b1710f1.
+
+Worker combat now uses canonical soldier attacks against aggregate civilian
+health (32 per real civilian). Impacts recheck hostility, cover and physical
+aim, consume damage once, and update native population, survivors, capacity and
+proportional cargo loss. Empty crews are eligible. Severe visible defense forces
+retreat; defenders interrupt raids; pursuit expires after ten seconds or 3.5
+without actual soldier closing/damage. Crews detect actual visible troops during
+travel and harvest and take reachable escape steps if home lies behind danger.
+Fully lost crews are removed in the same strategy pulse. Fog projections redact
+retained worker target/attacker references. The inspector and real count badge
+reflect casualties; effects mark the actual aggregate crew impact position.
+
+Worker pass pre-publication evidence: 361 full tests passed in 122.96s; 21 local
+browser checks in 74.39s (Chromium 151 is diagnostic only); focused late fog/effect
+checks retained under screenshots/worker-combat/. Browser raid images deliberately
+arrange a stationary 12-worker crew against six actual soldiers; they are controlled
+render evidence, not a natural-match or balance claim. Final exact-source CI
+acceptance remains required. No agents or videos were started. Execution remained
+functional after the platform disconnect callback at 11:08 UTC.
+
 User approved balanced starts, then a ONE-LEAD improvement window from 10:40:29
 until 12:40:29 UTC. No agents, long sweeps, videos or redundant unchanged runs.
 Checkpoint balanced maps first; next priority is real worker-crew combat: attacks

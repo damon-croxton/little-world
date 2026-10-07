@@ -9,6 +9,7 @@ import path from 'node:path';
 import os from 'node:os';
 import { configuration, launch, boot, environment, observeErrors, waitForRenderedFrames, output, save } from './browser-v2.mjs';
 import { battleSmoke } from './battle-smoke.mjs';
+import { workerSmoke } from './worker-smoke.mjs';
 
 const require = createRequire(import.meta.url);
 const browserRegistry = JSON.parse(await readFile(path.join(path.dirname(require.resolve('playwright-core/package.json')), 'browsers.json'), 'utf8'));
@@ -189,6 +190,7 @@ async function accept() {
     assert.ok(facts.clearings.every(y => Math.abs(y - 2.2) < 1e-8)); assert.equal(facts.step, 0);
     assert.equal(await page.locator('.faction-entry').count(), 3); return facts;
   });
+  await workerSmoke({ page, check, screenshotBefore: output(config, 'worker-raid-before.png'), screenshotAfter: output(config, 'worker-raid-after.png') });
   await battleSmoke({ page, check, screenshotPath: output(config, 'battle-smoke.png') });
   await check('No runtime, module or HTTP errors', async () => assert.deepEqual(report.errors, []));
 }
