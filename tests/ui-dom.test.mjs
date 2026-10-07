@@ -164,3 +164,10 @@ test('whole-world biome choice survives refresh and resets with the seed and civ
     assert.equal(t.root.querySelector('#atlas-biome').value,'alien');assert.match(t.root.querySelector('[data-slot="world-biome"]').textContent,/Alien meadow/);
   }finally{t.dispose();}
 });
+
+
+test('military inspection distinguishes fit attackers, recovery, threat reserve and production rally',()=>{
+ const t=setup();try{const h=t.state.settlements[0];h.defensePlan={ready:40,recovering:20,reserve:0,reason:'No reported home harassment.'};h.lastMobilization={requested:40,dispatched:32,reason:'Paid route supplies limit this departure.'};h.productionRally={kind:'frontline',reason:'Recruits assemble for the moving frontline.'};t.update();
+ assert.match(t.root.querySelector('.military-availability').textContent,/40 fit at home.*20 recovering.*0 reserved/);assert.match(t.root.querySelector('.production-rally').textContent,/Frontline reinforcements/);assert.match(t.root.querySelector('.military-reading').textContent,/32 of 40 available attackers/);assert.match(t.root.querySelector('.strength-definition').textContent,/not the number ready to attack/);
+ }finally{t.dispose();}
+});

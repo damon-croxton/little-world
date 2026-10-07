@@ -78,11 +78,11 @@ test('remote guard moves actual paid soldiers, preserves home reserve, populatio
   for (const residual of Object.values(ledgerResidual(s))) assert.ok(Math.abs(residual) < 1e-7);
 });
 
-test('remote protection declines unaffordable trips and refuses to empty the home garrison', () => {
+test('remote protection declines unaffordable trips and preserves a threatened home garrison', () => {
   const { s, home, f } = fixture(); for (const key of Object.keys(home.stock)) home.stock[key] = 0;
   dispatchProtection(s, f, [home]); assert.ok(!s.groups.some(g => g.missionKind === 'protection'));
   for (const key of Object.keys(home.stock)) home.stock[key] = 1500;
-  setMilitary(s, home, { infantry: 10, ranged: 2 }); dispatchProtection(s, f, [home]);
+  setMilitary(s, home, { infantry: 10, ranged: 2 }); const enemy=s.factions[1];f.relations[enemy.id]={status:'hostile'};f.knowledge.alarm={id:'alarm',kind:'group',groupKind:'army',ownerId:enemy.id,x:home.x+15,z:home.z,sizeEstimate:12,observedTick:s.tick,reportedTick:s.tick,confidence:1}; dispatchProtection(s, f, [home]);
   assert.ok(!s.groups.some(g => g.missionKind === 'protection'));
 });
 

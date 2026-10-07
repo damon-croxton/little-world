@@ -79,7 +79,7 @@ export function availableMilitary(state, home) {
 // Wounded returnees remain serving members of the home garrison and census.
 // A new expedition can only order bodies able to follow its outward march;
 // the individual planner otherwise preserves their homeward withdrawal.
-const expeditionSoldiers = (state, home) => getSoldiers(state, home, { excludeTowerCrew: true })
+const expeditionSoldiers = (state, home, { includeTowerCrew = false } = {}) => getSoldiers(state, home, { excludeTowerCrew: !includeTowerCrew })
   .filter(soldier => !soldier.withdrawing && soldier.hp / soldier.maxHp > (soldier.role === 'ranged' ? .38 : .30));
 
 function splitUnits(available, requested, preferredRole) {
@@ -101,9 +101,9 @@ function splitUnits(available, requested, preferredRole) {
 
 // Register the returned composition on a new army immediately after this call.
 // The unchanged home total already includes these soldiers throughout travel.
-export function allocateMilitary(state, home, size) {
+export function allocateMilitary(state, home, size, options = {}) {
   syncMilitary(state, home);
-  const available = soldierCounts(expeditionSoldiers(state, home));
+  const available = soldierCounts(expeditionSoldiers(state, home, options));
   return splitUnits(available, size);
 }
 
@@ -112,13 +112,23 @@ export function allocateMilitary(state, home, size) {
 export function deployMilitary(state, home, group) {
   if (!home || !group || group.kind !== 'army' || group.originId !== home.id || group.militaryReturned || group.finished) return 0;
   if (Array.isArray(group.soldierIds)) { syncGroupSoldiers(state, group); return group.size; }
-  const available = expeditionSoldiers(state, home);
+  const available = expeditionSoldiers(state, home, { includeTowerCrew: !!group.releaseTowerCrew });
   const requested = group.units || splitUnits(soldierCounts(available), group.size);
   const selected = MILITARY_ROLES.flatMap(role => available.filter(soldier => soldier.role === role).slice(0, integer(requested[role])));
   group.soldierIds = selected.map(soldier => soldier.id);
   for (const soldier of selected) {
+    if (group.releaseTowerCrew) soldier.towerId = null;
     soldier.groupId = group.id;
     soldier.commandFactionId = group.commandFactionId || group.factionId || home.factionId;
+  }
+  if (group.releaseTowerCrew) {
+    const departing = new Set(group.soldierIds);
+    for (const tower of home.buildings || []) if (tower.kind === 'tower') {
+      tower.crewSoldierIds = (tower.crewSoldierIds || []).filter(id => !departing.has(id));
+      tower.crewAssigned = tower.crewSoldierIds.length;
+      if (tower.crewAssigned < (tower.requiredCrew || 2)) { tower.operational = false; tower.inactiveReason = 'Operators joined the campaign.'; }
+    }
+    home.assigned ||= {}; home.assigned.towerCrew = (home.buildings || []).reduce((n, b) => n + (b.kind === 'tower' ? b.crewAssigned || 0 : 0), 0);
   }
   if (selected.length) touchSoldiers(state);
   syncGroupSoldiers(state, group);

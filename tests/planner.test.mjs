@@ -25,8 +25,8 @@ function fixture() {
   return { s, f, h, target, plan, advance, army };
 }
 
-test('bounded plans assign healthy guards and recovery without rewriting identities or wounds', () => {
-  const { s, h, plan, advance } = fixture();
+test('bounded plans defend an observed home threat and preserve identities and wounds', () => {
+  const { s, h, plan, advance } = fixture(); h.defensePlan={reserve:6,reason:'A fresh home threat requires guards.'};
   s.groups.push({ id: 'working', kind: 'worker', factionId: h.factionId, originId: h.id, size: 12, phase: 'working', targetId: 'ore', x: h.x + 12, z: h.z });
   const bodies = h.soldierRoster.slice(), wounded = bodies[1]; wounded.hp = wounded.maxHp * .25;
   const before = bodies.map(b => [b.id, b.hp, b.attackReadyAt]);

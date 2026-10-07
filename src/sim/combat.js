@@ -120,7 +120,7 @@ function physicalObservation(s, source, target, range = 18, height = .9) {
 function sees(s, source, target, range = 18, height = .9) {
   return physicalObservation(s, source, target, range, height).visible;
 }
-function broken(g) { return (g.morale ?? 85) < 37 || (g.supply ?? 100) < 18 || g.size < Math.max(1, (g.cohesionSize ?? g.initialSize ?? g.size) * .58); }
+function broken(g) { return (g.morale ?? 85) < 37 || (g.supply ?? 100) < (g.stagingPurpose === 'resupply' ? 8 : 18) || (!g.campaign || (g.morale ?? 85) < 55) && g.size < Math.max(1, (g.cohesionSize ?? g.initialSize ?? g.size) * .58); }
 function withdraw(s, g, hooks, reason = 'Field losses broke the expedition’s cohesion.') {
   if (!canFight(g)) return;
   Object.assign(status(g), { active: false, intent: 'retreat', reason, decisionUntil: clock(s) + 12 });
@@ -386,6 +386,7 @@ function acquire(s, g, hooks) {
       cs.ignoredWorkerId = target.id; cs.ignoreWorkerUntil = now + 18; cs.workerPursuit = null;
       target = null; intent = 'advance'; reason = 'The crew escaped the useful raid window; resuming the supplied objective.';
       if (g.missionKind === 'harassment') {
+        if (g.campaign && hooks.continueObjective?.(s, g)) { clearEngagement(g); return null; }
         reason = 'The worker raid made no further useful progress; preserving the force and returning with its observations.';
         if (hooks.retreat) hooks.retreat(s, g, reason, false);
         else { const home = homeOf(s, g); g.phase = 'returning'; if (home) { g.targetX = home.x; g.targetZ = home.z; } }

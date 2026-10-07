@@ -301,3 +301,22 @@ within the existing army limit. Locally visible raiders can be intercepted;
 otherwise guards hold near their assigned asset and physically return when
 the work ends, their rotation expires, or their return supply is needed.
 Returning guards are not diverted into offensive campaigns.
+
+
+### Offensive commitment and production rallies
+
+Military totals include wounded, guards and deployed soldiers. The home inspector
+shows fit troops, recovery, a reserve justified by current reported/visible home
+threats, and the actual last departure versus its funded request. There is no
+fixed percentage or minimum military reserve. An unharassed campaign can send
+every fit soldier, including tower operators; injury, observed danger and paid
+logistics remain real constraints. Civilians are not converted to fill an army.
+
+New recruits assemble at a reachable local departure point facing the current
+frontline. Paid reinforcements leave in groups of at least eight, join the
+existing field force, and preserve their native IDs and census. The rally tracks
+the owned front or its reported objective and changes to home defence under
+credible harassment. Successful forces can exploit nearby known workers, locally
+visible production and weaker settlements while their actual supplies cover the
+leg and return. A healthy force can physically visit a funded held forward depot
+and resume its mission; this does not heal soldiers or remotely transfer stores.

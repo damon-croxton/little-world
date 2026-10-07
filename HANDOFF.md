@@ -1,3 +1,38 @@
+# Late offensive and production-rally follow-up — 2026-10-07
+
+The 56cd83fc647d673cd3e251a0516c9e1d2a7389db biome/protection release completed
+all Actions gates in run 37685936758 and is the verified live fallback. The user
+then explicitly added concentration, exploitation after victory, threat-based
+reserves (including zero-reserve all-in), and dynamic production rallies within
+the same 21:33:55 UTC deadline. No agents or videos were used.
+
+This follow-up removes fixed 30-percent/12-person reserve rules and the original
+force-estimate ceiling on campaign reinforcements. Current visible/freshly
+reported home attacks determine the military reserve. Fit tower crews may join
+an unharassed offensive; wounded people retain their HP, cooldowns and identities.
+Recruits physically assemble toward a reachable forward destination and depart
+as funded batches rather than individual sacrificial arrivals. Civilian labor,
+actual supply requirements, fog, and departure commitments remain authoritative.
+Successful survivors may continue to nearby observed economic targets; a funded
+held forward depot can refill them on arrival without healing or forced origin
+return. Genuine tactical retreat remains. A resupply leg suppresses optional
+economic attacks so a low-supply force can actually reach its depot.
+
+Constructed before/after movement trace (screenshots/late-offensive/): 100 fit
+home soldiers previously dispatched 70 and held 30; now all 100 depart with zero
+reserve when no home harassment is known. Every ID is preserved and resource
+residuals remain zero. The 24-soldier completed-raid scenario at about 54% supply
+and 60 morale previously returned home; it now selects nearby known workers.
+These are controlled late-state scenarios, not reproduction of the user's exact
+100-versus-40 save or a natural late-game balance claim. The inspector explains
+fit/recovering/reserved/deployed distinctions and any paid supply limit.
+
+Old fixed-reserve test expectations were replaced by explicit all-in and
+observed-threat reserve contracts under the user's superseding policy. Hidden
+casualty/withdrawal invariance and exact identity/cargo accounting gates remain.
+Final exact-SHA CI/public-browser evidence and IDs are recorded in the release
+receipt under screenshots/late-offensive/ once complete.
+
 # Uniform biome and remote protection pass — 2026-10-07
 
 Single cloud lead, authorized 20:33:55 UTC through 21:33:55 UTC. No agents,

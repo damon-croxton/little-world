@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createSimulation } from '../src/sim/core.js';
+import { createSoldierRecords, syncSoldierCounts } from '../src/sim/soldiers.js';
+import { unitStats } from '../src/sim/military.js';
 import { stepStrategy } from '../src/sim/strategy.js';
 import { initializeMilitary, availableMilitary, countMilitary, applyMilitaryCasualties, deployMilitary, getSoldiers } from '../src/sim/military.js';
 import { initializeLedger, ledgerResidual, RESOURCES } from '../src/sim/economy.js';
@@ -52,14 +54,14 @@ function conserved(state) {
 }
 const ownArmies = (state, faction) => state.groups.filter(g => g.kind === 'army' && g.factionId === faction.id);
 
-test('campaign dispatch keeps a real home reserve and all staffed tower troops', () => {
+test('an unharassed all-in campaign releases fit tower troops without inventing soldiers', () => {
   const { state, faction, home, target } = fixture(); report(faction, target);
   const roster = home.soldierRoster.slice(), identities = new Set(roster.map(soldier => soldier.id));
   home.assigned.towerCrew = 25; initializeLedger(state);
   stepStrategy(state, 0);
   const army = ownArmies(state, faction)[0]; assert.ok(army);
-  assert.ok(countMilitary(availableMilitary(state, home)) >= Math.ceil(home.soldiers * .30));
-  assert.ok(availableMilitary(state, home).ranged >= 25);
+  assert.equal(countMilitary(availableMilitary(state, home)), 0);
+  assert.equal(home.defensePlan.reserve, 0); assert.equal(army.releaseTowerCrew, true); assert.equal(army.size, 120);
   assert.equal(army.size, countMilitary(army.units)); assert.ok(army.routeSupplyBudget > 18);
   assert.equal(army.soldierIds.length, army.size); assert.equal(new Set(army.soldierIds).size, army.size);
   assert.ok(army.soldierIds.every(id => identities.has(id)), 'dispatch invented a soldier');
@@ -82,7 +84,7 @@ test('wounded home soldiers retain their reserve while another healthy home can 
   const army = ownArmies(state, faction)[0]; assert.ok(army, 'an unready home prevented the other home from launching');
   assert.equal(army.originId, other.id); assert.equal(army.targetId, target.id);
   assert.equal(army.size, countMilitary(army.units)); assert.equal(faction.campaignOrders[army.id].size, army.size);
-  assert.equal(home.defensePlan.reserve, 36); assert.equal(countMilitary(availableMilitary(state, home)), 120);
+  assert.equal(home.defensePlan.reserve, 0); assert.equal(countMilitary(availableMilitary(state, home)), 120);
   assert.equal(home.population, 400); assert.equal(home.soldiers, 120); assert.deepEqual(home.stock, stock);
   assert.ok(home.soldierRoster.every(soldier => soldier.groupId == null && soldier.status === 'serving'));
   assert.deepEqual(home.soldierRoster.map(soldier => ({ id: soldier.id, hp: soldier.hp, attackReadyAt: soldier.attackReadyAt, cooldown: soldier.cooldown })), wounds);
@@ -95,7 +97,7 @@ test('wounded reserves cannot make an undersized expedition appear able to chall
   const stock = { ...home.stock }; initializeLedger(state); stepStrategy(state, 0);
   assert.equal(ownArmies(state, faction).length, 0);
   assert.deepEqual(home.stock, stock); assert.equal(countMilitary(availableMilitary(state, home)), 120);
-  assert.equal(home.defensePlan.reserve, 36); assert.deepEqual(faction.campaignOrders, {});
+  assert.equal(home.defensePlan.reserve, 0); assert.deepEqual(faction.campaignOrders, {});
   conserved(state);
 });
 
@@ -107,13 +109,15 @@ test('nearby achievable campaigns take priority over weaker cross-map targets', 
   conserved(state);
 });
 
-test('locally observed attackers retain home troops and prevent a new foreign march', () => {
+test('locally observed attackers retain enough fit home troops while the surplus can march', () => {
   const { state, faction, home, target } = fixture(); report(faction, target);
   initializeMilitary(target, { infantry: 80, ranged: 0 });
   const enemy = party(state, target, 'visible-attackers', 80, { x: home.x + 10, z: home.z });
   assert.ok(visibleToGroup(state, home, enemy)); initializeLedger(state);
   stepStrategy(state, 0);
-  assert.equal(ownArmies(state, faction).length, 0);
+  assert.equal(ownArmies(state, faction).length, 1);
+  assert.ok(countMilitary(availableMilitary(state,home)) >= home.defensePlan.reserve);
+  assert.equal(ownArmies(state,faction)[0].size,32);
   assert.equal(home.defensePlan.observedThreat, 80); assert.ok(home.defensePlan.reserve >= 80);
   conserved(state);
 });
@@ -156,7 +160,7 @@ test('one focused campaign concentrates available soldiers while civilian commit
   stepStrategy(state, 0); faction.lastArmy = 0; stepStrategy(state, 0);
   const armies = ownArmies(state, faction);
   assert.equal(armies.length, 1); assert.equal(armies[0].targetId, target.id);
-  assert.equal(armies[0].size, 84); assert.equal(new Set(armies[0].soldierIds).size, 84);
+  assert.equal(armies[0].size, 120); assert.equal(new Set(armies[0].soldierIds).size, 120);
   assert.ok(countMilitary(availableMilitary(state, home)) >= home.defensePlan.reserve);
   assert.equal(home.population, population); assert.deepEqual(state.groups.find(g => g.id === 'workers'), civilianBefore);
   faction.lastArmy = 0; stepStrategy(state, 0); assert.equal(ownArmies(state, faction).length, 1, 'the protected reserve was dispatched'); conserved(state);
@@ -250,7 +254,7 @@ test('remote withdrawal cannot silently release a campaign commitment and trigge
   const { state, faction, home, target } = fixture(); report(faction, target, 20);
   const army = party(state, home, 'remote-commitment', 50, { x: home.x + 40, z: home.z }); army.targetId = target.id;
   const retreating = structuredClone(state); retreating.groups[0].phase = 'retreating';
-  for (const current of [state, retreating]) { initializeLedger(current); stepStrategy(current, 0); conserved(current); assert.equal(ownArmies(current, current.factions[0]).length, 1); }
+  for (const current of [state, retreating]) { initializeLedger(current); stepStrategy(current, 0); conserved(current); assert.equal(ownArmies(current, current.factions[0]).length, 2); assert.ok(current.factions[0].campaignOrders[army.id]); }
   assert.deepEqual(retreating.settlements[0].stock, state.settlements[0].stock);
 });
 
@@ -275,7 +279,7 @@ test('an entire unseen army loss and removal retain its departure commitment unt
   for (const current of [state, missing]) { current.factions[0].lastArmy = 0; stepStrategy(current, 0); conserved(current); }
   assert.deepEqual(missing.factions[0].campaignOrders, faction.campaignOrders);
   assert.deepEqual(missing.settlements[0].defensePlan, home.defensePlan);
-  assert.equal(missing.groups.length, 0, 'unseen loss immediately summoned a replacement');
+  assert.deepEqual(missing.groups.map(g=>g.id), state.groups.filter(g=>g.id!==army.id).map(g=>g.id), 'unseen loss changed the normal reinforcement order');
   const deadline = faction.campaignOrders[army.id].expiresTick;
   Object.assign(missing, { tick: deadline + 1, time: deadline + 1, step: (deadline + 1) * 10 });
   missing.factions[0].lastScout = missing.tick; stepStrategy(missing, 0);
@@ -357,4 +361,37 @@ test('a smaller affordable campaign still meets the reported strength floor and 
   assert.ok(army, 'large preferred force masked the affordable alternative');
   assert.ok(army.size < 84 && army.size >= 17); assert.ok(home.stock.food >= 20 && home.stock.water >= 20);
   conserved(state);
+});
+
+test('a supplied winning army exploits a known nearby work party below the old arbitrary return thresholds', () => {
+  const {state,faction,home,target}=fixture();faction.lastArmy=400;
+  const army=party(state,home,'local-victor',24,{x:home.x+35,z:home.z});
+  Object.assign(army,{speed:2.9,campaign:true,missionKind:'harassment',targetId:'finished-raid',targetX:army.x,targetZ:army.z,missionTargetX:army.x,missionTargetZ:army.z,supply:55,morale:60});
+  const worker={id:'nearby-labor',kind:'worker',factionId:target.factionId,originId:target.id,size:12,x:army.x+6,z:army.z,phase:'working',carrying:{food:0,water:0,energy:0,materials:0}};state.groups.push(worker);
+  faction.knowledge[worker.id]={id:worker.id,kind:'group',groupKind:'worker',ownerId:worker.factionId,x:worker.x,z:worker.z,sizeEstimate:12,observedTick:400,reportedTick:400,confidence:1};
+  initializeLedger(state);stepStrategy(state,0);
+  assert.equal(army.targetId,worker.id);assert.ok(!['returning','retreating'].includes(army.phase));assert.equal(army.originId,home.id);conserved(state);
+});
+
+test('a low-supply offensive physically visits a funded forward depot without healing or returning to its origin', () => {
+  const {state,faction,home,target,other}=fixture();faction.lastArmy=400;
+  other.factionId=faction.id;other.x=home.x+30;other.z=home.z;initializeMilitary(other,{infantry:0,ranged:0},{state});
+  const army=party(state,home,'forward-refill',40,{x:home.x+35,z:home.z});
+  Object.assign(army,{speed:2.9,targetId:target.id,targetX:target.x,targetZ:target.z,missionTargetX:target.x,missionTargetZ:target.z,supply:20,morale:80});
+  const wounded=getSoldiers(state,army)[0];wounded.hp=wounded.maxHp*.7;const hp=wounded.hp,stock={...other.stock};initializeLedger(state);
+  stepStrategy(state,0);assert.equal(army.stagingPurpose,'resupply');assert.equal(army.stagingTargetId,other.id);assert.equal(army.targetX,other.x);assert.deepEqual(other.stock,stock,'remote depot paid before physical arrival');
+  for(let i=0;i<100&&army.stagingTargetId;i++)advance(state);
+  assert.equal(army.stagingTargetId,null);assert.ok(army.supply>95);assert.equal(army.targetX,target.x);assert.equal(wounded.hp,hp);assert.ok(RESOURCES.some(k=>other.stock[k]<stock[k]));conserved(state);
+});
+
+test('new recruits stage at a purposeful rally and depart together as paid frontline reinforcements', () => {
+  const {state,faction,home,target}=fixture();report(faction,target);initializeLedger(state);stepStrategy(state,0);
+  const main=ownArmies(state,faction)[0];assert.equal(main.size,120);Object.assign(main,{x:home.x+30,z:home.z});placeSoldiers(state,main);
+  const add=n=>{const bodies=createSoldierRecords(home,{infantry:n,ranged:0},{state,faction,source:'controlled-rally-fixture',statsByRole:{infantry:unitStats(faction,'infantry'),ranged:unitStats(faction,'ranged')}});syncSoldierCounts(state,home);return bodies;};
+  const first=add(4);Object.assign(state,{tick:416,step:4160,time:416});stepStrategy(state,0);
+  assert.equal(ownArmies(state,faction).length,1,'recruits trickled into a separate four-person attack');assert.equal(home.productionRally.kind,'frontline');
+  assert.ok(first.every(body=>body.order.role==='production-rally'&&body.groupId==null));assert.ok(Math.hypot(home.productionRally.x-home.x,home.productionRally.z-home.z)>0);
+  const rest=add(4);Object.assign(state,{tick:432,step:4320,time:432});stepStrategy(state,0);
+  const reinforcement=ownArmies(state,faction).find(g=>g.id!==main.id);assert.ok(reinforcement);assert.equal(reinforcement.size,8);assert.equal(reinforcement.reinforcement,true);
+  assert.deepEqual(new Set(reinforcement.soldierIds),new Set([...first,...rest].map(body=>body.id)));assert.equal(home.population,400);conserved(state);
 });

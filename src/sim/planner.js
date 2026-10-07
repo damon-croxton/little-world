@@ -20,8 +20,9 @@ function defensiveRoles(s, f, homes, groups) {
     const guarding = getSoldiers(s, home);
     for (const [i, body] of guarding.entries()) {
       const recovery = !ready(body), outer = !recovery && !body.towerId && clear && priority && i % 2 === 0;
-      body.order = { role: recovery ? 'recover' : body.towerId ? 'tower-guard' : outer ? 'guard-worksite' : 'home-reserve',
-        objectiveId: outer ? priority.targetId || priority.id : home.id, x: outer ? post.x : home.x, z: outer ? post.z : home.z };
+      const rally = !recovery && !body.towerId && home.productionRally?.kind === 'frontline' ? home.productionRally : null;
+      body.order = { role: recovery ? 'recover' : body.towerId ? 'tower-guard' : rally ? 'production-rally' : outer ? 'guard-worksite' : 'home-reserve',
+        objectiveId: rally?.targetId ?? (outer ? priority.targetId || priority.id : home.id), x: rally?.x ?? (outer ? post.x : home.x), z: rally?.z ?? (outer ? post.z : home.z) };
     }
   }
 }
@@ -53,7 +54,6 @@ export function planStrategy(s, f, homes, hooks) {
   if (f.strategy && s.tick < f.strategy.nextReview) return f.strategy;
   const old = f.strategy, groups = s.groups.filter(g => live(g) && groupController(s, g) === f.id);
   const armies = groups.filter(g => g.kind === 'army');
-  defensiveRoles(s, f, homes, groups);
   const reports = knownReports(s, f, { maxAge: 180, minConfidence: .35 });
   const held = new Set(s.settlements.filter(h => settlementController(s, h) === f.id).map(h => h.id));
   const candidates = reports.filter(k => !held.has(k.id) && k.kind === 'settlement' && hostile(f, k.ownerId) && !['camp', 'ruin'].includes(k.status) && s.tick - (f.unreachableTargets?.[k.id] ?? -100) >= 45);
@@ -70,6 +70,24 @@ export function planStrategy(s, f, homes, hooks) {
     observedTick: target?.observedTick ?? resource?.observedTick ?? null, intelAge: target ? s.tick - target.observedTick : null, nextReview: s.tick + 4,
     operation: old?.operation ?? null, reviews: (old?.reviews || 0) + 1,
     reason: recovering ? 'Restore reliable supplies before new offensives.' : target ? 'Concentrate a supplied force against the selected reported rival.' : resource ? 'Protect harvesting and reserve a viable workforce for surveyed expansion.' : 'Guard the home while scouts find resources and rivals.' };
+  for (const home of homes) {
+    const defend = home.defensePlan?.reserve > 0, front = armies.find(g => g.campaign && g.missionKind !== 'protection' && !['returning', 'retreating'].includes(g.phase));
+    if (mode !== 'campaign' || !target || defend) {
+      home.productionRally = { kind: 'defence', x: home.x, z: home.z, targetId: home.id, reason: defend ? home.defensePlan.reason : 'No supported offensive destination is known.' };
+      continue;
+    }
+    const objective = front && distance(home, front) > 16 ? front : target, d = Math.max(1, distance(home, objective));
+    const setback = objective === target ? 28 : front.combat?.active ? 18 : 6;
+    const fraction = Math.max(0, (d - setback) / d), destination = { x: home.x + (objective.x - home.x) * fraction, z: home.z + (objective.z - home.z) * fraction };
+    const local = { x: home.x + (destination.x - home.x) / Math.max(1, distance(home, destination)) * Math.min(8, distance(home, destination)), z: home.z + (destination.z - home.z) / Math.max(1, distance(home, destination)) * Math.min(8, distance(home, destination)) };
+    const key = `${target.id}:${Math.round(destination.x / 4)}:${Math.round(destination.z / 4)}`;
+    const reachable = home.productionRally?.key === key ? home.productionRally.reachable : findPath(hooks.planningWorld(s, f), home, destination, { factionId: f.id, maxExpansions: 800 }).reachable;
+    const localClear = isSegmentTraversable(s, home, local, { factionId: f.id, radius: .2 });
+    home.productionRally = { kind: reachable ? 'frontline' : 'defence', key, reachable, x: localClear ? local.x : home.x, z: localClear ? local.z : home.z,
+      destinationX: destination.x, destinationZ: destination.z, targetId: target.id, frontGroupId: front?.id || null, minimumBatch: 8,
+      reason: reachable ? 'New recruits assemble here for a paid group departure to the moving frontline; they do not march alone through enemy territory.' : 'The forward rally is unreachable; holding for a useful route.' };
+  }
+  defensiveRoles(s, f, homes, groups);
   if (strategy.operation && (!candidates.some(k => k.id === strategy.operation.targetId) || !armies.some(g => g.targetId === strategy.operation.targetId && !['returning', 'retreating'].includes(g.phase)))) {
     for (const g of armies) if (g.operationId === strategy.operation.id) { g.strategicHold = null; g.operationId = null; g.targetX = g.missionTargetX; g.targetZ = g.missionTargetZ; }
     strategy.operation = null;
