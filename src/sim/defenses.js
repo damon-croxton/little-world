@@ -100,24 +100,6 @@ function segmentDistance(point, from, to) {
   const t = length2 ? Math.max(0, Math.min(1, ((point.x - from.x) * dx + (point.z - from.z) * dz) / length2)) : 0;
   return Math.hypot(point.x - from.x - dx * t, point.z - from.z - dz * t);
 }
-function screenSegment(anchor, side, rank = 0) {
-  const forward = anchor.approach, axis = { x: -forward.z, z: forward.x }, halfGate = DEFENSE_STATS.gate.length * .5;
-  const topologySlot = side ? `${side < 0 ? 'left' : 'right'}-${rank}` : 'gate';
-  const node = (sign, index) => {
-    const origin = pointAlong(anchor, axis, sign * halfGate);
-    // A shallow return shelters the flanks without ever closing behind town.
-    const wing = { x: axis.x * sign * Math.sqrt(1 - .18 ** 2) - forward.x * .18, z: axis.z * sign * Math.sqrt(1 - .18 ** 2) - forward.z * .18 };
-    return pointAlong(origin, wing, index * DEFENSE_STATS.wall.length);
-  };
-  const from = side ? node(side, rank - 1) : node(-1, 0), to = side ? node(side, rank) : node(1, 0);
-  const kind = side ? 'wall' : 'gate', stats = DEFENSE_STATS[kind];
-  const join = (sign, index) => `${anchor.topologyId}:${sign < 0 ? 'left' : 'right'}:${index}`;
-  return { kind, ...wallGeometry({ from, to, width: stats.width }), from, to, gateWidth: stats.gateWidth || 0, isGate: kind === 'gate',
-    maxHp: stats.maxHp, hp: stats.maxHp, topologyId: anchor.topologyId, topologySlot,
-    joins: { from: side ? join(side, rank - 1) : join(-1, 0), to: side ? join(side, rank) : join(1, 0) },
-    approach: { ...forward }, targetReportId: anchor.targetReportId, defensiveObjective: anchor.defensiveObjective,
-    placementReason: `${anchor.placementReason}; ${side ? 'extends the joined screen while leaving the rear open' : 'keeps a controlled friendly passage through the defended approach'}` };
-}
 function footprintClear(state, home, plan) {
   if (plan.kind === 'tower') return terrainAt(plan.x, plan.z, state.seed).traversable && !home.buildings.some(b => !b.destroyed && distance(b, plan) < 3.5);
   // Check the full wall footprint, not just its center on a riverbank.
@@ -142,64 +124,78 @@ function preservesFriendlyRoutes(state, home, faction, plans, anchor) {
   return true;
 }
 
+function perimeterBlueprint(state, home, faction, objective, civicRadius) {
+  const bearing = objective ? Math.atan2(objective.z - home.z, objective.x - home.x) : 0;
+  const baseRadius = Math.max(12, Math.ceil(civicRadius + 6));
+  for (const adjustment of [0, 3, 6]) {
+    const radius = baseRadius + adjustment, count = Math.min(64, Math.max(12, Math.ceil(2 * Math.PI * radius / 8))), angle = Math.PI * 2 / count;
+    const vertices = [];
+    for (let i = 0; i < count; i++) {
+      const turn = bearing + (i - .5) * angle;
+      let vertex = null;
+      for (const inset of [0, -2, 2, -4, 4]) {
+        const reach = Math.max(civicRadius + 4, radius + inset), point = { x: home.x + Math.cos(turn) * reach, z: home.z + Math.sin(turn) * reach };
+        if (!terrainAt(point.x, point.z, state.seed).traversable || home.buildings.some(b => !b.destroyed && !DEFENSE_STATS[b.kind] && distance(b, point) < 4)) continue;
+        if (vertices.length && !isSegmentTraversable(state, vertices.at(-1), point, { radius: .8, ignoreWalls: true })) continue;
+        vertex = point; break;
+      }
+      if (!vertex) break;
+      vertices.push(vertex);
+    }
+    if (vertices.length !== count) continue;
+    const gates = new Set([0, Math.floor(count / 2)]);
+    // Additional gates follow surveyed extraction routes, not hidden deposits.
+    for (const resource of freshKnown(faction, state).filter(k => k.kind === 'resource' && distance(home, k) > radius).sort((a, b) => distance(home, a) - distance(home, b)).slice(0, 6)) {
+      const turn = (Math.atan2(resource.z - home.z, resource.x - home.x) - bearing + Math.PI * 4) % (Math.PI * 2);
+      const slot = Math.round(turn / angle) % count;
+      if (gates.size < 4 && [...gates].every(i => Math.min(Math.abs(i - slot), count - Math.abs(i - slot)) >= 3)) gates.add(slot);
+    }
+    const topologyId = `${home.id}:perimeter:${state.tick}:${radius}`;
+    const plans = vertices.map((from, i) => {
+      const to = vertices[(i + 1) % count], kind = gates.has(i) ? 'gate' : 'wall', stats = DEFENSE_STATS[kind];
+      const geometry = wallGeometry({ from, to, width: stats.width }), approach = { x: (geometry.x - home.x) / radius, z: (geometry.z - home.z) / radius };
+      return { kind, ...geometry, from, to, gateWidth: kind === 'gate' ? Math.min(5, geometry.length - 1.5) : 0, isGate: kind === 'gate',
+        maxHp: stats.maxHp, hp: stats.maxHp, topologyId, topologySlot: `ring-${i}`, perimeter: true,
+        joins: { from: `${topologyId}:v${i}`, to: `${topologyId}:v${(i + 1) % count}` }, approach,
+        targetReportId: objective?.id ?? home.id, defensiveObjective: 'perimeter',
+        placementReason: kind === 'gate' ? 'Keeps a controlled route through the enclosing perimeter' : 'Extends the connected perimeter around the civic footprint' };
+    });
+    if (plans.every(plan => footprintClear(state, home, plan)) && preservesFriendlyRoutes(state, home, faction, plans, plans[0])) return { radius, civicRadius, topologyId, plans, createdTick: state.tick };
+  }
+  return null;
+}
+
 export function defenseBuildingPlan(state, home, faction) {
   if (home.occupiedBy || faction.defeatedBy || state.tick < 70 || home.population < 90 || home.health < 72 || home.shortageDays > 0 || home.wellbeing < .98) return null;
-  const defenses = home.buildings.filter(building => DEFENSE_STATS[building.kind] && !building.destroyed && building.hp > 0);
-  // Keep a small, affordable fortification. Growth and extraction retain the
-  // majority of labour/materials; placement cannot become unlimited tower spam.
-  const budget = home.population >= 360 ? 15 : home.population >= 180 ? 11 : 7;
-  if (defenses.length >= budget || state.tick - (home.lastDefenseStarted ?? -100) < 24) return null;
+  if (state.tick - (home.lastDefenseStarted ?? -100) < 24 || state.tick < (home.perimeterRetryAt ?? 0)) return null;
   const objective = knownObjective(state, home, faction);
-  let anchor = defenses.find(b => b.kind === 'gate' && b.topologyId && b.approach && b.targetReportId === objective?.id) || defenses.find(b => b.kind === 'gate' && b.topologyId && b.approach) || home.buildings.find(b => b.kind === 'gate' && b.topologyId && b.approach);
-  if (anchor && objective?.priority === 'threat') {
-    const dx = objective.x - home.x, dz = objective.z - home.z;
-    if ((dx * anchor.approach.x + dz * anchor.approach.z) / Math.max(1, Math.hypot(dx, dz)) < .4) anchor = null;
+  const civicRadius = Math.max(4, ...home.buildings.filter(b => !b.destroyed && !DEFENSE_STATS[b.kind]).map(b => distance(home, b)));
+  let blueprint = home.perimeterPlan;
+  if (!blueprint || civicRadius > blueprint.radius - 3) {
+    blueprint = perimeterBlueprint(state, home, faction, objective, civicRadius);
+    if (!blueprint) { home.perimeterRetryAt = state.tick + 40; return null; }
+    home.perimeterPlan = blueprint;
   }
-  if (!anchor) {
-    if (!objective) return null;
-    const route = findPath(state, home, objective, { factionId: faction.id, arrival: 2, maxExpansions: 1024 });
-    if (!route.reachable || route.length < 8) return null;
-    const desired = Math.min(24, Math.max(12, Math.sqrt(home.buildings.length) * 3.25), route.length * .65);
-    for (const adjustment of [0, 3, -3, 6, -6]) {
-      let remaining = Math.max(6, Math.min(route.length - 3, desired + adjustment)), previous = home;
-      for (const next of route.waypoints) {
-        const length = distance(previous, next);
-        if (length < remaining) { remaining -= length; previous = next; continue; }
-        const approach = { x: (next.x - previous.x) / length, z: (next.z - previous.z) / length };
-        const base = { ...pointAlong(previous, approach, remaining), approach, topologyId: `${home.id}:defense-screen:${objective.id}`,
-          targetReportId: objective.id, defensiveObjective: objective.priority, placementReason: objective.reason };
-        const plans = [screenSegment(base, 0), screenSegment(base, -1, 1), screenSegment(base, 1, 1)];
-        if (plans.every(p => footprintClear(state, home, p)) && preservesFriendlyRoutes(state, home, faction, plans, base)) return plans[0];
-        break;
-      }
-    }
-    return null;
+  const standing = home.buildings.filter(b => !b.destroyed && b.hp > 0), count = blueprint.plans.length;
+  const occupied = new Set(standing.filter(b => b.topologyId === blueprint.topologyId).map(b => b.topologySlot));
+  // Repair holes first, otherwise grow adjacent wings from the threatened gate
+  // until they meet at the rear. Every segment is a paid construction project.
+  const repairs = blueprint.plans.filter(p => !occupied.has(p.topologySlot) && home.buildings.some(b => b.topologyId === p.topologyId && b.topologySlot === p.topologySlot && (b.destroyed || b.hp <= 0)));
+  const order = Array.from({ length: count }, (_, i) => i).sort((a, b) => (objective?.priority === 'threat' && occupied.size ? distance(blueprint.plans[a], objective) - distance(blueprint.plans[b], objective) : Math.min(a, count - a) - Math.min(b, count - b)) || a - b);
+  const plans = [...repairs, ...order.map(i => blueprint.plans[i])];
+  for (const plan of plans) {
+    if (occupied.has(plan.topologySlot)) continue;
+    const i = blueprint.plans.indexOf(plan);
+    if (occupied.size && !repairs.includes(plan) && !occupied.has(`ring-${(i + count - 1) % count}`) && !occupied.has(`ring-${(i + 1) % count}`)) continue;
+    if (footprintClear(state, home, plan) && preservesFriendlyRoutes(state, home, faction, [plan], blueprint.plans[0])) return { ...plan, from: { ...plan.from }, to: { ...plan.to }, joins: { ...plan.joins } };
   }
-  if (anchor.destroyed || anchor.hp <= 0) {
-    const replacement = screenSegment(anchor, 0);
-    return footprintClear(state, home, replacement) && preservesFriendlyRoutes(state, home, faction, [replacement], anchor) ? replacement : null;
-  }
-  // The funded gate fixes a stable blueprint even when the current report
-  // changes. Always join an existing segment; no disconnected outer fragments.
-  const desiredTowers = Math.min(home.population >= 300 ? 2 : 1, Math.floor((home.military?.ranged || 0) / 3));
-  const slots = [[-1, 1], [1, 1], [-1, 'tower'], [-1, 2], [1, 2], [1, 'tower'], [-1, 3], [1, 3], [-1, 4], [1, 4], [-1, 5], [1, 5]];
-  for (const [side, rank] of slots) {
-    const sideName = side < 0 ? 'left' : 'right', slot = `${sideName}-${rank}`;
-    if (defenses.some(b => b.topologyId === anchor.topologyId && b.topologySlot === slot)) continue;
-    let plan;
-    if (rank === 'tower') {
-      if (defenses.filter(b => b.kind === 'tower').length >= desiredTowers) continue;
-      if (!defenses.some(b => b.topologyId === anchor.topologyId && b.topologySlot === `${sideName}-1`)) continue;
-      const axis = { x: -anchor.approach.z, z: anchor.approach.x }, point = pointAlong(pointAlong(anchor, axis, side * 6.5), anchor.approach, -4);
-      const crew = (state.groups || []).filter(g => g.kind === 'worker' && !g.finished && g.originId === home.id && groupController(state, g) === faction.id && distance(g, point) < 14).sort((a, b) => distance(a, point) - distance(b, point))[0];
-      if (crew && distance(crew, point) > 6) { const reach = distance(crew, point); point.x += (crew.x - point.x) / reach * Math.min(6, reach - 6); point.z += (crew.z - point.z) / reach * Math.min(6, reach - 6); }
-      plan = { ...point, kind: 'tower', ...DEFENSE_STATS.tower, hp: DEFENSE_STATS.tower.maxHp, rotation: 0, topologyId: anchor.topologyId, topologySlot: slot,
-        targetReportId: anchor.targetReportId, defensiveObjective: anchor.defensiveObjective, placementReason: crew ? 'Protects an actual harvesting party beside the connected front screen' : 'Covers the controlled gate and joined defensive screen' };
-    } else {
-      if (rank > 1 && !defenses.some(b => b.topologyId === anchor.topologyId && b.topologySlot === `${sideName}-${rank - 1}`)) continue;
-      plan = screenSegment(anchor, side, rank);
-    }
-    if (footprintClear(state, home, plan) && (plan.kind === 'tower' || preservesFriendlyRoutes(state, home, faction, [plan], anchor))) return plan;
+  const towerLimit = Math.min(home.population >= 300 ? 2 : 1, Math.floor((home.military?.ranged || 0) / 3));
+  if (standing.filter(b => b.kind === 'tower').length >= towerLimit) return null;
+  for (const gate of blueprint.plans.filter(p => p.kind === 'gate')) {
+    const point = pointAlong(gate, gate.approach, -4);
+    const plan = { ...point, kind: 'tower', ...DEFENSE_STATS.tower, hp: DEFENSE_STATS.tower.maxHp, rotation: 0,
+      topologyId: blueprint.topologyId, topologySlot: `${gate.topologySlot}-tower`, targetReportId: gate.targetReportId, defensiveObjective: 'perimeter', placementReason: 'Covers a useful gate through the completed perimeter' };
+    if (footprintClear(state, home, plan)) return plan;
   }
   return null;
 }

@@ -117,3 +117,16 @@ test('own tactical inspector explains decisions while foreign observation hides 
     assert.equal(t.root.querySelector('.tactical-reading'),null);assert.doesNotMatch(t.root.querySelector('.inspector').textContent,/Observed defenders outnumber/);
   }finally{t.dispose();}
 });
+
+test('comparison chart updates a collapsed census and rebuilds cleanly after reset', () => {
+  const t = setup(); try {
+    assert.equal(t.root.querySelectorAll('.strength-bar[role="img"]').length, 4);
+    t.state.factions[1].economy.population = 0; t.state.factions[1].economy.soldiers = 0;
+    t.state.factions[1].status = 'collapsed'; t.update();
+    const row = t.root.querySelector('.faction-entry[data-value="f1"]');
+    assert.match(row.textContent, /0 workers · 0 military/); assert.equal(row.querySelector('.strength-workers').style.width, '0.00%');
+    t.actions.reset('fresh-chart', { civCount: 3 });
+    assert.equal(t.root.querySelectorAll('.strength-bar[role="img"]').length, 3);
+    assert.ok(!t.root.querySelector('.faction-entry[data-value="f3"]'));
+  } finally { t.dispose(); }
+});

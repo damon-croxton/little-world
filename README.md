@@ -1,6 +1,6 @@
 # LittleWorld
 
-An observer-first domination simulation of human settlers, scavenger machines and alien hives. Civilisations gather physical resources, grow settlements, train infantry and ranged forces, build defenses, scout through fog of war, and compete to control the world. Each resource crew appears as one worker with its actual count, such as 11×. Soldiers and home inhabitants remain individual bodies; temporary falling markers depict recorded deaths.
+An observer-first domination simulation of human settlers, scavenger machines and alien hives. Civilisations gather physical resources, grow settlements, train infantry and ranged forces, build defenses, scout through fog of war, and compete to control the world. Each resource crew appears as one worker with its actual count, such as 11×. Soldiers remain individual bodies; housing and census totals represent home inhabitants; temporary falling markers depict recorded deaths.
 
 All architecture, terrain, characters and effects are original procedural geometry. Built with vanilla JavaScript and Three.js 0.160.1; no downloaded artwork is required.
 
@@ -75,7 +75,7 @@ One neutral cycle is one simulation second at 1x. The simulation advances in fix
 
 A civilisation wins when no independent opposing settlements or viable field armies remain. Defeated settlements can be occupied: their native inhabitants and species remain, and captured stores stay at the physical location. Conquest does not delete civilians, transform species or teleport inventory to a capital. A surviving field army can still try to liberate its home before capitulation. If a sovereign loses all native bases but still holds a foreign town, one held producer can recruit paid native auxiliaries under its command. Their species and population identity do not change.
 
-Campaigns reserve troops for home defense and may field bounded simultaneous expeditions. Command decisions use delivered intelligence and local home sightings; a field force uses its own visible contacts. Supplied survivors can press an undefended objective and continue from a captured depot after paying for the next route's rations. Low supplies, strong defenders and home threats can still justify withdrawal. Nearby soldiers can engage different hostile formations at once, while scouts intercepted at physical contact retreat with their people and reports intact.
+Campaigns reserve troops for home defense and concentrate supplied parties at a shared forward rally before committing against a reported objective. Command decisions use delivered intelligence and local home sightings; a field force uses its own visible contacts. Supplied survivors can press an undefended objective and continue from a captured depot after paying for the next route's rations. Low supplies, strong defenders and home threats can still justify withdrawal. Nearby soldiers can engage different hostile formations at once, while scouts intercepted at physical contact retreat with their people and reports intact.
 
 Inspectors distinguish native identity from current control. Buildings retain their native architecture; military command colors identify their controller. Combat checks current allegiance again when a delayed strike lands, so capture or capitulation cannot turn an old attack into friendly damage.
 
@@ -87,7 +87,7 @@ Seeded advantages are independent of species. Examples include faster gathering 
 
 - Workers travel to finite or regenerating deposits, extract within reach, carry cargo and deliver it home. Dispatch tries affordable reachable alternatives and funds survival trips before discretionary spending. A starving town may risk a small nearby recovery crew with only its remaining rations; hunger, casualties and cargo conservation still apply.
 - Each species has distinct infantry and ranged producers. Buildings require funded construction, and finite training queues pay their costs and reserve existing civilians. A cancelled or destroyed course cannot complete later.
-- Defenses grow as connected screens facing known approaches, beginning with a usable gate and joined wings. The rear remains open, and planned construction preserves friendly routes. Staffed towers need two actual ranged operators and paid ammunition. Civilians can contest a paper resource claim until real troops or towers secure it.
+- Defenses grow into a connected enclosing perimeter around the civic footprint. Funded sections extend from a gate, prioritize known threats, preserve friendly routes through multiple gates, repair destroyed spans and expand outward as the base grows. Infeasible terrain causes a bounded retry rather than an impassable wall. Staffed towers need two actual ranged operators and paid ammunition. Civilians can contest a paper resource claim until real troops or towers secure it.
 - Terrain includes deep water, rocky barriers, fords and mountain passes. Group routes and body formation offsets respect physical obstacles; friendly/occupier gates preserve access.
 - Infantry loosen into reachable contact positions; ranged soldiers seek firing distance. Local body separation and a shared squad route keep passage movement physical. Infantry strikes and ranged projectiles create real damage and casualty events; effects only read those events.
 - Squads prioritize locally observed defenders, compare their supported strength with observable enemy types, and retreat when heavily overmatched. They can seize an exposed crew's real cargo or damage economic buildings. A useful breach must beat the cost of a detour. The inspector explains decisions and target interruptions. Lost storage records excess supplies as spoilage in the ledger.
@@ -179,9 +179,11 @@ observations. Small paid harassment parties use fresh delivered worker reports,
 keep a home reserve, and interrupt raids for defenders. Funded armies can continue
 to a suitable nearby reported objective with sufficient existing supplies.
 
-Front screens can extend through five joined wall spans on each side of a gate.
-Known hostile approaches can supersede an obsolete rear-facing screen, and
-towers favor nearby actual work parties while retaining physical crew requirements.
+Enclosing perimeters supersede the former front-only screens. A cached terrain-checked
+blueprint surrounds the current civic footprint; construction remains staged and
+paid. Gates follow known extraction routes, and towers cover completed gates
+with actual ranged crews. Terrain can delay an enclosure; construction does not
+teleport bodies or close a scaffold through someone standing on its footprint.
 
 Interactive frames run at most four simulation pulses, stopping after an 8 ms
 CPU budget once the current pulse finishes. Requested backlog is bounded at half
@@ -189,3 +191,27 @@ a simulation second; excess requested time is recorded, never credited as comput
 world progress. This prioritizes input responsiveness under load and does not
 guarantee the selected nominal speed. Actual simulated cycles per second remain
 available in performance diagnostics.
+
+
+### Bounded strategic planning and comparison
+
+Faction plans reconsider objectives every four cycles, retain valid objectives,
+and assign home reserves, worksite guards and recovering soldiers distinct jobs.
+Supplied campaign parties assemble at one forward rally and count actual arrived
+healthy soldiers before committing together. An unsupported rally times out; a
+stalled march receives one route retry before returning physically and placing
+that objective on a finite cooldown. Affordable smaller forces still respect the
+reported strength floor, paid route supplies and home defense reserve. Existing
+harvest, survey and expansion jobs retain their real targets and cargo.
+
+The Societies panel compares native civilians (all civilian jobs, trainees and
+travelers) with serving military (home and deployed). Faction-colored bars use a
+shared population scale in Whole world. Faction perspective shows only its own
+exact census; foreign counts and their contribution to the scale remain unknown.
+Mobile panels remain collapsed until opened.
+
+The design borrows persistent roles/target IDs, bounded work and route cache
+invalidation from [Screeps Memory](https://docs.screeps.com/global-objects.html),
+[CPU guidance](https://docs.screeps.com/cpu-limit.html), and its
+[community caching guide](https://docs.screeps.com/contributed/caching-overview.html).
+Those are programming principles; Screeps does not supply this game's strategy.

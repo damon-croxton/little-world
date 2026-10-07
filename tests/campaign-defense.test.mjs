@@ -147,17 +147,19 @@ test('unseen threats and unreturned worker sightings cannot alter home reserves 
   assert.deepEqual(orders(altered), orders(state)); assert.deepEqual(altered.settlements[0].defensePlan, home.defensePlan);
 });
 
-test('two simultaneous campaigns reserve distinct soldiers while civilian commitments and cargo stay unchanged', () => {
+test('one focused campaign concentrates available soldiers while civilian commitments and cargo stay unchanged', () => {
   const { state, faction, home, target, other } = fixture(); report(faction, target); report(faction, other);
   state.groups.push({ id: 'workers', kind: 'worker', factionId: faction.id, originId: home.id, size: 20, x: home.x, z: home.z,
     phase: 'working', carrying: { food: 25, water: 0, energy: 0, materials: 0 } });
+  state.groups[0].strategicRole = 'harvest';
   const civilianBefore = structuredClone(state.groups[0]), population = home.population; initializeLedger(state);
   stepStrategy(state, 0); faction.lastArmy = 0; stepStrategy(state, 0);
   const armies = ownArmies(state, faction);
-  assert.equal(armies.length, 2); assert.equal(new Set(armies.map(g => g.targetId)).size, 2);
+  assert.equal(armies.length, 1); assert.equal(armies[0].targetId, target.id);
+  assert.equal(armies[0].size, 84); assert.equal(new Set(armies[0].soldierIds).size, 84);
   assert.ok(countMilitary(availableMilitary(state, home)) >= home.defensePlan.reserve);
   assert.equal(home.population, population); assert.deepEqual(state.groups.find(g => g.id === 'workers'), civilianBefore);
-  faction.lastArmy = 0; stepStrategy(state, 0); assert.equal(ownArmies(state, faction).length, 2, 'force cap was exceeded'); conserved(state);
+  faction.lastArmy = 0; stepStrategy(state, 0); assert.equal(ownArmies(state, faction).length, 1, 'the protected reserve was dispatched'); conserved(state);
 });
 
 test('a returned stronger-defender report can fund a separate reinforcement within the home reserve', () => {
@@ -345,4 +347,14 @@ test('a second campaign cannot raid or damage a settlement captured earlier in t
   assert.equal(target.occupiedBy, faction.id); assert.equal(army.siegeDays, 0, 'first army did not continue its next leg');
   assert.equal(second.siegeDays, 5, 'second army pressed its newly friendly target'); assert.equal(second.engagedDays, 5);
   assert.equal(state.stats.captures, 1); conserved(state);
+});
+
+
+test('a smaller affordable campaign still meets the reported strength floor and pays exact rations', () => {
+  const { state, faction, home, target } = fixture(); report(faction, target, 20);
+  home.stock.food = 50; home.stock.water = 45; initializeLedger(state);
+  stepStrategy(state, 0); const army = ownArmies(state, faction)[0];
+  assert.ok(army, 'large preferred force masked the affordable alternative');
+  assert.ok(army.size < 84 && army.size >= 17); assert.ok(home.stock.food >= 20 && home.stock.water >= 20);
+  conserved(state);
 });

@@ -30,12 +30,14 @@ function standingWall(id, x, z, length, hp = 300) {
   return { id, factionId: 'enemy', kind: 'wall', x, z, rotation: Math.PI / 2, length, width: 1, hp, maxHp: hp, progress: 1 };
 }
 
-test('gate-led fortifications form exact joined wings and preserve a real friendly harvesting route', () => {
+test('funded fortifications enclose the base with joined gates and preserve a real harvesting route', () => {
   const { state, home, owner, goal } = fixture(), before = structuredClone(state);
   assert.equal(defenseBuildingPlan(state, home, owner).kind, 'gate');
-  assert.deepEqual(state, before, 'planning must not fund, move, or mutate anything');
-  const plans = build(state, home, owner, 9), gate = plans[0], screen = plans.filter(p => p.kind !== 'tower');
-  assert.equal(screen.length, 7); assert.equal(plans.filter(p => p.kind === 'tower').length, 2);
+  const cached = home.perimeterPlan; delete home.perimeterPlan;
+  assert.deepEqual(state, before, 'planning must not fund construction, move bodies, or change the census'); home.perimeterPlan = cached;
+  const plans = build(state, home, owner, cached.plans.length + 2), gate = plans[0], screen = plans.filter(p => p.kind !== 'tower');
+  assert.equal(screen.length, cached.plans.length); assert.equal(plans.filter(p => p.kind === 'tower').length, 2);
+  assert.ok(screen.filter(p => p.kind === 'gate').length >= 2);
   assert.ok(plans.every(p => p.topologyId === gate.topologyId));
   const nodes = new Map();
   for (const wall of screen) {
@@ -46,11 +48,12 @@ test('gate-led fortifications form exact joined wings and preserve a real friend
       else nodes.set(wall.joins[end], wall[end]);
     }
   }
-  assert.equal(nodes.size, screen.length + 1, 'screen is disconnected or closes an accidental ring');
+  assert.equal(nodes.size, screen.length, 'perimeter must form a closed loop');
+  for (const id of nodes.keys()) assert.equal(screen.flatMap(p => Object.values(p.joins)).filter(v => v === id).length, 2);
   assert.equal(findPath(state, home, goal, { factionId: owner.id }).reason, 'direct');
   assert.equal(findPath(state, home, goal, { factionId: 'ally' }).reason, 'direct');
   const hostile = findPath(state, home, goal, { factionId: 'enemy' });
-  assert.ok(hostile.reachable && hostile.length > 45, 'connected screen failed to protect its approach');
+  assert.equal(hostile.reachable, false, 'a hostile party escaped through the closed perimeter');
   let previous = home;
   for (const point of hostile.waypoints) {
     assert.ok(isSegmentTraversable(state, previous, point, { factionId: 'enemy', radius: .16 })); previous = point;
@@ -70,18 +73,24 @@ test('gate-led fortifications form exact joined wings and preserve a real friend
   assert.equal(worker.size, 8); assert.equal(home.population, 400);
 });
 
-test('small towns fund connected protection; later reports cannot scatter an established screen', () => {
+test('small towns finish a stable enclosing plan despite later intel changes, then expand around new buildings', () => {
   const { state, home, owner } = fixture(); home.population = 100;
-  const gate = build(state, home, owner, 1)[0];
+  const gate = build(state, home, owner, 1)[0], blueprint = home.perimeterPlan;
   owner.knowledge = {};
-  const left = defenseBuildingPlan(state, home, owner);
-  assert.equal(left.topologyId, gate.topologyId); assert.deepEqual(left.from, gate.from);
-  home.buildings.push({ ...left, id: 'left', progress: 1 }); invalidateNavigation(state);
-  const right = defenseBuildingPlan(state, home, owner);
-  assert.deepEqual(right.from, gate.to);
-  home.buildings.push({ ...right, id: 'right', progress: 1 });
-  for(let i=3;i<7;i++){const plan=defenseBuildingPlan(state,home,owner);assert.ok(plan,'longer connected small-town screen stopped early');assert.equal(plan.topologyId,gate.topologyId);home.buildings.push({...plan,id:`extended-${i}`,progress:1});invalidateNavigation(state);}
-  assert.equal(defenseBuildingPlan(state, home, owner), null, 'seven-piece small-town budget exceeded');
+  for (let i = 1; i < blueprint.plans.length; i++) {
+    const plan = defenseBuildingPlan(state, home, owner); assert.ok(plan);
+    assert.equal(plan.topologyId, gate.topologyId);
+    assert.ok(home.buildings.some(b => Object.values(b.joins || {}).some(end => Object.values(plan.joins).includes(end))), 'new work detached from the funded perimeter');
+    home.buildings.push({ ...plan, id: `extension-${i}`, progress: 1 }); invalidateNavigation(state);
+  }
+  assert.ok(blueprint.plans.length > 7, 'old screen budget prevented enclosure');
+  const tower = defenseBuildingPlan(state, home, owner); assert.equal(tower.kind, 'tower');
+  home.buildings.push({ ...tower, id: 'tower', progress: 1 }); invalidateNavigation(state);
+  assert.equal(defenseBuildingPlan(state, home, owner), null, 'a completed perimeter started endless extra defenses');
+  home.buildings.push({ id: 'new-house', kind: 'housing', x: home.x + blueprint.radius + 2, z: home.z, hp: 100, progress: 1 });
+  const expansion = defenseBuildingPlan(state, home, owner);
+  assert.ok(expansion, 'growth had no enclosing fallback'); assert.ok(home.perimeterPlan.radius > blueprint.radius);
+  assert.notEqual(expansion.topologyId, gate.topologyId);
 });
 
 test('a destroyed gate is rebuilt on the original joined endpoints', () => {

@@ -345,10 +345,10 @@ function acquire(s, g, hooks) {
     withdraw(s, g, hooks, `Visible defenders outweigh this force and nearby support (${cs.strengthRatio}× local strength).`); return null;
   }
   const urgent = local.threats.filter(t => t.urgent), priorEconomic = cs.active && ['structure', 'worker'].includes(cs.targetKind);
-  const selected = chooseStable(urgent.length ? urgent : local.threats, cs, now);
+  const selected = chooseStable(g.strategicHold ? urgent : urgent.length ? urgent : local.threats, cs, now);
   let target = selected?.target, intent = 'engage', reason = 'Engaging the most immediate visible local threat.';
   if (selected && priorEconomic && target.id !== cs.targetId) { intent = 'intercept'; reason = 'Visible defenders threaten the raiders; interrupting the economic or wall attack.'; }
-  if (!selected && g.phase !== 'returning' && cs.resumePhase !== 'returning') {
+  if (!selected && !g.strategicHold && g.phase !== 'returning' && cs.resumePhase !== 'returning') {
     const cargo = CARGO_KEYS.reduce((n, key) => n + (g.carrying?.[key] || 0), 0);
     const economic = local.workers.filter(worker => cargo < g.size * 1.2 - .1 && CARGO_KEYS.some(key => (worker.carrying?.[key] || 0) > 0)).map(worker => ({ target: worker, score: 23 - distance(g, worker) }));
     if (!local.objective || distance(g, local.objective) > 4 || cs.targetKind === 'structure') for (const building of local.structures) if (distance(g, building) < 10) economic.push({ target: building, score: (building.structureKind === 'housing' ? 29 : 17) - distance(g, building) });
@@ -371,7 +371,7 @@ function acquire(s, g, hooks) {
     }
   } else cs.scoutPursuit = null;
   const goal = target || (Number.isFinite(g.missionTargetX ?? g.targetX) && Number.isFinite(g.missionTargetZ ?? g.targetZ) ? { x: g.missionTargetX ?? g.targetX, z: g.missionTargetZ ?? g.targetZ } : null);
-  const route = !selected?.urgent && g.phase !== 'returning' && cs.resumePhase !== 'returning' ? routeDecision(s, g, local, goal) : null;
+  const route = !g.strategicHold && !selected?.urgent && g.phase !== 'returning' && cs.resumePhase !== 'returning' ? routeDecision(s, g, local, goal) : null;
   if (route?.action === 'breach') {
     const obstacle = local.walls.find(w => w.building.id === route.wallId && permittedTarget(s, g, w.home));
     if (obstacle && g.units.infantry > 0) { target = structureTarget(s, obstacle.home, obstacle.building); intent = 'breach'; reason = route.reason; }

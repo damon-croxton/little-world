@@ -65,6 +65,8 @@ async function accept() {
     const facts = await page.evaluate(() => ({ selected: littleworld.view.selectedId, viewer: littleworld.shownState.viewer.factionId, foreignCensus: littleworld.shownState.factions.filter(f => f.id !== 'f1').map(f => f.economy.population), fog: littleworld.diagnostics.fog.active }));
     assert.equal(facts.selected, 's1'); assert.equal(facts.viewer, 'f1'); assert.equal(facts.fog, true);
     assert.ok(facts.foreignCensus.every(value => value === null));
+    assert.equal(await page.locator('.strength-bar[role="img"]').count(), 1);
+    assert.equal(await page.locator('.strength-hidden').count(), config.civCount - 1);
     assert.equal(await page.evaluate(() => JSON.stringify(littleworld.state)), initial);
     return facts;
   });
@@ -141,6 +143,35 @@ async function accept() {
     assert.equal(c.drawnModels, c.visibleIndividuals - c.visibleWorkerIndividuals + c.drawnWorkerModels);
     assert.equal(c.drawnWorkerModels, c.visibleWorkerCrews);
     return { people: d.totalPopulation, models: c.drawnModels, workers: c.visibleWorkerIndividuals, crews: c.drawnWorkerModels };
+  });
+  await check('Worker and military comparison matches the native census on a shared scale', async () => {
+    const facts = await page.evaluate(() => {
+      const w = littleworld, maximum = Math.max(...w.state.factions.map(f => f.economy.population));
+      return w.state.factions.map(f => {
+        const row = document.querySelector(`.faction-entry[data-value="${f.id}"]`);
+        return { population: f.economy.population, military: f.economy.soldiers, label: row.querySelector('.strength-bar').getAttribute('aria-label'),
+          actualPercent: parseFloat(row.querySelector('.strength-workers').style.width) + parseFloat(row.querySelector('.strength-military').style.width), expectedPercent: f.economy.population / maximum * 100 };
+      });
+    });
+    for (const row of facts) { assert.ok(Math.abs(row.actualPercent - row.expectedPercent) <= .011); assert.match(row.label, /workers and .* military; shared population scale/); }
+    return facts;
+  });
+  await check('Mobile society chart opens, fits and closes without advancing the world', async () => {
+    const before = await page.evaluate(() => ({ step: littleworld.state.step, paused: littleworld.view.paused }));
+    await page.setViewportSize({ width: 390, height: 844 }); await rendered();
+    await page.locator('[data-action="mobile-panel"][data-value="factions"]').click(); await rendered();
+    const bounds = await page.evaluate(() => {
+      const panel = document.querySelector('.faction-index'), rect = panel.getBoundingClientRect();
+      return { x: rect.x, right: rect.right, bottom: rect.bottom, width: panel.clientWidth, scrollWidth: panel.scrollWidth,
+        rows: [...panel.querySelectorAll('.strength-bar')].map(b => { const r = b.getBoundingClientRect(); return { width: r.width, right: r.right }; }) };
+    });
+    assert.ok(bounds.x >= 0 && bounds.right <= 390 && bounds.bottom < 790); assert.ok(bounds.scrollWidth <= bounds.width + 1);
+    assert.equal(bounds.rows.length, config.civCount); assert.ok(bounds.rows.every(r => r.width > 50 && r.right <= bounds.right));
+    await page.screenshot({ path: output(config, 'mobile-chart.png') });
+    await page.locator('.faction-index [data-action="close-mobile-panel"]').click(); await rendered();
+    assert.equal(await page.locator('[data-action="mobile-panel"][data-value="factions"]').getAttribute('aria-pressed'), 'false');
+    assert.deepEqual(await page.evaluate(() => ({ step: littleworld.state.step, paused: littleworld.view.paused })), before);
+    await page.setViewportSize({ width: 1280, height: 800 }); await rendered(); return bounds;
   });
   await page.screenshot({ path: output(config, 'smoke.png') });
   await battleSmoke({ page, check, screenshotPath: output(config, 'battle-smoke.png') });

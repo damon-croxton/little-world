@@ -119,9 +119,13 @@ function plan(s, record, index, adapter) {
     }
   }
   const retreat = !context.isHome && ['retreating', 'disabled'].includes(entity.phase);
-  const chosen = select(s, record, index, adapter, retreat || body.withdrawing), was = body.targetId;
+  const chosen = select(s, record, index, adapter, retreat || body.withdrawing || !!entity.strategicHold), was = body.targetId;
   let target = chosen.target, action = 'advance', reason = 'squad-objective', speed = spec.speed, intercept = null;
   let goal = combatFormationSlot(entity, ordinal, { units: context.units, x: context.x, z: context.z, yaw: entity.combat.yaw, physical: false });
+  if (context.isHome && !entity.combat.active && body.order && !body.withdrawing && !body.towerId) {
+    goal = combatFormationSlot(entity, ordinal, { units: context.units, x: body.order.x, z: body.order.z, yaw: entity.combat.yaw, physical: false });
+    reason = body.order.role;
+  }
   if (target && !retreat && !body.withdrawing && distance(body, target.body) > spec.range + .35) {
     const gap = distance(body, target.body);
     if (body.pursuit?.targetId !== target.body.id) body.pursuit = { targetId: target.body.id, since: time, progressAt: time, bestGap: gap, x: body.x, z: body.z };

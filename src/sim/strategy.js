@@ -3,6 +3,7 @@ import { terrainAt, WORLD_RADIUS } from '../world.js';
 import { allocateMilitary, applyMilitaryCasualties, availableMilitary, countMilitary, deployMilitary, getSoldiers, returnMilitary, demobilizeMilitary, refreshExileBases } from './military.js';
 import { stepCombat, canFight } from './combat.js';
 import { syncGroupSoldiers, touchSoldiers } from './soldiers.js';
+import { planStrategy } from './planner.js';
 import { observeGroup, reportObservations, knownReports, visibleToGroup } from './knowledge.js';
 import { moveAlongRoute, isSegmentTraversable, findPath } from './navigation.js';
 import { factionController, settlementController, groupController, occupySettlement, updateConquest } from './conquest.js';
@@ -107,6 +108,7 @@ function returnHome(s, g, reason, retreat = false) {
   }
   g.phase = retreat ? 'retreating' : 'returning';
   g.rallyGroupId = null; g.rallyWaitUntil = null;
+  g.strategicHold = null; g.operationId = null;
   if (g.combat) { g.combat.active = false; g.combat.resumePhase = null; g.combat.intent = retreat ? 'retreat' : 'return'; g.combat.reason = reason; }
   g.targetX = p.x;
   g.targetZ = p.z;
@@ -454,6 +456,7 @@ export function coordinateFrontlines(s, f) {
   const fronts = armies.filter(g => g.campaign && !g.rallyGroupId && !['returning', 'retreating'].includes(g.phase) && g.supply >= 45 && g.morale >= 55)
     .sort((a, b) => (a.createdTick ?? 0) - (b.createdTick ?? 0) || a.id.localeCompare(b.id));
   for (const g of armies) {
+    if (g.operationId && f.strategy?.operation?.id === g.operationId) continue;
     if (g.finished || g.phase === 'retreating' || g.morale < 65 || g.supply < 55 || getSoldiers(s, g).some(body => body.withdrawing)) continue;
     let leader = g.rallyGroupId && armies.find(other => other.id === g.rallyGroupId && !other.finished && !['returning', 'retreating'].includes(other.phase));
     if (!leader) leader = fronts.find(other => other !== g && !other.finished && (other.createdTick ?? 0) <= (g.createdTick ?? 0) &&
@@ -534,6 +537,7 @@ function updateGroups(s, dt, cycleBoundary) {
     // movement speed; arrivals also survey before delivering a report.
     if (g.kind !== 'trader' && (cycleBoundary || arrived)) observe(s, g);
     if (arrived) {
+      if (g.kind === 'army' && g.strategicHold) continue;
       if (g.kind === 'scout' && g.fieldRaidTargetId && g.phase === 'outbound') continue;
       if (g.kind === 'army' && g.rallyGroupId && g.phase === 'outbound') {
         const leader = s.groups.find(other => other.id === g.rallyGroupId && !other.finished);
@@ -721,11 +725,12 @@ function campaignRoute(s, f, from, target, size, speed, stage = null, observer =
 }
 
 export function dispatchHarassment(s, f, homes) {
+  if (f.strategy?.mode === 'recover' || f.strategy?.operation?.phase === 'assemble') return;
   if (s.tick < 70 || s.tick - (f.lastHarassment ?? -40) < 40 || s.groups.length >= MAX_GROUPS ||
     s.groups.filter(g => g.kind === 'army' && !g.finished && groupController(s, g) === f.id).length >= 4 ||
     s.groups.some(g => g.missionKind === 'harassment' && !g.finished && groupController(s, g) === f.id)) return;
   const reported = knownReports(s, f, { kind: 'group', maxAge: 18, minConfidence: .5, includeOwn: false });
-  const workers = reported.filter(k => k.groupKind === 'worker' && k.sizeEstimate > 0 && k.sizeEstimate <= 8 && relation(f, k.ownerId).status === 'hostile' &&
+  const workers = reported.filter(k => k.groupKind === 'worker' && k.sizeEstimate > 0 && k.sizeEstimate <= 24 && relation(f, k.ownerId).status === 'hostile' &&
     !reported.some(other => other.groupKind === 'army' && other.ownerId === k.ownerId && distance(k, other) < 20));
   for (const home of homes) {
     const defense = homeDefense(s, f, home, []);
@@ -752,10 +757,12 @@ export function dispatchHarassment(s, f, homes) {
 
 function chooseExpedition(s, f, homes) {
   if (s.tick < 100 || s.groups.length >= MAX_GROUPS) return;
+  if (f.strategy?.mode === 'recover') return;
   const orders = Object.values(f.campaignOrders || {});
   const armies = s.groups.filter(g => g.kind === 'army' && !g.finished && groupController(s, g) === f.id);
   if (Math.max(orders.length, armies.length) >= Math.min(4, Math.max(2, homes.length * 2))) return;
-  const cooldown = 70 + Math.round((1 - f.traits.aggression) * 55);
+  const assembling = f.strategy?.operation?.phase === 'assemble';
+  const cooldown = assembling ? 12 : 70 + Math.round((1 - f.traits.aggression) * 55);
   if (s.tick - f.lastArmy < cooldown) return;
   const heldIds = new Set(s.settlements.filter(p => alive(p) && settlementController(s, p) === f.id).map(p => p.id));
   const known = knownReports(s, f, { kind: 'settlement', maxAge: 230, minConfidence: .3, includeOwn: false }).filter(k => k.ownerId && !heldIds.has(k.id) && !['camp', 'ruin'].includes(k.status));
@@ -769,6 +776,7 @@ function chooseExpedition(s, f, homes) {
     const staple = f.species === 'machine' ? 'energy' : 'food';
     const need = p.stock[staple] < p.population * 0.25 || p.stock.materials < p.population * 0.20;
     for (const k of known) {
+      if (f.strategy?.mode === 'campaign' && k.id !== f.strategy.targetId) continue;
       const r = relation(f, k.ownerId);
       if (['allied', 'trade'].includes(r.status)) continue;
       const distanceTo = distance(p, k);
@@ -792,7 +800,7 @@ function chooseExpedition(s, f, homes) {
       const assigned = committed.reduce((sum, order) => sum + order.size, 0);
       const required = Math.max(24, Math.ceil(reportedDefenders * 1.45 + 12));
       if (assigned >= required || committed.length >= 2) continue;
-      const size = Math.min(200, available, Math.max(24, required - assigned));
+      const size = f.strategy?.mode === 'campaign' ? Math.min(200, available) : Math.min(200, available, Math.max(24, required - assigned));
       if (size + assigned < reportedDefenders * .85) continue;
       const vulnerability = clamp((available - reportedDefenders) * 0.17, -12, 11);
       const damageOpportunity = Math.max(0, 70 - (k.healthEstimate ?? 100)) * 0.065;
@@ -802,7 +810,7 @@ function chooseExpedition(s, f, homes) {
   }
   if (!best) { if (s.tick % 12 === 0) f.intent = 'Seeking a fresh reachable rival report and waiting for temporary truces to expire.'; return; }
   const { p, k, need, deposit, frontierClaim } = best;
-  const units = allocateMilitary(s, p, best.size), size = countMilitary(units);
+  let units = allocateMilitary(s, p, best.size), size = countMilitary(units);
   const estimate = Math.max(1, k.soldiersEstimate ?? k.populationEstimate * 0.22);
   p.militaryTarget = clamp(.30 + f.traits.aggression * .10, .30, .40);
   if (size < (best.reinforcement ? 8 : 16)) {
@@ -814,15 +822,23 @@ function chooseExpedition(s, f, homes) {
   const stages = s.settlements.filter(h => h.id !== p.id && alive(h) && settlementController(s, h) === f.id && distance(p, h) < best.distanceTo * .85 && distance(h, k) < best.distanceTo * .85 && canPay(h, provisions(biology, size, true), 8));
   stages.sort((a, b) => distance(p, a) + distance(a, k) - distance(p, b) - distance(b, k));
   const stage = best.distanceTo > 125 ? stages[0] : null;
-  const route = campaignRoute(s, f, p, k, size, speed, stage);
+  let route = campaignRoute(s, f, p, k, size, speed, stage);
   if (!route) { f.unreachableTargets ??= {}; f.unreachableTargets[k.id] = s.tick; f.intent = 'The reported rival has no traversable approach; another known route is needed.'; return; }
-  const { expectedTravelCycles, routeSupplyBudget, provisionFactor } = route;
-  if (provisionFactor > 3.5) { f.intent = 'The known march would require more rations than this expedition can carry.'; return; }
-  const costs = Object.fromEntries(Object.entries(provisions(biology, size, true)).map(([key, value]) => [key, value * provisionFactor]));
-  if (!canPay(p, costs, Math.max(12, p.population * 0.05))) {
-    f.intent = `Building expedition stocks; intelligence alone cannot feed ${size} soldiers on the march.`;
-    return;
+  const minimum = Math.max(best.reinforcement ? 8 : 16, Math.ceil(estimate * .85 - orders.filter(o => o.targetId === k.id).reduce((n, o) => n + o.size, 0)));
+  const reserve = Math.max(12, p.population * .05);
+  let costs;
+  // Prefer concentration, but a smaller supported army is better than an
+  // unaffordable order. At most three alternatives; no money is spent yet.
+  for (let attempt = 0; attempt < 4; attempt++) {
+    costs = Object.fromEntries(Object.entries(provisions(biology, size, true)).map(([key, value]) => [key, value * route.provisionFactor]));
+    if (route.provisionFactor <= 3.5 && canPay(p, costs, reserve)) break;
+    const smaller = Math.max(minimum, Math.floor(size * .7));
+    if (attempt === 3 || smaller >= size) { f.intent = 'Building paid route supplies for a supported force while preserving the home reserve.'; return; }
+    units = allocateMilitary(s, p, smaller); size = countMilitary(units);
+    if (size < minimum) return;
+    route = campaignRoute(s, f, p, k, size, speed, stage); if (!route) return;
   }
+  const { expectedTravelCycles, routeSupplyBudget, provisionFactor } = route;
   pay(s, p, costs);
   const reason = `${relation(f, k.ownerId).status === 'hostile' ? 'An unresolved frontier conflict' : frontierClaim ? 'A territorial claim on a reported ' + deposit.resourceKind + ' deposit shared with the rival frontier' : deposit ? 'A campaign to secure reported ' + deposit.resourceKind + ' stores and territory' : 'A campaign against an independently reported rival settlement'}; a returned report observed about ${estimate} defenders ${s.tick - k.observedTick} cycles ago.`;
   const g = { id: 'g' + s.nextId++, factionId: p.factionId, commandFactionId: f.id, originId: p.id, kind: 'army',
@@ -879,6 +895,7 @@ export function stepStrategy(s, dt = 0.1) {
     const homes = s.settlements.filter(p => alive(p) && (p.factionId === f.id && !p.occupiedBy || p.exileBaseFor === f.id && settlementController(s, p) === f.id));
     if (!homes.length) continue;
     reserveHomeDefense(s, f, homes, knownReports(s, f, { kind: 'settlement', maxAge: 230, minConfidence: .3, includeOwn: false }));
+    planStrategy(s, f, homes, { planningWorld: expeditionPlanningWorld, returnHome });
     dispatchScout(s, f, homes);
     dispatchHarassment(s, f, homes);
     chooseExpedition(s, f, homes);

@@ -1,3 +1,35 @@
+# Strategic planner, enclosing walls and comparison — 2026-10-07
+
+Single cloud lead; no agents, videos, long sweeps or optional polish. This pass
+supersedes front-only screens with funded enclosing perimeters. A cached blueprint
+uses the civic footprint and traversable terrain, grows joined sections from a
+useful gate, preserves friendly extraction routes, repairs destroyed spans and
+expands around new buildings. Multiple gates remain open to friendly traffic.
+Unbuildable terrain defers a bounded retry; no unfunded instant enclosure.
+
+Faction planning runs at most every four cycles. Persistent role/target IDs serve
+home reserves, worksite guards, recovery, harvesting, scouting and expansion.
+Campaigns concentrate affordable supplied troops at a shared forward rally and
+commit on actual arrived healthy bodies versus dated reported defenders. Weak
+rallies expire; stuck movement gets one path invalidation/retry, then a physical
+return and objective cooldown. Urgent defenders interrupt assembly, while casual
+raids do not scatter it. Existing individual IDs, wounds, home reserves, housing,
+training and paid cargo remain authoritative. No hidden foreign truth informs
+strategic target choice. Screeps is design inspiration only, not a runtime.
+
+Societies now includes a compact worker/military comparison with faction colors,
+shared scale, explicit native-census definitions and mobile collapse. Foreign
+counts AND scale contribution are withheld in faction perspective. Zero/collapsed
+rows and resets are covered. Browser acceptance checks the chart and mobile panel.
+
+Validation is focused regressions plus three natural 200-cycle observations,
+then the unchanged required build/test/browser/deploy/public-browser pipeline.
+All 60 natural audit checkpoints preserved resources, population and persistent
+rosters; short-run results are not a claim about long-game balance. Raw evidence
+and elapsed check times are retained under ignored screenshots/planner-pass/.
+Locked Chromium 153 in CI is release acceptance; local system Chromium 151 is
+explicitly diagnostic. No physical phone, desktop GPU or nominal-speed claim.
+
 # Recovery, frontlines and live scouts — 2026-10-07
 
 One cloud lead; no specialists, videos, long seed sweeps or optional polish.

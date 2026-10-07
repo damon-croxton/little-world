@@ -3,6 +3,7 @@ import { MILITARY_BUILDINGS, MILITARY_UNITS } from './sim/military.js';
 import { normalizeConfig, MIN_CIV_COUNT, MAX_CIV_COUNT } from './config.js';
 import { observedBuilding, observedGroupController, observedSoldier } from './selection.js';
 import { soldierInspectionMarkup, soldierLabel } from './soldier-inspection.js';
+import { strengthRows } from './strength-chart.js';
 
 const SPECIES = {
   human: { name: 'Human settlers', short: 'Human', mark: 'I', food: 'Provisions', water: 'Water', energy: 'Power', materials: 'Materials' },
@@ -79,7 +80,7 @@ export function createUI(root, actions) {
         <div class="render-reading"><span data-slot="performance">Measuring the view…</span><button data-action="help" class="text-button">Field guide</button></div>
       </section>
 
-      <nav id="atlas-inhabitants" class="faction-index" aria-label="Factions"><button class="mobile-panel-close" data-action="close-mobile-panel" aria-label="Close inhabitants panel">Close ×</button><div class="section-heading"><span class="eyebrow">The inhabitants</span><span data-slot="faction-count" class="count-label">06</span></div><div data-slot="factions" class="faction-list"></div><p class="faction-index-note">Choose a civilisation to focus its home and see through its fog of war. Click people or buildings to inspect them.</p><div class="developed-control"><button class="developed-button" data-action="develop" title="Actually simulate another 1,200 cycles of this current seed">${icon('arrow')}<span>Developed world</span></button><p>Simulate this world forward 1,200 cycles.</p><a class="battle-mode-link" href="./battle.html">Battle sandbox <span>24 vs 24 →</span></a></div></nav>
+      <nav id="atlas-inhabitants" class="faction-index" aria-label="Factions"><button class="mobile-panel-close" data-action="close-mobile-panel" aria-label="Close inhabitants panel">Close ×</button><div class="section-heading"><span class="eyebrow">The inhabitants</span><span data-slot="faction-count" class="count-label">06</span></div><div class="strength-legend" aria-label="Strength chart legend"><span><i class="strength-workers"></i>Workers</span><span><i class="strength-military"></i>Military</span></div><div data-slot="factions" class="faction-list" aria-label="Workforce and military comparison"></div><p class="strength-definition">Native populations · workers include all civilian jobs and travel; military includes home and deployed soldiers.</p><p class="faction-index-note">Choose a civilisation to focus its home and see through its fog of war. Click people or buildings to inspect them.</p><div class="developed-control"><button class="developed-button" data-action="develop" title="Actually simulate another 1,200 cycles of this current seed">${icon('arrow')}<span>Developed world</span></button><p>Simulate this world forward 1,200 cycles.</p><a class="battle-mode-link" href="./battle.html">Battle sandbox <span>24 vs 24 →</span></a></div></nav>
 
       <aside id="atlas-inspector" class="inspector glass" aria-label="Selection details"><button class="mobile-panel-close" data-action="close-mobile-panel" aria-label="Close selection panel">Close ×</button>
         <div data-slot="selection-header" class="selection-header"></div>
@@ -106,7 +107,7 @@ export function createUI(root, actions) {
         <button class="icon-button guide-close" data-action="help" aria-label="Close field guide">${icon('close')}</button>
         <span class="eyebrow">A small field guide</span><h2>Watch a world<br>find its way.</h2>
         <p>The societies begin small. Each population unit is an actual individual. Teams share work decisions, travel to physical sites, extract supplies and carry them home.</p>
-        <ol><li><strong>Watch it grow.</strong> Try 16x, or Developed world to actually simulate 1,200 more cycles of the current seed. A cycle is one simulation second at 1x.</li><li><strong>Follow the work.</strong> Select a colony, team or resource site. Watch building projects, extraction and cargo deliveries.</li><li><strong>See what they know.</strong> Click a civilisation in the left menu to focus its home and see its fog of war. Whole world is available in settings. Reports age, and scouts must return or transmit what they discover.</li><li><strong>Watch them prepare.</strong> Paid training buildings produce infantry and ranged units. Walls, gates and towers protect routes and resources; supplies and terrain still decide what survives.</li></ol>
+        <ol><li><strong>Watch it grow.</strong> Try 16x, or Developed world to actually simulate 1,200 more cycles of the current seed. A cycle is one simulation second at 1x.</li><li><strong>Follow the work.</strong> Select a colony, team or resource site. Watch building projects, extraction and cargo deliveries.</li><li><strong>See what they know.</strong> Click a civilisation in the left menu to focus its home and see its fog of war. Whole world is available in settings. Scouts share actual sight live; remembered reports age after sight is lost.</li><li><strong>Watch them prepare.</strong> Paid training buildings produce infantry and ranged units. Walls, gates and towers protect routes and resources; supplies and terrain still decide what survives.</li></ol>
         <div class="guide-shortcuts"><span><kbd>Space</kbd> pause</span><span>Drag to orbit</span><span>Scroll to explore</span></div>
         <button class="guide-done" data-action="help">Let the world unfold ${icon('arrow')}</button>
       </section>
@@ -587,6 +588,7 @@ export function createUI(root, actions) {
     root.querySelectorAll('[data-action="overlay"]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.value === (view.overlay || 'none'))));
     root.querySelector('[data-action="cinematic"]').setAttribute('aria-pressed', String(!!view.cinematic));
     const identities = list(view.perspectiveOptions).length ? view.perspectiveOptions : list(state.factions);
+    const strength = new Map(strengthRows(state, identities).map(row => [row.id, row]));
     slots['faction-count'].textContent = String(identities.length).padStart(2, '0');
     setHTML(slots.factions, identities.map(identity => {
       const faction=list(state.factions).find(item=>item.id===identity.id)||identity;
@@ -594,11 +596,13 @@ export function createUI(root, actions) {
       const ownCensus=state.viewer?.mode!=='faction'||state.viewer.factionId===faction.id;
       const population=settlements.reduce((sum,home)=>sum+n(home.population),0);
       const spec=SPECIES[faction.species]||SPECIES.human;
+      const row = strength.get(faction.id);
+      const bar = row.known ? `<span class="strength-counts">${num(row.workers)} workers · ${num(row.military)} military</span><span class="strength-bar" role="img" aria-label="${num(row.workers)} workers and ${num(row.military)} military; shared population scale"><i class="strength-workers" style="width:${row.workerPercent.toFixed(2)}%"></i><i class="strength-military" style="width:${row.militaryPercent.toFixed(2)}%"></i></span>` : '<span class="strength-counts strength-unknown">Workforce / military unknown</span><span class="strength-bar strength-hidden" aria-hidden="true"></span>';
       const active=view.perspective&&view.perspective!=='omniscient'?view.perspective===faction.id:current.faction?.id===faction.id;
       const fate=faction.defeatedBy?'defeated':faction.status==='collapsed'?'collapsed':faction.status==='displaced'?'displaced':'active';
       const remembered=list(state.knownPlaces).some(place=>place.ownerId===faction.id||place.nativeOwnerId===faction.id);
       const detail=ownCensus?(fate==='defeated'?`Capitulated · ${num(population)} survivors`:fate==='collapsed'?'Collapsed · record remains':fate==='displaced'?`Displaced · ${num(population)} survivors`:`${spec.short} · ${num(population)} ${faction.species==='machine'?'units':faction.species==='hive'?'individuals':'people'}`):settlements.length?`${spec.short} · currently in sight`:remembered?`${spec.short} · remembered contact`:`${spec.short} · outside this view`;
-      return `<button class="faction-entry ${active?'is-selected':''} ${ownCensus&&fate==='collapsed'?'faction-collapsed':ownCensus&&fate==='displaced'?'faction-displaced':''}" data-action="inspect-faction" data-value="${esc(faction.id)}" aria-label="View ${esc(faction.name)} perspective and focus home" title="Focus ${esc(faction.name)} and view its fog of war" aria-pressed="${active}" style="--faction-color:${color(faction.color)}"><span class="faction-sigil species-${esc(faction.species)}">${spec.mark}</span><span class="faction-entry-label"><strong>${esc(faction.name)}</strong><small>${esc(detail)}</small></span><span class="faction-chevron">›</span></button>`;
+      return `<button class="faction-entry ${active?'is-selected':''} ${ownCensus&&fate==='collapsed'?'faction-collapsed':ownCensus&&fate==='displaced'?'faction-displaced':''}" data-action="inspect-faction" data-value="${esc(faction.id)}" aria-label="View ${esc(faction.name)} perspective and focus home" title="${esc(detail)}. Focus and view this civilisation’s fog of war." aria-pressed="${active}" style="--faction-color:${color(faction.color)}"><span class="faction-sigil species-${esc(faction.species)}">${spec.mark}</span><span class="faction-entry-label"><strong>${esc(faction.name)}</strong>${bar}${ownCensus&&fate!=='active'?`<small>${esc(title(fate))}</small>`:''}</span></button>`;
     }).join(''));
     renderSelection(current);
     renderEvents(current.faction);
