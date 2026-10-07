@@ -44,7 +44,7 @@ test('observer settings show four starts and edited seed/count survive refresh a
     const seed=t.root.querySelector('#atlas-seed'),civs=t.root.querySelector('#atlas-civs');assert.equal(civs.value,'4');assert.equal(t.root.querySelectorAll('.faction-entry').length,4);
     seed.value='a-new-world';t.fire('#atlas-seed','input');civs.value='5';t.fire('#atlas-civs','input');t.update();
     assert.equal(seed.value,'a-new-world');assert.equal(civs.value,'5');assert.equal(t.root.querySelector('[data-slot="civ-count"]').textContent,'5');
-    t.fire('.seed-form','submit');assert.deepEqual(t.calls.at(-1),{action:'reset',seed:'a-new-world',config:{civCount:5}});assert.equal(t.state.factions.length,5);assert.equal(t.root.querySelectorAll('.faction-entry').length,5);
+    t.fire('.seed-form','submit');assert.deepEqual(t.calls.at(-1),{action:'reset',seed:'a-new-world',config:{civCount:5,biome:'random'}});assert.equal(t.state.factions.length,5);assert.equal(t.root.querySelectorAll('.faction-entry').length,5);
   }finally{t.dispose();}
 });
 
@@ -149,5 +149,18 @@ test('balanced-district rules are visible in the home and deposit inspectors',()
     assert.match(t.root.querySelector('.balanced-district').textContent,/0.80 fertility/);
     const node=t.state.nodes.find(n=>n.balancedDistrict);t.view.selectedId=node.id;t.update();
     assert.match(t.root.querySelector('.balanced-district').textContent,/matched stocks and replenishment/);
+  }finally{t.dispose();}
+});
+
+
+test('whole-world biome choice survives refresh and resets with the seed and civilisation count',()=>{
+  const t=setup();try{
+    t.root.querySelector('#atlas-biome').value='desert';t.fire('#atlas-biome','change');t.update();
+    assert.equal(t.root.querySelector('#atlas-biome').value,'desert');
+    t.fire('.seed-form','submit');assert.equal(t.calls.at(-1).config.biome,'desert');
+    assert.equal(t.state.terrain.biome,'desert');assert.match(t.root.querySelector('[data-slot="world-biome"]').textContent,/Current world: Desert.*One biome throughout/);
+    assert.equal(t.root.querySelector('#atlas-civs').value,'4');
+    t.actions.reset('other-world',{civCount:3,biome:'alien'});
+    assert.equal(t.root.querySelector('#atlas-biome').value,'alien');assert.match(t.root.querySelector('[data-slot="world-biome"]').textContent,/Alien meadow/);
   }finally{t.dispose();}
 });

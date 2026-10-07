@@ -27,7 +27,7 @@ for (const seed of ['first-light', 'river-fairness']) for (const civCount of [3,
     }
   }
   assert.ok(world.nodes.some(n=>!n.balancedDistrict&&n.regeneration===0),'outer finite scarcity disappeared');
-  assert.ok(new Set(world.nodes.map(n=>n.biome)).size===3,'biome scenery disappeared');
+  assert.deepEqual([...new Set(world.nodes.map(n=>n.biome))],[world.biome],'generated world mixes biomes');
 });
 
 test('matched starter deposits cover at least 350 cycles of every species maximum starting upkeep',()=>{
@@ -60,7 +60,7 @@ test('first-expansion sites enter planning only through observed resource report
 
 test('districts keep biome scenery while habitat research is neutral for every species',()=>{
   const s=createSimulation('first-light');
-  for(const h of s.settlements){assert.equal(biomeAt(h.x,h.z,s.seed),biomeAt(h.x,h.z,s.terrainSeed));for(const k of Object.keys(h.stock))h.stock[k]=1500;h.availableWorkers=100;h.assigned={};}
+  for(const h of s.settlements){assert.equal(biomeAt(h.x,h.z,s.terrainSeed),s.terrain.biome);for(const k of Object.keys(h.stock))h.stock[k]=1500;h.availableWorkers=100;h.assigned={};}
   for(let tick=24;tick<40;tick++){s.tick=tick;s.step=tick*10;s.time=tick;stepProgression(s);}
   for(const f of s.factions){assert.ok(f.tech.progress>0);assert.equal(f.tech.environment,'Balanced district: ×1.00 trial yield');}
   const point={x:145,z:20};assert.equal(heightAt(point.x,point.z,s.seed),heightAt(point.x,point.z,s.terrainSeed),'untouched outer ground was globally flattened');

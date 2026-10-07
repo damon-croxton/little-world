@@ -301,7 +301,8 @@ function localSituation(s, g) {
       const power = strength(combatant(s, target), d, true);
       if (permittedTarget(s, g, other)) {
         const range = observed.units.ranged ? unitStats(factionOf(s, other.factionId)?.species, 'ranged').range : 2;
-        const urgent = d < Math.max(7, range + 2);
+        const protecting = g.strategicHold?.kind === 'protect';
+        const urgent = d < Math.max(7, range + 2) || protecting && distance(target, g.strategicHold) < 18;
         threats.push({ target, power, urgent, score: 30 - d + (urgent ? 14 : 0) });
       } else if (id === owner || factionOf(s, owner)?.relations?.[id]?.status === 'allied') support += power * clamp(1 - d / 20, .1, .85);
     } else if (other.kind === 'worker' && other.size > 0 && permittedTarget(s, g, other) && d <= 16 && (status(g).ignoredWorkerId !== other.id || clock(s) >= status(g).ignoreWorkerUntil)) workers.push(other);
@@ -362,7 +363,8 @@ function acquire(s, g, hooks) {
     withdraw(s, g, hooks, `Visible defenders outweigh this force and nearby support (${cs.strengthRatio}× local strength).`); return null;
   }
   const urgent = local.threats.filter(t => t.urgent), priorEconomic = cs.active && ['structure', 'worker'].includes(cs.targetKind);
-  const selected = chooseStable(g.strategicHold ? urgent : urgent.length ? urgent : local.threats, cs, now);
+  const heldThreats = g.strategicHold?.kind === 'protect' ? urgent.filter(threat => distance(threat.target, g.strategicHold) < 22 || distance(threat.target, g) < 7) : urgent;
+  const selected = chooseStable(g.strategicHold ? heldThreats : urgent.length ? urgent : local.threats, cs, now);
   let target = selected?.target, intent = 'engage', reason = 'Engaging the most immediate visible local threat.';
   if (selected && priorEconomic && target.id !== cs.targetId) { intent = 'intercept'; reason = 'Visible defenders threaten the raiders; interrupting the economic or wall attack.'; }
   if (!selected && !g.strategicHold && g.phase !== 'returning' && cs.resumePhase !== 'returning') {

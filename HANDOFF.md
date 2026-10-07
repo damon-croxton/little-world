@@ -1,3 +1,43 @@
+# Uniform biome and remote protection pass — 2026-10-07
+
+Single cloud lead, authorized 20:33:55 UTC through 21:33:55 UTC. No agents,
+video, or long seed sweeps. Cloud commands, ordinary Git pushes and Pages
+publication remain the supported workflow; no user computer is required.
+
+New generated worlds use exactly one Grassland, Desert or Alien meadow biome
+for scenery and terrain rules. Settings include explicit choice or a seeded
+choice; seed/count/biome repeat the world. Balanced districts keep equal
+fertility, resources, approaches and neutral habitat effects. Legacy terrain
+fixture keys still decode, and old artifacts are preserved.
+
+Founding and protection share delivered-report threat assessment, actual
+military/tower coverage and ready reinforcement travel. Every route segment is
+sampled for reported danger. Six-to-twelve-person paid guard rotations use real
+existing soldiers, keep the home reserve and eighteen cycles of home upkeep,
+and fund the round trip plus forty cycles on station. They protect remote
+worksites, escort colonists and continue guarding a physically founded outpost.
+They intercept locally visible raiders, keep bounded missions and physically
+return; returning guards cannot be merged into offensive campaigns.
+
+Validation before commit: 389 full tests passed in 112.89 seconds; after the
+final provisioning/reinforcement refinement, 27 focused contracts passed in
+0.695 seconds. The earlier full run had one stale config-object assertion,
+which was updated for the new public biome field; no release gate was weakened.
+A final natural first-light 250-cycle trace took 18.12 seconds: thirteen census,
+individual-roster and resource-accounting checkpoints passed; 226 deliveries,
+two remote guard rotations, no shortages and no worker combat deaths. No colony
+formed during this short natural window. Controlled funded-founding, stale-threat
+expiry and escort-to-outpost scenarios pass. This is not a balance/pacing sweep.
+The user's report of ordinary-play worker raids remains user observation.
+
+The browser release command now checks each biome through actual settings,
+captures all three worlds, and checks the selector in a 390×844 viewport. Exact
+commit Actions/public-marker/browser receipts and screenshot IDs are recorded
+under screenshots/uniform-frontier/ after publication. Until that receipt is
+present, the preceding live baseline is 02b1f2252505dd2e3573044de5474df2c33f5630.
+Cloud SwiftShader timings do not establish physical GPU/iPhone performance;
+the historical roughly 41m30 nominal-2× browser pacing limit is not superseded.
+
 # Cloud worker-combat follow-up — 2026-10-07
 
 Latest verified simulation checkpoint: ef0bc06a736b3f903d862592701fa62200955dc6.

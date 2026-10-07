@@ -246,10 +246,12 @@ Those are programming principles; Screeps does not supply this game's strategy.
 
 ### Balanced new-world districts
 
-New worlds keep their entered seed, visual biomes, species and scarce 160-site
-resource budget. Seed plus civilisation count deterministically defines local
-terrain clearings; changing the count rebuilds those clearings without changing
-the seed text or reset workflow. Existing open browser sessions need a reload or
+New worlds have one biome throughout: Grassland, Desert or Alien meadow.
+World settings offer an explicit choice or a deterministic choice from the seed.
+The choice changes both scenery and terrain rules; it is also available through
+`?biome=meadow`, `?biome=desert` or `?biome=alien`. Seed, civilisation count and
+biome repeat the same world. Species and the scarce 160-site resource budget
+remain unchanged; changing the count rebuilds the balanced terrain clearings. Existing open browser sessions need a reload or
 new world to use this generator version.
 
 Each start and its designated first expansion have a 20-unit radius of level
@@ -280,3 +282,22 @@ deposits, scarcity, competition and population accounting remain unchanged.
 Fairness guarantees cover opening districts and designated first expansion
 access, not equal total regional wealth, uninterrupted survival or equal win
 rates. Further expansion, neighbouring terrain and enemy decisions remain varied.
+
+
+### Remote protection and expansion
+
+Expansion sites and remote protection share an assessment of delivered threat
+reports, actual nearby soldiers and staffed towers, reinforcement travel, and
+route exposure. Routes are checked along each segment, not just at waypoints.
+Unseen enemy movement or stores cannot change these command decisions, and
+stale army reports expire so safe expansion can resume.
+
+When reserves and supplies permit, six to twelve existing soldiers can protect
+a remote worksite, escort settlers, or guard a young outpost. Their native
+census stays at their origin. The origin retains its home defence reserve and
+eighteen cycles of upkeep; the guard pays for its round trip and forty cycles
+on station before leaving. One or two rotations per civilisation are allowed
+within the existing army limit. Locally visible raiders can be intercepted;
+otherwise guards hold near their assigned asset and physically return when
+the work ends, their rotation expires, or their return supply is needed.
+Returning guards are not diverted into offensive campaigns.

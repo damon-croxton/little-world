@@ -25,7 +25,7 @@ const viewport=()=>({width:Math.max(1,root.clientWidth||innerWidth),height:Math.
 const initialViewport=viewport();
 const params=new URLSearchParams(location.search);
 const initialQuality=params.get('quality')==='low'||((innerWidth<=800||innerHeight<=560)&&window.matchMedia?.('(pointer: coarse)').matches)?'low':'high';
-let state=createSimulation(params.get('seed')||'first-light',normalizeConfig({civCount:params.get('civs')??undefined}));
+let state=createSimulation(params.get('seed')||'first-light',normalizeConfig({civCount:params.get('civs')??undefined,biome:params.get('biome')??undefined}));
 let shownState=state;
 const view={victoryObserved:null,outcomeDismissed:false,worldGeneration:0,perspective:'omniscient',perspectiveOptions:[],speed:2,paused:false,selectedId:'s0',followId:null,overlay:'none',cinematic:false,quality:initialQuality,fps:0,diagnostics:{},advancing:null};
 let renderedPerspective=null;

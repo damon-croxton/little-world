@@ -88,24 +88,24 @@ test('endpoint edits, gate width/open state, damage, construction and ruins inva
   renderer.dispose();
 });
 
-test('readable landscape retains all harvestable deposits and biome silhouettes with a bounded decoration budget', () => {
-  const state = createSimulation('first-light'), before = structuredClone(state), scene = new THREE.Scene(), terrain = createTerrain(THREE, scene, state.seed);
+for (const biome of ['meadow', 'desert', 'alien']) test(`${biome} landscape retains all deposits and only its own biome silhouettes within the decoration budget`, () => {
+  const state = createSimulation('first-light', { biome }), before = structuredClone(state), scene = new THREE.Scene(), terrain = createTerrain(THREE, scene, state.seed, state.config);
   terrain.update(0, state);
   const d = terrain.diagnostics;
   assert.equal(d.resourceSites, 160); assert.equal(d.visibleResourceSites, state.nodes.length);
-  assert.equal(d.resourcePieces, 1523, 'every deposit in the deliberately scarce seeded world retains its representation');
+  assert.equal(d.resourcePieces, { meadow: 1606, desert: 1657, alien: 1313 }[biome], 'every deposit retains its complete seeded representation');
   assert.equal(d.visibleResourcePieces, d.resourcePieces);
-  assert.ok(d.visibleDecorativePieces < 1800 && d.visibleDecorativePieces > 650, `${d.visibleDecorativePieces} decorative pieces retain atmosphere without blanket noise`);
+  assert.ok(d.visibleDecorativePieces < 1800 && d.visibleDecorativePieces > 300, `${d.visibleDecorativePieces} decorative pieces retain atmosphere without blanket noise`);
   assert.ok(d.visibleResourceSiteDetails < 1800, 'deposits no longer carry rings of random pebbles');
   const canopyBiomes = new Set(), matrix = new THREE.Matrix4(), position = new THREE.Vector3();
   scene.traverse(mesh => {
     if (!mesh.isInstancedMesh || mesh.userData.clearanceKind !== 'canopy') return;
     for (let i = 0; i < mesh.count; i++) {
-      mesh.getMatrixAt(i, matrix); position.setFromMatrixPosition(matrix); canopyBiomes.add(biomeAt(position.x, position.z, state.seed));
+      mesh.getMatrixAt(i, matrix); position.setFromMatrixPosition(matrix); canopyBiomes.add(biomeAt(position.x, position.z, state.terrainSeed));
       for (const node of state.nodes) assert.ok(Math.hypot(position.x - node.x, position.z - node.z) > node.radius + 2.599, 'decorative canopy stays outside worksite access margin');
     }
   });
-  assert.deepEqual([...canopyBiomes].sort(), ['alien', 'desert', 'meadow']);
+  assert.deepEqual([...canopyBiomes], [biome]);
   assert.deepEqual(state, before);
   terrain.dispose(); assert.equal(scene.children.length, 0);
 });

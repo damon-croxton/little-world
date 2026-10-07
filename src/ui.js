@@ -1,6 +1,6 @@
 import { factionController, settlementController } from './sim/control.js';
 import { MILITARY_BUILDINGS, MILITARY_UNITS } from './sim/military.js';
-import { normalizeConfig, MIN_CIV_COUNT, MAX_CIV_COUNT } from './config.js';
+import { normalizeConfig, BIOME_LABELS, MIN_CIV_COUNT, MAX_CIV_COUNT } from './config.js';
 import { observedBuilding, observedGroupController, observedSoldier } from './selection.js';
 import { soldierInspectionMarkup, soldierLabel } from './soldier-inspection.js';
 import { strengthRows } from './strength-chart.js';
@@ -76,7 +76,7 @@ export function createUI(root, actions) {
       </section>
 
       <section id="atlas-settings" class="atlas-settings glass" hidden aria-label="World settings">
-        <form class="seed-form"><label class="eyebrow" for="atlas-seed">Grow a different world</label><div class="seed-input-row"><input id="atlas-seed" name="seed" type="text" value="littleworld" maxlength="64" autocomplete="off" spellcheck="false" aria-label="World seed"><button type="submit" title="Start a new world with this seed">${icon('seed')}<span>Reset</span></button></div><div class="civ-setting"><label for="atlas-civs">Starting civilisations <output for="atlas-civs" data-slot="civ-count">4</output></label><input id="atlas-civs" name="civs" type="range" min="${MIN_CIV_COUNT}" max="${MAX_CIV_COUNT}" step="1" value="4" aria-label="Starting civilisations"><p>3–5 is a good starting range. Four is the default.</p></div><p>The same seed and civilisation count repeat the same story. Reset applies both at cycle zero.</p></form><div class="perspective-setting"><label for="atlas-perspective">Observer perspective</label><select id="atlas-perspective" aria-label="Observer perspective"><option value="omniscient">Whole world</option></select><p data-slot="perspective-note">All societies still act from their own limited knowledge.</p></div>
+        <form class="seed-form"><label class="eyebrow" for="atlas-seed">Grow a different world</label><div class="seed-input-row"><input id="atlas-seed" name="seed" type="text" value="littleworld" maxlength="64" autocomplete="off" spellcheck="false" aria-label="World seed"><button type="submit" title="Start a new world with this seed">${icon('seed')}<span>Reset</span></button></div><div class="civ-setting"><label for="atlas-civs">Starting civilisations <output for="atlas-civs" data-slot="civ-count">4</output></label><input id="atlas-civs" name="civs" type="range" min="${MIN_CIV_COUNT}" max="${MAX_CIV_COUNT}" step="1" value="4" aria-label="Starting civilisations"><p>3–5 is a good starting range. Four is the default.</p></div><div class="perspective-setting"><label for="atlas-biome">Whole-world biome</label><select id="atlas-biome" aria-label="Whole-world biome">${Object.entries(BIOME_LABELS).map(([value,label])=>`<option value="${value}">${label}</option>`).join('')}</select><p data-slot="world-biome"></p></div><p>Seed, civilisation count and biome repeat the same world. Reset applies all three at cycle zero.</p></form><div class="perspective-setting"><label for="atlas-perspective">Observer perspective</label><select id="atlas-perspective" aria-label="Observer perspective"><option value="omniscient">Whole world</option></select><p data-slot="perspective-note">All societies still act from their own limited knowledge.</p></div>
         <div class="quality-setting"><label for="atlas-quality">Render quality</label><select id="atlas-quality" aria-label="Render quality"><option value="high">High</option><option value="low">Performance</option></select></div>
         <div class="render-accounting" data-slot="render-accounting"></div>
         <div class="render-reading"><span data-slot="performance">Measuring the view…</span><button data-action="help" class="text-button">Field guide</button></div>
@@ -131,6 +131,7 @@ export function createUI(root, actions) {
   const seedInput = root.querySelector('#atlas-seed');
   const qualityInput = root.querySelector('#atlas-quality');
   const civInput = root.querySelector('#atlas-civs');
+  const biomeInput = root.querySelector('#atlas-biome');
   const perspectiveInput = root.querySelector('#atlas-perspective');
   const followButton = slots['selection-actions'].querySelector('button');
   const followLabel = followButton.querySelector('span');
@@ -253,7 +254,7 @@ export function createUI(root, actions) {
     if (!event.target.matches('.seed-form')) return;
     event.preventDefault();
     const seed = seedInput.value.trim() || 'littleworld';
-    const config = normalizeConfig({ civCount: civInput.value });
+    const config = normalizeConfig({ civCount: civInput.value, biome: biomeInput.value });
     settingsDirty = false;
     actions.reset?.(seed, config);
     activeTab = 'life';
@@ -264,11 +265,12 @@ export function createUI(root, actions) {
   }
 
   function onChange(event) {
+    if (event.target === biomeInput) settingsDirty = true;
     if (event.target === qualityInput) actions.setQuality?.(qualityInput.value);
     if (event.target === perspectiveInput) actions.setPerspective?.(perspectiveInput.value);
   }
   function onInput(event) {
-    if (event.target === seedInput || event.target === civInput) settingsDirty = true;
+    if (event.target === seedInput || event.target === civInput || event.target === biomeInput) settingsDirty = true;
     if (event.target === civInput) slots['civ-count'].textContent = normalizeConfig({ civCount: civInput.value }).civCount;
   }
   root.addEventListener('click', onClick);
@@ -614,13 +616,15 @@ export function createUI(root, actions) {
     renderSelection(current);
     renderEvents(current.faction);
     updateDiagnostics();
-    const identity = `${state.seed}:${state.config?.civCount ?? state.factions.length}`;
+    const identity = `${state.seed}:${state.config?.civCount ?? state.factions.length}:${state.config?.biome}`;
     if (worldIdentity !== identity || newWorld) { worldIdentity = identity; settingsDirty = false; }
     if (!settingsDirty) {
       seedInput.value = String(state.seed || 'littleworld');
       civInput.value = String(normalizeConfig(state.config || { civCount: state.factions.length }).civCount);
       slots['civ-count'].textContent = civInput.value;
+      biomeInput.value = normalizeConfig(state.config).biome;
     }
+    slots['world-biome'].textContent = `Current world: ${BIOME_LABELS[state.terrain?.biome] || 'Grassland'}. One biome throughout; starter districts retain equal fertility and supplies.`;
     const perspectiveOptions = view.perspectiveOptions || state.factions;
     const options = `<option value="omniscient">Whole world</option>` + perspectiveOptions.map(f => `<option value="${esc(f.id)}">${esc(f.name)}</option>`).join('');
     if (perspectiveInput.innerHTML !== options) perspectiveInput.innerHTML = options;

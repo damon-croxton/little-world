@@ -190,6 +190,36 @@ async function accept() {
     assert.ok(facts.clearings.every(y => Math.abs(y - 2.2) < 1e-8)); assert.equal(facts.step, 0);
     assert.equal(await page.locator('.faction-entry').count(), 3); return facts;
   });
+  await check('Whole-world biome selection changes actual scenery and terrain while retaining balanced starts', async () => {
+    const results = [];
+    for (const biome of ['desert', 'alien', 'meadow']) {
+      await button('settings').click(); await page.locator('#atlas-biome').selectOption(biome);
+      await page.locator('.seed-form button[type="submit"]').click(); await rendered();
+      const facts = await page.evaluate(async () => {
+        const w = littleworld, { biomeAt, terrainAt } = await import(new URL('./src/world.js', location.href).href), biomes = new Set();
+        for (let x = -160; x <= 160; x += 32) for (let z = -160; z <= 160; z += 32) biomes.add(biomeAt(x, z, w.state.terrainSeed));
+        return { selected: w.state.config.biome, actual: w.state.terrain.biome, biomes: [...biomes], seed: w.state.seed, count: w.state.config.civCount,
+          fertility: w.state.settlements.map(home => terrainAt(home.x, home.z, w.state.terrainSeed).fertility), step: w.state.step,
+          label: document.querySelector('[data-slot="world-biome"]').textContent, resourceSites: w.diagnostics.terrain.visibleResourceSites };
+      });
+      assert.equal(facts.selected, biome); assert.equal(facts.actual, biome); assert.deepEqual(facts.biomes, [biome]);
+      assert.equal(facts.seed, config.seed); assert.equal(facts.count, 3); assert.equal(facts.step, 0); assert.equal(facts.resourceSites, 160);
+      assert.ok(facts.fertility.every(value => value === .8)); assert.match(facts.label, /One biome throughout/);
+      await page.screenshot({ path: output(config, `biome-${biome}.png`) }); results.push(facts);
+    }
+    return results;
+  });
+  await check('Mobile biome control remains reachable and applies the selected world', async () => {
+    await page.setViewportSize({ width: 390, height: 844 }); await rendered(); await button('settings').click();
+    await page.locator('#atlas-biome').selectOption('alien'); await page.locator('#atlas-biome').scrollIntoViewIfNeeded();
+    const bounds = await page.locator('#atlas-biome').boundingBox();
+    assert.ok(bounds && bounds.x >= 0 && bounds.x + bounds.width <= 390 && bounds.y >= 0 && bounds.y + bounds.height < 790);
+    await page.screenshot({ path: output(config, 'mobile-biome-settings.png') });
+    await page.locator('.seed-form button[type="submit"]').click(); await rendered();
+    assert.equal(await page.evaluate(() => littleworld.state.terrain.biome), 'alien');
+    assert.equal(await page.evaluate(() => littleworld.state.step), 0);
+    await page.setViewportSize({ width: 1280, height: 800 }); await rendered(); return bounds;
+  });
   await workerSmoke({ page, check, screenshotBefore: output(config, 'worker-raid-before.png'), screenshotAfter: output(config, 'worker-raid-after.png') });
   await battleSmoke({ page, check, screenshotPath: output(config, 'battle-smoke.png') });
   await check('No runtime, module or HTTP errors', async () => assert.deepEqual(report.errors, []));

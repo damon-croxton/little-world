@@ -625,7 +625,7 @@ export function factionView(state, factionId = null) {
     factions: state.factions.filter(a => identities.has(a.id)).map(a => a.id === f.id ? a : publicFaction(a)), settlements, groups, soldiers, nodes, knownPlaces,
     visibleNodeIds: nodes.map(n => n.id), combatEvents, projectiles: filterEffects(state.projectiles), combatEffects: filterEffects(state.combatEffects),
     events: (state.events || []).filter(e => e.factionId === f.id || e.defeatedId === f.id || e.type === 'victory' || (e.type === 'capture' && (e.previousControllerId === f.id || nativeHomeIds.has(e.settlementId))) || (e.otherFactionId === f.id && !e.pending && ['trade', 'diplomacy'].includes(e.type))),
-    tradeOffers: (state.tradeOffers || []).filter(o => o.factionId === f.id), stats: {}, terrain: { seed: state.terrainSeed || state.seed }, renderWorldId: renderWorldId(state),
+    tradeOffers: (state.tradeOffers || []).filter(o => o.factionId === f.id), stats: {}, terrain: { seed: state.terrainSeed || state.seed, biome: state.terrain?.biome }, renderWorldId: renderWorldId(state),
     viewer: { mode: 'faction', factionId, visibleCells, exploredCells, totalCells: CELL_COUNT, reportCount: knownReports(state, f).length, staleCount: knownPlaces.length, version: v.version, updatedTick: v.updatedTick },
   };
   cache.set(f.id, { signature, view });

@@ -4,17 +4,23 @@ import { normalizeConfig } from './config.js';
 // The public seed and simulation RNG remain unchanged. Plain seed geometry is
 // retained for isolated terrain fixtures; generated worlds use the versioned key.
 const cache = new Map();
-const MAP_PREFIX = '@balanced-v1:';
+const MAP_PREFIX = '@uniform-v2:';
 export const BALANCED_DISTRICT = Object.freeze({ radius: 20, shoulder: 10, starterRadius: 92, expansionRadius: 44, resourceDistance: 16, fertility: .8, movement: 1, approachWidth: 8 });
 export const BALANCED_SUPPLIES = Object.freeze({
   start: { food: 1400, water: 1400, energy: 1800, materials: 1200 },
   expansion: { food: 1800, water: 1800, energy: 2200, materials: 1600 },
   regeneration: { food: .4, water: 1.6, energy: .6, materials: .085 }, richness: .7,
 });
-export function worldTerrainSeed(seed, options = {}) { return `${MAP_PREFIX}${normalizeConfig(options).civCount}:${String(seed)}`; }
+export function worldBiome(seed, options = {}) {
+  const biome = normalizeConfig(options).biome;
+  return biome === 'random' ? ['meadow', 'desert', 'alien'][hashSeed(`biome:${seed}`) % 3] : biome;
+}
+export function worldTerrainSeed(seed, options = {}) { return `${MAP_PREFIX}${normalizeConfig(options).civCount}:${worldBiome(seed, options)}:${String(seed)}`; }
 function terrainIdentity(value) {
-  const text = String(value), match = text.startsWith(MAP_PREFIX) && text.slice(MAP_PREFIX.length).match(/^([3-6]):([\s\S]*)$/);
-  return match ? { seed: match[2], civCount: Number(match[1]) } : { seed: text, civCount: null };
+  const text = String(value), match = text.startsWith(MAP_PREFIX) && text.slice(MAP_PREFIX.length).match(/^([3-6]):(meadow|desert|alien):([\s\S]*)$/);
+  if (match) return { seed: match[3], civCount: Number(match[1]), biome: match[2] };
+  const legacy = text.match(/^@balanced-v1:([3-6]):([\s\S]*)$/);
+  return legacy ? { seed: legacy[2], civCount: Number(legacy[1]), biome: null } : { seed: text, civCount: null, biome: null };
 }
 function balancedLayout(rotation, count) {
   if (!count) return { districts: [], approaches: [], balanceBins: new Map() };
@@ -91,7 +97,7 @@ function parameters(seed) {
     id: `${ridge.id}-pass-${i}`, kind: 'mountain-pass', x: ridge.x + Math.cos(ridge.angle) * along,
     z: ridge.z + Math.sin(ridge.angle) * along, width: 10, axis: ridge.angle + Math.PI / 2, obstacleId: ridge.id,
   })))];
-  const p = { hash, phase, starts, offset, rotation, ridges, fords, passes, ...balancedLayout(rotation, identity.civCount) };
+  const p = { hash, biome: identity.biome, phase, starts, offset, rotation, ridges, fords, passes, ...balancedLayout(rotation, identity.civCount) };
 
   if (cache.size > 16) cache.delete(cache.keys().next().value);
   cache.set(key, p);
@@ -124,6 +130,7 @@ function ridgeAmount(x, z, ridge) {
 export function biomeAt(x, z, seed = 'littleworld') {
   x /= LAND_SCALE; z /= LAND_SCALE;
   const p = parameters(seed);
+  if (p.biome) return p.biome;
   const warp = (noise(x * .085, z * .085, p.hash) - .5) * 7;
   if (z < -3.5 + x * .16 + warp) return 'alien';
   return x > 3 + z * .07 + warp ? 'desert' : 'meadow';
@@ -295,5 +302,5 @@ export function generateWorld(seed = 'littleworld', options = {}) {
     if (nodes.some(n => Math.hypot(n.x - x, n.z - z) < 5.3)) continue;
     add(kinds[Math.floor(rand() * kinds.length)], x, z);
   }
-  return { nodes, starts, config, terrainSeed, ...terrainFeatures(terrainSeed), bounds: { minX: -WORLD_RADIUS, maxX: WORLD_RADIUS, minZ: -WORLD_RADIUS, maxZ: WORLD_RADIUS } };
+  return { nodes, starts, config, biome: worldBiome(seed, config), terrainSeed, ...terrainFeatures(terrainSeed), bounds: { minX: -WORLD_RADIUS, maxX: WORLD_RADIUS, minZ: -WORLD_RADIUS, maxZ: WORLD_RADIUS } };
 }

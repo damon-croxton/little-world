@@ -29,7 +29,7 @@ test('world seeds deterministically generate traversable starts and finite resou
 });
 
 test('civilization count defaults to four and preserves deterministic three-to-five choices plus legacy six', () => {
-  assert.deepEqual(normalizeConfig(), { civCount: 4 });
+  assert.deepEqual(normalizeConfig(), { civCount: 4, biome: 'random' });
   assert.equal(normalizeConfig({ factionCount: 5 }).civCount, 5);
   assert.equal(normalizeConfig({ civCount: 0 }).civCount, 3);
   assert.equal(normalizeConfig({ civCount: 99 }).civCount, 6);

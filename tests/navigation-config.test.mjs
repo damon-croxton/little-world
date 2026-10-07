@@ -21,7 +21,7 @@ function enclosed(seed = 'navigation-room') {
 }
 
 test('configuration defaults to four and supports explicit three through six plus factionCount alias', () => {
-  assert.deepEqual(DEFAULT_CONFIG, { civCount: 4 });
+  assert.deepEqual(DEFAULT_CONFIG, { civCount: 4, biome: 'random' });
   for (const value of [undefined, {}, null, { civCount: NaN }, { civCount: Infinity }, { civCount: 'bad' }]) assert.equal(normalizeConfig(value).civCount, 4);
   assert.equal(normalizeConfig({ civCount: 2 }).civCount, 3);
   assert.equal(normalizeConfig({ civCount: 99 }).civCount, 6);

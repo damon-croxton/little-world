@@ -7,6 +7,8 @@ import { planStrategy } from './planner.js';
 import { observeGroup, reportObservations, knownReports, visibleToGroup } from './knowledge.js';
 import { moveAlongRoute, isSegmentTraversable, findPath } from './navigation.js';
 import { factionController, settlementController, groupController, occupySettlement, updateConquest } from './conquest.js';
+import { frontierContext, frontierAssets, assessFrontierRoute } from './frontier.js';
+import { SURVIVAL_NEEDS, canAfford } from './economy.js';
 
 // Decisions read faction reports, including live scout observations. Other
 // field parties retain local observations until they physically report them.
@@ -96,6 +98,7 @@ function returnHome(s, g, reason, retreat = false) {
   if (!p) { g.finished = true; return; }
   g.stagingTargetId = null; g.stagingPurpose = null;
   if (g.kind === 'army' && !g.surrendered && !factionOf(s, groupController(s, g))?.defeatedBy && settlementController(s, p) !== groupController(s, g) && !retreat) {
+    if (g.missionKind === 'protection') { g.missionKind = 'campaign'; g.campaign = true; g.strategicHold = null; }
     g.phase = 'outbound'; g.missionOrderTick = s.tick; g.intelligence = { observedTick: s.tick, reportedTick: s.tick, confidence: 1, reportMethod: 'own-home-status' }; g.targetId = p.id; g.targetX = p.x; g.targetZ = p.z; g.liberation = true;
     if (g.combat) g.combat.active = false;
     g.reason = 'The surviving expedition is marching to liberate its occupied native home.'; return;
@@ -465,6 +468,7 @@ export function coordinateFrontlines(s, f) {
   const fronts = armies.filter(g => g.campaign && !g.rallyGroupId && !['returning', 'retreating'].includes(g.phase) && g.supply >= 45 && g.morale >= 55)
     .sort((a, b) => (a.createdTick ?? 0) - (b.createdTick ?? 0) || a.id.localeCompare(b.id));
   for (const g of armies) {
+    if (g.missionKind === 'protection') continue; // Guard rotations must physically resupply, not be absorbed into a campaign on return.
     if (g.operationId && f.strategy?.operation?.id === g.operationId) continue;
     if (g.finished || g.phase === 'retreating' || g.morale < 65 || g.supply < 55 || getSoldiers(s, g).some(body => body.withdrawing)) continue;
     let leader = g.rallyGroupId && armies.find(other => other.id === g.rallyGroupId && !other.finished && !['returning', 'retreating'].includes(other.phase));
@@ -760,6 +764,65 @@ function campaignRoute(s, f, from, target, size, speed, stage = null, observer =
   return { expectedTravelCycles, routeSupplyBudget, provisionFactor: Math.max(1, routeSupplyBudget / 86) };
 }
 
+function updateProtection(s, g, f) {
+  if (g.missionKind !== 'protection' || ['returning', 'retreating'].includes(g.phase)) return;
+  let asset;
+  if (g.protectionKind === 'outpost') asset = s.settlements.find(home => home.id === g.protectionId && alive(home) && settlementController(s, home) === f.id);
+  else if (g.protectionKind === 'escort') {
+    asset = s.groups.find(group => group.id === g.protectionId && !group.finished && group.kind === 'colonist' && groupController(s, group) === f.id && group.phase === 'outbound');
+    if (!asset) {
+      // Arrival changes the protected asset, not the roster or the paid stores.
+      asset = s.settlements.find(home => alive(home) && settlementController(s, home) === f.id && home.foundedTick >= g.createdTick && distance(home, g.strategicHold || g) < 12);
+      if (asset) { g.protectionKind = 'outpost'; g.protectionId = asset.id; }
+    }
+  } else {
+    const crew = s.groups.find(group => group.kind === 'worker' && !group.finished && group.size > 0 && groupController(s, group) === f.id && (group.targetId || group.id) === g.protectionId && !['returning', 'retreating'].includes(group.phase));
+    if (crew) asset = { x: crew.targetX ?? crew.x, z: crew.targetZ ?? crew.z };
+  }
+  if (!asset || s.tick >= g.protectionUntil) { returnHome(s, g, !asset ? 'The protected work or journey has ended; the guard is returning.' : 'The funded guard rotation is complete; returning to resupply.'); return; }
+  g.strategicHold = { kind: 'protect', x: asset.x, z: asset.z };
+  g.targetX = g.missionTargetX = asset.x; g.targetZ = g.missionTargetZ = asset.z;
+}
+
+export function dispatchProtection(s, f, homes) {
+  if (s.tick % 8 || s.groups.length >= MAX_GROUPS || s.tick - (f.lastProtection ?? -24) < 24 || f.strategy?.mode === 'recover') return;
+  const armies = s.groups.filter(group => group.kind === 'army' && !group.finished && groupController(s, group) === f.id);
+  if (armies.length >= 4 || armies.filter(group => group.missionKind === 'protection').length >= Math.min(2, homes.length)) return;
+  const context = frontierContext(s, f), assets = frontierAssets(s, f, context);
+  const reports = context.threats.filter(report => report.kind === 'settlement');
+  for (const asset of assets) {
+    if (armies.some(group => group.missionKind === 'protection' && group.protectionId === asset.id && !['returning', 'retreating'].includes(group.phase))) continue;
+    for (const home of [...homes].sort((a, b) => distance(a, asset) - distance(b, asset))) {
+      if (home.shortageDays > 0 || home.health < 75 || home.availableWorkers < 12 || distance(home, asset) > 95) continue;
+      const defense = homeDefense(s, f, home, reports);
+      if (defense.observedThreat || defense.deployable < 6) continue;
+      const units = allocateMilitary(s, home, Math.min(12, Math.max(6, asset.need), defense.deployable)), size = countMilitary(units);
+      if (size < 6 || asset.assessment.uncovered > size * 1.2) continue;
+      const speed = 3, path = findPath(expeditionPlanningWorld(s, f), home, asset, { factionId: f.id, arrival: .45 });
+      if (!path.reachable) continue;
+      const risk = assessFrontierRoute(context, home, path);
+      if (risk.peak > size * 1.2) continue;
+      const route = campaignRoute(s, f, home, asset, size, speed);
+      if (!route || route.provisionFactor > 2 || route.expectedTravelCycles > 100) continue;
+      const biology = { ...f, species: factionOf(s, home.factionId)?.species || f.species };
+      const provisionCycles = route.expectedTravelCycles + 40, travelCosts = provisions(biology, size, true);
+      const costs = Object.fromEntries(KEYS.map(key => [key, Math.max((travelCosts[key] || 0) * route.provisionFactor, (SURVIVAL_NEEDS[biology.species][key] || 0) * size * provisionCycles)]));
+      const reserve = Object.fromEntries(KEYS.map(key => [key, (SURVIVAL_NEEDS[biology.species][key] || 0) * home.population * 18]));
+      if (!canAfford(home, costs, reserve)) continue;
+      const group = { id: 'g' + s.nextId++, factionId: home.factionId, commandFactionId: f.id, originId: home.id, kind: 'army', missionKind: 'protection', campaign: false,
+        protectionId: asset.id, protectionKind: asset.kind, protectionUntil: s.tick + Math.min(100, Math.ceil(route.expectedTravelCycles / 2) + 40),
+        x: home.x, z: home.z, prevX: home.x, prevZ: home.z, targetId: asset.id, targetX: asset.x, targetZ: asset.z, missionTargetX: asset.x, missionTargetZ: asset.z,
+        strategicHold: { kind: 'protect', x: asset.x, z: asset.z }, phase: 'outbound', size, initialSize: size, units, supply: 100, morale: 90, speed, ...route,
+        homeReserve: defense.reserve, provisionCycles, provisions: costs, carrying: emptyCargo(), observations: [], createdTick: s.tick, createdTime: s.time ?? s.tick,
+        reason: `A funded guard rotation protects this ${asset.kind}; ${defense.reserve} military remain reserved at home.` };
+      if (!deployMilitary(s, home, group)) continue;
+      pay(s, home, costs); s.groups.push(group); f.lastProtection = s.tick;
+      s.stats.protectionParties = (s.stats.protectionParties || 0) + 1;
+      rememberCampaignOrder(s, group); return;
+    }
+  }
+}
+
 export function dispatchHarassment(s, f, homes) {
   if (f.strategy?.mode === 'recover' || f.strategy?.operation?.phase === 'assemble') return;
   if (s.tick < 70 || s.tick - (f.lastHarassment ?? -40) < 40 || s.groups.length >= MAX_GROUPS ||
@@ -903,6 +966,10 @@ export function stepStrategy(s, dt = 0.1) {
   }
   if (cycleBoundary) {
     refreshExileBases(s);
+    for (const group of s.groups) {
+      const commander = factionOf(s, groupController(s, group));
+      if (commander && !group.finished) updateProtection(s, group, commander);
+    }
     for (const f of s.factions) coordinateFrontlines(s, f);
     const remaining = [];
     for (const packet of s.pendingReports) {
@@ -932,6 +999,7 @@ export function stepStrategy(s, dt = 0.1) {
     reserveHomeDefense(s, f, homes, knownReports(s, f, { kind: 'settlement', maxAge: 230, minConfidence: .3, includeOwn: false }));
     planStrategy(s, f, homes, { planningWorld: expeditionPlanningWorld, returnHome });
     dispatchScout(s, f, homes);
+    dispatchProtection(s, f, homes);
     dispatchHarassment(s, f, homes);
     chooseExpedition(s, f, homes);
   }

@@ -152,6 +152,7 @@ export function createTerrain(THREE, scene, seed = 'littleworld', options = {}) 
     return true;
   }
   function sample(count, biome, minHeight = .7, radius = 38.5, clear = 5.2) {
+    if (biome && biome !== world.biome) return [];
     count = Math.round(count * 2.4); radius *= LAND_SCALE;
     const result = [];
     for (let attempts = 0; result.length < count && attempts < count * 28; attempts++) {

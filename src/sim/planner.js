@@ -119,7 +119,7 @@ export function planStrategy(s, f, homes, hooks) {
   }
   for (const g of armies) {
     recoverProgress(s, f, g, hooks);
-    const role = g.phase === 'retreating' || g.phase === 'returning' ? 'recover' : g.strategicHold ? 'rally' : g.missionKind === 'harassment' ? 'raid' : g.campaign ? 'assault' : 'field-guard';
+    const role = g.phase === 'retreating' || g.phase === 'returning' ? 'recover' : g.strategicHold?.kind === 'protect' ? 'field-guard' : g.strategicHold ? 'rally' : g.missionKind === 'harassment' ? 'raid' : g.campaign ? 'assault' : 'field-guard';
     g.strategicRole = role;
     for (const body of getSoldiers(s, g)) body.order = { role: ready(body) ? role : 'recover', objectiveId: g.targetId ?? g.originId, x: g.targetX, z: g.targetZ };
   }
