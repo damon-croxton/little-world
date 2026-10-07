@@ -1,5 +1,26 @@
 # Cloud worker-combat follow-up — 2026-10-07
 
+Latest verified simulation checkpoint: ef0bc06a736b3f903d862592701fa62200955dc6.
+Actions 37618448297 passed all gates: 373 tests (158.64s), 21 built checks (85.68s)
+and 21 public checks (75.68s), with the exact public marker and pinned Chromium
+153.0.8010.12 WebGL boot. Public artifact 11480639270 /
+file_00000000e5d88230a60aabd37348aa3b; receipt and images are preserved under
+screenshots/worker-combat/ef0bc06-public-ci/. No returning army was stuck in the
+250 or 300-cycle final observations; the originally lagging survivor returned.
+
+This final small presentation change moves existing owned-crew health beside
+the work assignment, above the inspector fold. 17 existing UI tests pass; actual
+desktop and 390×844 touch-emulated renders show the 12-to-11 count change and
+343/352 remaining health without scrolling, with panel open/close preserved.
+These local Chromium 151 renders are diagnostic, not release browser parity or
+a physical iPhone claim. Final exact-source CI/publication is recorded separately.
+
+An unaccelerated 20-second fresh-world browser observation at nominal 2× measured
+2.86 FPS and 1.04 simulation cycles per wall second, with no browser errors.
+This is cloud SwiftShader behaviour, not physical GPU performance. The historical
+roughly 41m30 browser pacing limitation is not superseded by short Node checks.
+The user asked to finish by 12:40:29 UTC: no further broad features or sweeps.
+
 Follow-up cdd8181469e16da45de0454e369b421e3b7e06c9 is now published and verified.
 Actions 37616857626 completed green: 372 tests (177.19s), 21 built browser checks
 (89.79s), 21 public checks (88.08s). The public marker matched exactly and pinned

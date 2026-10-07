@@ -323,6 +323,9 @@ button.world-label.selected::after { content: ''; position: absolute; bottom: -5
 .ledger-note { padding-bottom: 18px; }
 .worker-job { padding: 16px 0; border-bottom: 1px solid var(--line); }
 .worker-job .site-job-link { margin-top: 12px; }
+.worker-job .crew-health { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 10px; margin: 10px 0; font-size: 10px; line-height: 1.5; }
+.worker-job .crew-health strong { font-weight: 500; }
+.worker-job .crew-health span { color: var(--muted); }
 .atlas-settings { max-height: calc(100% - 140px); overflow-y: auto; scrollbar-width: thin; scrollbar-color: #a5b4a633 transparent; }
 @media (max-height: 760px) and (min-width: 801px) { .developed-control { margin-top: 10px; } .developed-button { padding: 8px 10px; } .developed-control > p { display: none; } }
 @media (max-width: 800px) { .atlas-brand .world-scale { display: block; font-size: 8px; margin-top: 5px; } .world-scale > span { display: none; } .developed-control > p { display: none; } .developed-button { font-size: 9px; padding: 8px; gap: 6px; } .overlay-control button { padding-left: 5px; padding-right: 5px; } }
