@@ -17,18 +17,22 @@ page.setDefaultTimeout(30000); observeErrors(page, report);
 const settle = () => waitForRenderedFrames(page, { minimumFrames: 3 });
 const observe = () => page.evaluate(() => ({ tick: littleworld.state.tick, perspective: littleworld.view.perspective, selectedId: littleworld.view.selectedId, camera: littleworld.camera.position.toArray(), target: littleworld.controls.target.toArray(), inspector: document.querySelector('.inspector').innerText }));
 async function shot(name) { const file = `${baseline ? 'before' : 'after'}-${name}.png`; await page.screenshot({ path: output(config, file) }); report.screenshots.push({ file, ...await observe() }); }
-async function pin(x, z, distance = 24) {
-  await page.evaluate(async ({ x, z, distance }) => {
+async function pin(x, z, distance = 24, side = 1) {
+  await page.evaluate(async ({ x, z, distance, side }) => {
     const w = littleworld, { heightAt } = await import(new URL('./src/world.js', location.href).href), y = heightAt(x, z, w.state.seed);
-    w.actions.follow(null); w.camera.position.set(x + distance * .75, y + distance * .8, z + distance); w.controls.target.set(x, y + 1, z); w.controls.update();
-  }, { x, z, distance }); await settle();
+    w.actions.follow(null); w.camera.position.set(x + distance * .75 * side, y + distance * .8, z + distance * side); w.controls.target.set(x, y + 1, z); w.controls.update();
+  }, { x, z, distance, side }); await settle();
 }
 async function projectedPick(kind) {
-  return page.evaluate(kind => {
+  return page.evaluate(async kind => {
+    const THREE = await import('three');
     const w = littleworld, proxies = kind === 'building' ? w.renderers.buildings.getPickables() : w.renderers.crowds.getPickables();
+    const ray = new THREE.Raycaster(), all = [...w.renderers.buildings.getPickables(), ...w.renderers.crowds.getPickables()];
     return proxies.map(o => { const p = o.position.clone().setFromMatrixPosition(o.matrixWorld).project(w.camera); const x = (p.x * .5 + .5) * innerWidth, y = (-p.y * .5 + .5) * innerHeight;
-      return { id: o.userData.buildingId || o.userData.groupId, homeId: o.userData.settlementId, x, y, clear: document.elementFromPoint(x, y)?.tagName === 'CANVAS', depth: p.z };
-    }).filter(p => p.id && p.clear && p.depth < 1 && p.x > 240 && p.x < 1260 && p.y > 150 && p.y < 850);
+      ray.setFromCamera(new THREE.Vector2(p.x, p.y), w.camera); const hit = ray.intersectObjects(all, true)[0];
+      const frontId = hit && (w.renderers.crowds.resolvePick?.(hit) || hit.object.userData.buildingId || hit.object.userData.groupId || hit.object.userData.settlementId);
+      return { id: o.userData.buildingId || o.userData.groupId, frontId, homeId: o.userData.settlementId, x, y, clear: document.elementFromPoint(x, y)?.tagName === 'CANVAS', depth: p.z };
+    }).filter(p => p.id && p.id === p.frontId && p.clear && p.depth < 1 && p.x > 240 && p.x < 1260 && p.y > 150 && p.y < 850);
   }, kind);
 }
 async function recordBattle() {
@@ -79,8 +83,15 @@ try {
   assert.ok(building, 'Actual building canvas clicks did not select a building');
   if (!baseline) { assert.equal(building.observed.selectedId, building.intended.id); assert.match(building.observed.inspector, /condition|integrity|health|construction/i); }
   report.checks.push({ name: 'Building canvas selection resolves actual building details', observed: building }); await shot('building-inspection');
-  const group = await page.evaluate(() => { const g = littleworld.state.groups.find(g => g.kind === 'worker' && g.size > 0); return { id: g.id, x: g.x, z: g.z, size: g.size }; });
-  await pin(group.x, group.z, 15); const groupPoints = await projectedPick('group'); const target = groupPoints.find(p => p.id === group.id); assert.ok(target, 'Selected real worker proxy is not exposed');
+  // A screen projection can be behind a nearer building. Find an actually
+  // exposed natural crew before testing its real click; never move entities.
+  const workers = await page.evaluate(() => littleworld.state.groups.filter(g => g.kind === 'worker' && g.size > 0).sort((a, b) => Number(b.phase === 'working') - Number(a.phase === 'working')).slice(0, 12).map(g => ({ id: g.id, x: g.x, z: g.z, size: g.size })));
+  let group, target;
+  for (const candidate of workers) {
+    for (const side of [1, -1]) { await pin(candidate.x, candidate.z, 15, side); target = (await projectedPick('group')).find(p => p.id === candidate.id); if (target) break; }
+    if (target) { group = candidate; break; }
+  }
+  assert.ok(target, 'No exposed natural worker could be prepared for an actual canvas click');
   await page.mouse.click(target.x, target.y); await settle(); const worker = await observe(); assert.equal(worker.selectedId, group.id); assert.match(worker.inspector, /worker|crew|cargo/i);
   report.checks.push({ name: 'Unit canvas selection exposes real group details', observed: { group, worker } }); await shot('unit-inspection');
   await page.evaluate(() => { littleworld.reset('first-light', { civCount: 4 }); littleworld.actions.setPerspective('omniscient'); });
@@ -112,6 +123,6 @@ try {
   assert.deepEqual(report.errors, []);
   if (!baseline) { report.finalSourceSha256 = await sourceHash(); assert.equal(report.finalSourceSha256, report.sourceSha256, 'Application source changed during browser evidence'); }
   report.status = baseline ? 'baseline-observed' : 'passed';
-} catch (error) { report.status = 'failed'; report.failure = error.stack; process.exitCode = 1; }
+} catch (error) { report.status = 'failed'; report.failure = error.stack; process.exitCode = 1; try { await shot('failure'); } catch {} }
 finally { report.completedAt = new Date().toISOString(); await save(config, 'interaction-campaign-report.json', report); await browser.close(); }
 console.log(JSON.stringify({ status: report.status, report: output(config, 'interaction-campaign-report.json'), checks: report.checks.length, failure: report.failure }));
