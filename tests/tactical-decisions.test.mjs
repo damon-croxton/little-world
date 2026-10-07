@@ -1,10 +1,11 @@
+import { setMilitary, recruitMilitary, bindArmy } from './roster-fixtures.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createSimulation } from '../src/sim/core.js';
 import { terrainAt } from '../src/world.js';
 import { stepCombat } from '../src/sim/combat.js';
 import { stepStrategy } from '../src/sim/strategy.js';
-import { initializeMilitary, countMilitary, queueTraining, advanceTraining, unitStats } from '../src/sim/military.js';
+import { countMilitary, queueTraining, advanceTraining, unitStats } from '../src/sim/military.js';
 import { lineOfSight, invalidateNavigation } from '../src/sim/navigation.js';
 import { emptyResources, initializeLedger, ledgerResidual, RESOURCES } from '../src/sim/economy.js';
 
@@ -15,7 +16,7 @@ function fixture() {
   s.groups = []; s.nodes = []; s.events = [];
   for (const home of s.settlements) {
     home.buildings = []; home.assigned = {}; home.population = 300; home.homePresent = 300; home.availableWorkers = 300;
-    home.stock = Object.fromEntries(RESOURCES.map(key => [key, 500])); initializeMilitary(home);
+    home.stock = Object.fromEntries(RESOURCES.map(key => [key, 500])); setMilitary(s, home);
   }
   const [a, b] = s.factions;
   a.relations[b.id] = { status: 'hostile', trust: 0 }; b.relations[a.id] = { status: 'hostile', trust: 0 };
@@ -33,11 +34,11 @@ function fixture() {
 const point = (center, x = 0, z = 0) => ({ x: center.x + x, z: center.z + z });
 function army(s, home, id, size, position, extras = {}) {
   const units = extras.units || { infantry: size, ranged: 0 };
-  home.military.infantry += units.infantry; home.military.ranged += units.ranged; home.soldiers = countMilitary(home.military); home.workers = home.population - home.soldiers;
+  recruitMilitary(s, home, units);
   const g = { id, kind: 'army', factionId: home.factionId, originId: home.id, units: { ...units }, size, initialSize: size,
     ...position, prevX: position.x, prevZ: position.z, targetX: position.x, targetZ: position.z, targetId: null, phase: 'outbound', speed: 0,
     morale: 100, supply: 100, carrying: emptyResources(), ...extras };
-  s.groups.push(g); return g;
+  bindArmy(s, home, g); s.groups.push(g); return g;
 }
 function pulse(s, strategy = false) {
   s.step++; s.time = s.step / 10; s.tick = Math.floor(s.time);
@@ -121,7 +122,7 @@ test('hidden remote census, queues and structures do not change local target or 
   const { s, center, ha, hb } = fixture();
   army(s, ha, 'a-main', 30, point(center, -3)); army(s, hb, 'b-contact', 25, point(center, 3));
   const alternate = structuredClone(s), remote = alternate.settlements.find(p => p.id === hb.id);
-  remote.population = 800; remote.military = { infantry: 650, ranged: 100 }; remote.soldiers = 750;
+  remote.population = 800; recruitMilitary(alternate, remote, { infantry: 625, ranged: 100 });
   remote.buildings.push({ id: 'secret-farm', kind: 'farm', x: remote.x, z: remote.z, progress: 1, hp: 160 });
   remote.trainingQueue = [{ id: 'secret-course', role: 'ranged', size: 40 }];
   const knowledge = structuredClone(s.factions[0].knowledge);
@@ -186,7 +187,7 @@ test('new local defenders interrupt settlement pressure before the next strategi
 
 test('one garrison advances once per pulse toward the closest of simultaneous attackers', () => {
   const { s, center, ha, hb } = fixture();
-  Object.assign(hb, center); initializeMilitary(hb, { infantry: 20, ranged: 0 });
+  Object.assign(hb, center); setMilitary(s, hb, { infantry: 20, ranged: 0 });
   hb.combat = { x: hb.x, z: hb.z, active: false };
   army(s, ha, 'a-far', 40, point(center, -7));
   army(s, ha, 'b-near', 40, point(center, -3));

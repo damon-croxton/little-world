@@ -73,6 +73,23 @@ async function accept() {
     assert.equal(await page.evaluate(() => littleworld.view.perspective), 'omniscient');
     assert.equal(await page.evaluate(() => JSON.stringify(littleworld.state)), initial);
   });
+  await check('Main world renders and inspects persistent recruited soldier identities', async () => {
+    const facts = await page.evaluate(() => {
+      const w = littleworld, canonical = w.state.settlements.flatMap(home => home.soldierRoster).filter(body => body.status === 'serving' && body.alive);
+      const projected = w.shownState.soldiers.filter(body => body.status === 'serving' && body.alive);
+      const visible = w.getMotionSamples().filter(sample => sample.soldierId && sample.visible);
+      const selected = visible[0]?.soldierId;
+      if (selected) w.select(selected);
+      return { canonical: canonical.map(body => body.id).sort(), projected: projected.map(body => body.id).sort(), selected, visible: visible.map(sample => sample.soldierId), militaryModels: w.diagnostics.crowds.militaryIndividuals };
+    });
+    assert.ok(facts.canonical.length && facts.selected, 'No actual initial soldier was rendered');
+    assert.deepEqual(facts.projected, facts.canonical); assert.equal(facts.militaryModels, facts.canonical.length);
+    assert.ok(facts.visible.every(id => facts.canonical.includes(id)));
+    await rendered(); assert.equal(await page.evaluate(() => littleworld.view.selectedId), facts.selected);
+    assert.match(await page.locator('.soldier-detail').innerText(), /Health/);
+    assert.equal(await page.evaluate(() => JSON.stringify(littleworld.state)), initial, 'Soldier inspection changed the world');
+    return { serving: facts.canonical.length, selected: facts.selected, visible: facts.visible.length, militaryModels: facts.militaryModels };
+  });
   await check('An exposed building canvas click opens its own details', async () => {
     const points = await page.evaluate(async () => {
       const THREE = await import('three'), w = littleworld, ray = new THREE.Raycaster();

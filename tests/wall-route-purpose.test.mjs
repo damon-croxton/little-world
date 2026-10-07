@@ -1,3 +1,5 @@
+import { setMilitary, bindArmy } from './roster-fixtures.mjs';
+import { getSoldiers } from '../src/sim/soldiers.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { defenseBuildingPlan, canCompleteDefense } from '../src/sim/defenses.js';
@@ -9,6 +11,7 @@ function fixture() {
   const home = { id: 'town', factionId: owner.id, x: -78, z: -120, population: 400, health: 100, wellbeing: 1, shortageDays: 0, military: { ranged: 9 }, buildings: [], status: 'town' };
   owner.knowledge.materials = { id: 'materials', kind: 'resource', resourceKind: 'materials', x: home.x + 30, z: home.z, amountEstimate: 1000, richnessEstimate: 1, observedTick: 100, reportedTick: 100 };
   const state = { seed: 'joined-screen', step: 1000, tick: 100, time: 100, factions: [owner, enemy, ally], settlements: [home], groups: [], walls: [] };
+  setMilitary(state, home, { infantry: 2, ranged: 9 });
   return { state, home, owner, enemy, ally, goal: owner.knowledge.materials };
 }
 function build(state, home, owner, count) {
@@ -94,7 +97,10 @@ test('defense completion respects endpoint geometry, actual soldier bodies, and 
   const { state, home, owner } = fixture(), wall = standingWall('wall', home.x + 8, home.z, 9);
   wall.from = { x: home.x + 8, z: home.z - 4.5 }; wall.to = { x: home.x + 8, z: home.z + 4.5 };
   wall.x = 999; wall.z = 999; // Legacy center data must not override endpoints.
-  const group = { id: 'army', factionId: owner.id, size: 2, x: home.x + 5, z: home.z, formationSlots: { infantry: [{ x: home.x + 8, z: home.z }], ranged: [] } };
+  const group = { id: 'army', originId: home.id, kind: 'army', factionId: owner.id, size: 2, units: { infantry: 2, ranged: 0 }, x: home.x + 5, z: home.z };
+  bindArmy(state, home, group);
+  const bodies = getSoldiers(state, group); bodies.forEach(body => Object.assign(body, { positioned: true }));
+  bodies[0].x = home.x + 8; group.formationSlots = { infantry: bodies, ranged: [] };
   state.groups.push(group);
   assert.equal(canCompleteDefense(state, wall), false);
   group.formationSlots.infantry[0].x = home.x + 5;

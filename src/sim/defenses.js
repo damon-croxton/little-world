@@ -1,6 +1,6 @@
 import { distance } from '../shared.js';
 import { terrainAt } from '../world.js';
-import { availableMilitary } from './military.js';
+import { getSoldiers, isServingSoldier, touchSoldiers } from './soldiers.js';
 import { findPath, isSegmentTraversable, wallGeometry, blockingWallParts } from './navigation.js';
 import { settlementController, groupController } from './control.js';
 
@@ -33,21 +33,42 @@ export function isStandingDefense(building) {
 
 export function assignDefenses(state, home, faction) {
   const active = home.population > 0 && !home.occupiedBy && !['camp', 'ruin'].includes(home.status);
-  let ranged = active ? availableMilitary(state, home).ranged : 0;
+  const priorCrew = (home.buildings || []).filter(b => b.kind === 'tower').map(b => (b.crewSoldierIds || []).join(',')).join('|');
+  const available = getSoldiers(state, home).filter(soldier => soldier.role === 'ranged' && !soldier.withdrawing);
+  const byId = new Map(available.map(soldier => [soldier.id, soldier]));
+  const assigned = new Set();
   let crew = 0;
+  // Keep surviving operators at their post. Assignment reserves an existing
+  // soldier; combat moves that soldier to the tower before it can operate.
+  for (const building of home.buildings || []) if (building.kind === 'tower') {
+    building.crewSoldierIds = active && isStandingDefense(building)
+      ? (building.crewSoldierIds || []).filter(id => byId.has(id) && !assigned.has(id)).slice(0, DEFENSE_STATS.tower.requiredCrew).filter(id => !assigned.has(id) && (assigned.add(id), true))
+      : [];
+  }
+  for (const soldier of home.soldierRoster || []) if (!assigned.has(soldier.id)) soldier.towerId = null;
   for (const building of home.buildings || []) {
     if (!DEFENSE_STATS[building.kind]) continue;
     building.maxHp ??= DEFENSE_STATS[building.kind].maxHp;
     building.hp ??= building.maxHp;
     if (building.kind !== 'tower') continue;
     building.requiredCrew = DEFENSE_STATS.tower.requiredCrew;
-    building.crewAssigned = active && isStandingDefense(building) ? Math.min(building.requiredCrew, ranged) : 0;
-    ranged -= building.crewAssigned; crew += building.crewAssigned;
+    if (active && isStandingDefense(building)) {
+      const candidates = available.filter(soldier => !assigned.has(soldier.id))
+        .sort((a, b) => distance(a, building) - distance(b, building) || a.id.localeCompare(b.id));
+      for (const soldier of candidates) {
+        if (building.crewSoldierIds.length >= building.requiredCrew) break;
+        building.crewSoldierIds.push(soldier.id); assigned.add(soldier.id);
+      }
+    }
+    for (const id of building.crewSoldierIds) byId.get(id).towerId = building.id;
+    building.crewAssigned = building.crewSoldierIds.length;
+    crew += building.crewAssigned;
     building.operational = active && isStandingDefense(building) && building.crewAssigned === building.requiredCrew;
     building.inactiveReason = !active ? 'Settlement inactive' : !isStandingDefense(building) ? 'Construction unfinished or tower destroyed' : !building.operational ? 'Two trained ranged operators required' : null;
   }
   home.assigned ||= {};
   home.assigned.towerCrew = crew;
+  if (priorCrew !== (home.buildings || []).filter(b => b.kind === 'tower').map(b => b.crewSoldierIds.join(',')).join('|')) touchSoldiers(state);
   return crew;
 }
 
@@ -186,6 +207,14 @@ export function canCompleteDefense(state, building) {
   const home = state.settlements?.find(p => p.buildings?.includes(building));
   const ownerId = home ? (state.factions ? settlementController(state, home) : home.occupiedBy || home.factionId) : building.factionId;
   const clearance = (building.width || 1) * .5 + .55;
+  // Persistent bodies may trail their army or withdraw independently. Their
+  // actual positions keep a scaffold open even when its route anchor passed.
+  for (const origin of state.settlements || []) for (const soldier of origin.soldierRoster || []) {
+    if (!isServingSoldier(soldier) || !soldier.positioned) continue;
+    const group = soldier.groupId && state.groups?.find(g => g.id === soldier.groupId);
+    const factionId = group ? groupController(state, group) : settlementController(state, origin);
+    for (const [from, to] of blockingWallParts(state, building, ownerId, factionId)) if (segmentDistance(soldier, from, to) <= clearance) return false;
+  }
   for (const entity of [...(state.groups || []), ...(state.settlements || [])]) {
     if (entity.finished || !(entity.size > 0 || entity.population > 0)) continue;
     const factionId = state.factions ? ('population' in entity ? settlementController(state, entity) : groupController(state, entity)) : entity.factionId;

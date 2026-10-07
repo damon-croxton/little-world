@@ -1,3 +1,5 @@
+import { getSoldier, getSoldiers } from '../src/sim/soldiers.js';
+import { setMilitary, recruitMilitary, bindArmy } from './roster-fixtures.mjs';
 // Independent contract audit. Controlled fixtures are not natural-population or
 // browser-performance evidence; natural multi-seed evidence lives in balance.mjs.
 import test from 'node:test';
@@ -6,7 +8,7 @@ import { stepStrategy } from '../src/sim/strategy.js';
 import { createSimulation, stepSimulation } from '../src/sim/core.js';
 import { terrainAt } from '../src/world.js';
 import { emptyResources, initializeLedger, ledgerResidual, RESOURCES } from '../src/sim/economy.js';
-import { initializeMilitary, countMilitary, refreshExileBases, commandFactionForHome, queueTraining, advanceTraining, unitStats } from '../src/sim/military.js';
+import { countMilitary, refreshExileBases, commandFactionForHome, queueTraining, advanceTraining, unitStats } from '../src/sim/military.js';
 import { groupController } from '../src/sim/control.js';
 import { DEFENSE_STATS, assignDefenses, defenseAmmoCost } from '../src/sim/defenses.js';
 import { stepCombat, updateCombatFormation, combatFormationSlot, COMBAT_LIMITS } from '../src/sim/combat.js';
@@ -31,7 +33,7 @@ function fixture() {
     home.buildings = []; home.population = 200; home.homePresent = 200;
     home.stock = Object.fromEntries(RESOURCES.map(k => [k, 500]));
     home.assigned = { training: 0, towerCrew: 0 };
-    initializeMilitary(home);
+    setMilitary(state, home);
   }
   const center = clearSite(state);
   const [a, b] = state.factions;
@@ -41,12 +43,12 @@ function fixture() {
   return { state, center, a, b, ha: state.settlements[0], hb: state.settlements[1] };
 }
 function army(state, home, id, units, point) {
-  initializeMilitary(home, units);
+  recruitMilitary(state, home, units);
   const g = { id, kind: 'army', factionId: home.factionId, originId: home.id,
     units: { ...units }, size: countMilitary(units), initialSize: countMilitary(units),
     x: point.x, z: point.z, prevX: point.x, prevZ: point.z, targetX: point.x, targetZ: point.z,
     speed: 0, phase: 'outbound', supply: 100, morale: 100, carrying: emptyResources(), createdTick: state.tick };
-  state.groups.push(g); return g;
+  bindArmy(state, home, g); state.groups.push(g); return g;
 }
 function pulse(state) {
   state.step++; state.tick = Math.floor(state.step / 10); state.time = state.step / 10;
@@ -75,7 +77,9 @@ test('visible ranged volleys create pending projectiles before actual role casua
     const order = state.pendingCombat.find(p => p.id === event.id);
     assert.ok(order && order.impactTime > state.time, 'visual projectile lacks a future damage order');
     assert.equal(event.count, event.shots.length);
-    assert.ok(event.shots.length <= COMBAT_LIMITS.rangedFrontage);
+    assert.equal(event.shots.length, 1);
+    assert.ok(source.soldierIds.includes(event.sourceSoldierId));
+    assert.ok(target.soldierIds.includes(event.targetSoldierId));
     for (const shot of event.shots) assert.ok(Number.isFinite(shot.from.x) && Number.isFinite(shot.to.x));
   }
   for (let i = 0; i < 200 && target.size === initialSize; i++) pulse(state);
@@ -92,7 +96,7 @@ test('combat pulse replay is deterministic, bounded and exactly frozen with no e
   const first = duel(), second = duel();
   for (let i = 0; i < 350; i++) {
     pulse(first.state); pulse(second.state);
-    assert.ok(first.state.pendingCombat.length <= COMBAT_LIMITS.pending);
+    assert.ok(first.state.pendingCombat.every(strike => getSoldier(first.state, strike.sourceSoldierId) && getSoldier(first.state, strike.targetSoldierId)), 'a pending strike lost its canonical shooter or target');
     assert.ok(first.state.combatEvents.length <= COMBAT_LIMITS.effects);
     conserved(first.state);
   }
@@ -104,12 +108,14 @@ test('combat pulse replay is deterministic, bounded and exactly frozen with no e
 
 function towerFixture() {
   const f = fixture(), { state, center, ha, hb, a } = f;
-  initializeMilitary(ha, { infantry: 0, ranged: 2 });
+  setMilitary(state, ha, { infantry: 0, ranged: 2 });
   const tower = { id: 'audit-tower', kind: 'tower', x: center.x - 3, z: center.z, progress: 1,
     hp: DEFENSE_STATS.tower.maxHp, maxHp: DEFENSE_STATS.tower.maxHp };
   ha.buildings = [tower];
   army(state, hb, 'audit-tower-target', { infantry: 20, ranged: 0 }, { x: center.x + 3, z: center.z });
-  assignDefenses(state, ha, a); initializeLedger(state);
+  assignDefenses(state, ha, a);
+  for (const body of getSoldiers(state, ha)) Object.assign(body, { x: tower.x, z: tower.z, prevX: tower.x, prevZ: tower.z, positioned: true });
+  initializeLedger(state);
   return { ...f, tower };
 }
 
@@ -126,8 +132,8 @@ test('operational towers spend species ammunition only when firing real delayed 
 test('uncrewed, destroyed, unfinished, unfunded and wall-occluded towers cannot shoot', () => {
   for (const reason of ['no-crew', 'lost-crew', 'destroyed', 'unfinished', 'unfunded', 'wall']) {
     const { state, ha, tower, a, center } = towerFixture();
-    if (reason === 'no-crew') { initializeMilitary(ha); assignDefenses(state, ha, a); }
-    if (reason === 'lost-crew') initializeMilitary(ha); // Intentionally leave operational stale until combat validates it.
+    if (reason === 'no-crew') { setMilitary(state, ha); assignDefenses(state, ha, a); }
+    if (reason === 'lost-crew') setMilitary(state, ha); // Intentionally leave operational stale until combat validates it.
     if (reason === 'destroyed') tower.hp = 0;
     if (reason === 'unfinished') tower.progress = .99;
     if (reason === 'unfunded') ha.stock = emptyResources();
@@ -203,7 +209,7 @@ test('a wall completed during projectile flight blocks damage without undoing th
   invalidateNavigation(state);
   for (let i = 0; i < 12; i++) pulse(state);
   assert.equal(target.size, initialSize, 'projectile killed through newly completed cover');
-  assert.equal(target.combat?.wounds?.infantry || 0, 0, 'blocked projectile banked future casualty damage');
+  assert.ok(getSoldiers(state, target).every(body => body.hp === body.maxHp), 'blocked projectile injured a canonical target');
   assert.equal(state.stats.attacks, attacks, 'blocking cover undid the actual fired-shot count');
   assert.ok(!state.pendingCombat.some(p => fired.some(e => e.id === p.id)), 'blocked orders never resolved');
   conserved(state);
@@ -236,11 +242,11 @@ test('an outbound worker abort cannot remotely refresh its unseen target deposit
 test('every actual formation body stays on connected terrain beside a solid wall', () => {
   const { state, center, ha } = fixture();
   const units = { infantry: 40, ranged: 40 };
-  const g = army(state, ha, 'audit-wall-flank', units, { x: center.x - 1.1, z: center.z - 2 });
-  g.speed = 3; g.targetX = g.x; g.targetZ = center.z + 6;
   ha.buildings.push({ id: 'audit-flank-wall', kind: 'wall', x: center.x, z: center.z,
     rotation: Math.PI / 2, length: 30, width: 1, progress: 1, hp: 300 });
   invalidateNavigation(state);
+  const g = army(state, ha, 'audit-wall-flank', units, { x: center.x - 1.1, z: center.z - 2 });
+  g.speed = 3; g.targetX = g.x; g.targetZ = center.z + 6;
   for (let i = 0; i < 20; i++) {
     state.step++; state.time = state.step / 10; g.z += .15;
     updateCombatFormation(state, g, units, .1, { yaw: 0 });
@@ -260,7 +266,7 @@ test('every actual formation body stays on connected terrain beside a solid wall
 test('occupation preserves native species, actual citizens, deployed roles and local stores', () => {
   const { state, ha, hb, a, b } = fixture();
   const invader = army(state, ha, 'audit-occupying-army', { infantry: 20, ranged: 12 }, hb);
-  initializeMilitary(hb, { infantry: 8, ranged: 4 });
+  setMilitary(state, hb, { infantry: 8, ranged: 4 });
   const original = { population: population(state), nativeFactionId: hb.factionId, species: b.species, stock: { ...hb.stock }, military: hb.soldiers };
   initializeLedger(state);
   assert.equal(occupySettlement(state, hb, invader), true);
@@ -295,6 +301,7 @@ test('exchanged capitals preserve both territorial sovereignties until a real la
   // A later, separately staged physical contact liberates the first capital.
   // This explicit transition fixture does not claim that a natural march occurred.
   ga.x = ha.x; ga.z = ha.z;
+  for (const body of getSoldiers(state, ga)) Object.assign(body, { x: ha.x, z: ha.z, prevX: ha.x, prevZ: ha.z, positioned: true });
   assert.ok(occupySettlement(state, ha, ga));
   updateConquest(state);
   assert.equal(state.outcome.status, 'victory', 'genuine all-territory control never resolved the war');
@@ -322,7 +329,8 @@ test('an attacking army progresses a siege against the effective occupier of a d
   hb.occupiedBy = a.id; b.defeatedBy = a.id; b.status = 'capitulated';
   a.relations[third.id] = { status: 'hostile', trust: 0 }; third.relations[a.id] = { status: 'hostile', trust: 0 };
   const attacker = army(state, hc, 'audit-occupied-assault', { infantry: 24, ranged: 12 }, { x: hb.x + 3, z: hb.z });
-  Object.assign(attacker, { targetId: hb.id, targetX: hb.x, targetZ: hb.z, phase: 'engaging', campaign: true });
+  // This isolated siege starts with extended field rations for its distant return.
+  Object.assign(attacker, { targetId: hb.id, targetX: hb.x, targetZ: hb.z, phase: 'engaging', campaign: true, provisionFactor: 2 });
   initializeLedger(state);
   for (let i = 0; i < 100 && settlementController(state, hb) !== third.id; i++) {
     state.step++; state.tick = Math.floor(state.step / 10); state.time = state.step / 10;
@@ -502,7 +510,7 @@ test('an auxiliary cannot pass an enemy gate merely because its native identity 
 test('exchanged native capitals still produce real controlled scouts and paid auxiliary units', () => {
   const state = createSimulation('audit-exile-agency', { civCount: 3 }), [a, b] = state.factions, [ha, hb] = state.settlements;
   ha.occupiedBy = b.id; hb.occupiedBy = a.id;
-  initializeMilitary(ha); initializeMilitary(hb);
+  setMilitary(state, ha); setMilitary(state, hb);
   const initial = population(state), seenCommands = new Set();
   initializeLedger(state);
   for (let cycle = 0; cycle < 160; cycle++) {

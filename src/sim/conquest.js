@@ -1,6 +1,7 @@
 import { distance, emit } from '../shared.js';
 import { availableMilitary, countMilitary, cancelTraining, demobilizeMilitary } from './military.js';
-import { invalidateNavigation } from './navigation.js';
+import { getSoldiers, touchSoldiers } from './soldiers.js';
+import { isSegmentTraversable, invalidateNavigation } from './navigation.js';
 import { observationFor, reportObservations, sightRadius, visibleToGroup } from './knowledge.js';
 
 // Control and biological identity are separate. Conquest changes sovereignty
@@ -17,6 +18,9 @@ export function occupySettlement(state, home, army) {
   if (!home || !army || army.finished || army.size <= 0 || !home.population || distance(home, army) > Math.max(24, (home.radius || 8) + 8)) return false;
   const victorId = groupController(state, army), previous = settlementController(state, home);
   if (!victorId || victorId === previous) return false;
+  const occupying = getSoldiers(state, army).filter(soldier => soldier.positioned && distance(soldier, home) <= Math.max(5, home.radius || 8) &&
+    isSegmentTraversable(state, soldier, home, { factionId: victorId, radius: .16 }));
+  if (occupying.length < Math.min(8, army.size)) return false;
   const victor = state.factions.find(f => f.id === victorId), native = state.factions.find(f => f.id === home.factionId);
   const surrender = countMilitary(availableMilitary(state, home));
   cancelTraining(state, home, null, 'The settlement surrendered; surviving trainees returned to civilian life');
@@ -32,7 +36,7 @@ export function occupySettlement(state, home, army) {
   for (const group of state.groups) if (group.originId === home.id && group.kind === 'colonist' && !group.finished) {
     group.phase = 'returning'; group.targetX = home.x; group.targetZ = home.z; group.reason = 'The founding expedition returns to its occupied home.';
   }
-  invalidateNavigation(state);
+  invalidateNavigation(state); touchSoldiers(state);
   state.stats.captures = (state.stats.captures || 0) + 1;
   state.stats.surrenders = (state.stats.surrenders || 0) + surrender;
   victor.experience.combat += 4;
@@ -68,6 +72,7 @@ export function updateConquest(state) {
     for (const home of held) { const id = settlementController(state, home); controllers.set(id, (controllers.get(id) || 0) + home.population); }
     const winner = [...controllers].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0]?.[0];
     if (!winner || winner === faction.id) continue;
+    touchSoldiers(state);
     faction.defeatedBy = winner; faction.defeatedAt = state.tick; faction.status = 'capitulated'; faction.researchWorkers = 0; faction.researchHomeId = null;
     faction.intent = 'Capitulated after losing its independent settlements and viable field armies.';
     for (const group of state.groups) if ((group.commandFactionId || group.factionId) === faction.id && group.kind === 'army' && !group.finished) {

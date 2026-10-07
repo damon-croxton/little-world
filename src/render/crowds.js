@@ -1,7 +1,6 @@
 import { heightAt } from '../world.js';
 import { observedGroupController } from '../selection.js';
 import { settlementController } from '../sim/control.js';
-import { combatFormationSlot } from '../sim/combat.js';
 import { createWorkerBadges } from './worker-badges.js';
 
 // Military and home citizens are individual bodies. An active resource crew
@@ -16,18 +15,25 @@ const countOf = x => Math.max(0, Math.floor(finite(x)));
 function hash(text) { let n = 2166136261; for (const c of String(text)) n = Math.imul(n ^ c.charCodeAt(0), 16777619); return n >>> 0; }
 function noise(n) { n = Math.imul(n ^ n >>> 16, 0x45d9f3b); n = Math.imul(n ^ n >>> 16, 0x45d9f3b); return ((n ^ n >>> 16) >>> 0) / 4294967296; }
 function angleMix(a, b, t) { return a + Math.atan2(Math.sin(b - a), Math.cos(b - a)) * t; }
+// Main and faction views provide a flat allowlisted projection. Raw simulation
+// tests can read the canonical home ledgers, but a faction view never can.
+function visibleSoldiers(state) { return Array.isArray(state.soldiers) ? state.soldiers : state.viewer?.mode === 'faction' ? [] : state.settlements.flatMap(home => home.soldierRoster || []); }
 
 export function createCrowds(THREE, scene) {
   const root = new THREE.Group(); root.name = 'Population - individuals and counted worker crews'; scene.add(root);
   const workerBadges = createWorkerBadges(THREE, root);
   const templates = new Map(), pools = new Map(), homeLayouts = new Map(), groupViews = new Map(), heights = new Map();
+  const soldierViews = new Map();
+  const selectionGeometry = new THREE.RingGeometry(.43, .59, 24), selectionMaterial = new THREE.MeshBasicMaterial({ color: '#fff0b8', transparent: true, opacity: .8, depthWrite: false, side: THREE.DoubleSide });
+  const soldierSelection = new THREE.Mesh(selectionGeometry, selectionMaterial); soldierSelection.name = 'Selected soldier'; soldierSelection.rotation.x = -Math.PI / 2; soldierSelection.visible = false; root.add(soldierSelection);
   const transform = new THREE.Object3D(), point = new THREE.Vector3(), sphere = new THREE.Sphere(), frustum = new THREE.Frustum(), clip = new THREE.Matrix4();
   const colorCache = new Map();
   const timeUniform = { value: 0 };
-  let seed = null, lastState = null, disposed = false, pickables = [], samples = [], hasCamera = false;
+  let seed = null, lastState = null, lastWorld = null, disposed = false, pickables = [], samples = [], hasCamera = false;
   let lastFrame = null;
   const priorClip = new THREE.Matrix4();
   let nodeIndex = new Map();
+  let soldierFrame = 0, factionIndex = new Map();
   const diagnostics = {};
 
   // Composite, genuinely three-dimensional silhouettes are baked once. A
@@ -328,7 +334,7 @@ export function createCrowds(THREE, scene) {
     else {
       const pool = poolFor(faction.species || 'human', lod, x, z), index = pool.count++;
       if (index >= pool.capacity) grow(pool, index + 1);
-      pool.selectionIds[index] = record.groupId || record.settlementId;
+      pool.selectionIds[index] = record.soldierId || record.groupId || record.settlementId;
       if (collect) { meshUuid = pool.mesh.uuid; instanceIndex = index; poolKey = pool.key; }
       // All crowd transforms are yaw + uniform scale. Write the affine matrix
       // directly instead of composing an Object3D/quaternion for every body.
@@ -347,27 +353,40 @@ export function createCrowds(THREE, scene) {
       }
       if (detailed) diagnostics.detailedIndividuals += representedCount; else { diagnostics.simplifiedIndividuals += representedCount; if (lod === 'overview') diagnostics.overviewIndividuals += representedCount; }
     }
-    if (collect && samples.length < 256) {
+    if (record.soldierId && record.selected) { soldierSelection.visible = visible; soldierSelection.position.set(x, y + .025, z); }
+    if (collect && (samples.length < 256 || record.soldierId && record.selected)) {
       const beat = timeUniform.value * 8.4 + phase, bob = (.5 + .5 * Math.sin(beat * 2)) * .025 * walk;
       // These offsets mirror the GPU vertex deformation, allowing QA to sample
       // working limbs even when a miner correctly remains at one worksite.
       const toolDy = work * Math.sin(beat * .73) * .17 * scale, toolDz = work * (.12 + Math.cos(beat * .73) * .08) * scale;
-      samples.push({ id, meshUuid, instanceIndex, poolKey, groundY: y, groupId: record.groupId || null, settlementId: record.settlementId || null, kind: record.kind, phase: record.action, representedCount, crewSize: record.crewSize || 1, badgeText: workerCrew ? `${representedCount}×` : null, scale, x, y: y + bob * scale, z, heading: yaw, role, militaryRole: record.militaryRole || null, attackTime: record.attackTime ?? -1000, hitTime: record.hitTime ?? -1000, attacking: Math.max(0, 1 - (timeUniform.value - (record.attackTime ?? -1000)) / .38) * Number(timeUniform.value >= (record.attackTime ?? -1000)), walking: walk, working: work, carrying: cargo, visible, lod, animationPhase: beat, leftFootZ: Math.sin(beat) * .125 * walk * scale, toolMotion: { x: Math.sin(yaw) * toolDz, y: toolDy, z: Math.cos(yaw) * toolDz }, simulationTime: timeUniform.value });
+      samples.push({ id, soldierId: record.soldierId || null, meshUuid, instanceIndex, poolKey, groundY: y, groupId: record.groupId || null, settlementId: record.settlementId || null, kind: record.kind, phase: record.action, representedCount, crewSize: record.crewSize || 1, badgeText: workerCrew ? `${representedCount}×` : null, scale, x, y: y + bob * scale, z, heading: yaw, role, militaryRole: record.militaryRole || null, attackTime: record.attackTime ?? -1000, hitTime: record.hitTime ?? -1000, attacking: Math.max(0, 1 - (timeUniform.value - (record.attackTime ?? -1000)) / .38) * Number(timeUniform.value >= (record.attackTime ?? -1000)), walking: walk, working: work, carrying: cargo, visible, lod, animationPhase: beat, leftFootZ: Math.sin(beat) * .125 * walk * scale, toolMotion: { x: Math.sin(yaw) * toolDz, y: toolDy, z: Math.cos(yaw) * toolDz }, simulationTime: timeUniform.value });
     }
   }
 
-  function renderHome(s, faction, deployed, militaryAway, time, camera, awayRoles = { infantry: 0, ranged: 0 }, alpha = 1, militaryFaction = faction) {
+  function renderSoldier(soldier, faction, camera, alpha, selectedId, collect = false) {
+    if (soldier.positioned === false || !Number.isFinite(soldier.x) || !Number.isFinite(soldier.z)) { diagnostics.unpositionedSoldiers++; return; }
+    let body = soldierViews.get(soldier.id);
+    if (!body) { const h = noise(hash(soldier.id)); body = { id: soldier.id, soldierId: soldier.id, phase: h * TAU, scale: .97 + h * .08, cargo: 0, work: 0 }; soldierViews.set(soldier.id, body); }
+    body.seenFrame = soldierFrame; body.groupId = soldier.groupId || null; body.settlementId = soldier.groupId ? null : soldier.originId || null;
+    body.kind = soldier.groupId ? 'army' : 'home'; body.action = soldier.action || (soldier.towerId ? 'tower-crew' : soldier.groupId ? 'serving' : 'garrison');
+    body.x = mix(finite(soldier.prevX, soldier.x), soldier.x, alpha); body.z = mix(finite(soldier.prevZ, soldier.z), soldier.z, alpha);
+    body.yaw = angleMix(finite(soldier.prevYaw, finite(soldier.yaw)), finite(soldier.yaw), alpha);
+    body.walk = Math.hypot(soldier.x - finite(soldier.prevX, soldier.x), soldier.z - finite(soldier.prevZ, soldier.z)) > .001 ? 1 : 0;
+    body.militaryRole = soldier.role; body.role = soldier.role === 'ranged' ? 7 : 2; body.attackTime = soldier.lastAttackTime ?? -1000; body.hitTime = soldier.lastHitTime ?? -1000;
+    body.elevation = soldier.elevation || 0; body.selected = selectedId === soldier.id;
+    const native = factionIndex.get(soldier.nativeFactionId || soldier.factionId) || faction, commander = factionIndex.get(soldier.commandFactionId || soldier.controllerId);
+    const appearance = { species: soldier.species || native?.species || 'human', color: faction?.color || commander?.color || native?.color };
+    emitIndividual(body, appearance, camera, collect || body.selected);
+  }
+
+  function renderHome(s, faction, deployed, time, camera, alpha = 1, militaryFaction = faction, roster = [], selectedId) {
     const population = countOf(s.population), present = Math.max(0, population - deployed), base = hash(s.id), layout = homeLayout(s);
     diagnostics.homePresentBySettlement[s.id] = present; diagnostics.homePresentIndividuals += present;
-    const researchers = Math.min(present, countOf(s.assigned?.researchers)), builders = Math.min(present - researchers, countOf(s.assigned?.construction));
-    const infrastructure = Math.min(present - researchers - builders, countOf(s.assigned?.infrastructure));
+    const civilianCount = Math.max(0, present - roster.length);
+    const researchers = Math.min(civilianCount, countOf(s.assigned?.researchers)), builders = Math.min(civilianCount - researchers, countOf(s.assigned?.construction));
+    const infrastructure = Math.min(civilianCount - researchers - builders, countOf(s.assigned?.infrastructure));
     const specialistCount = researchers + builders + infrastructure;
-    const garrison = Math.min(present - specialistCount, Math.max(0, countOf(s.soldiers) - militaryAway));
-    const homeUnits = s.military ? { infantry: Math.max(0, countOf(s.military.infantry) - awayRoles.infantry), ranged: Math.max(0, countOf(s.military.ranged) - awayRoles.ranged) } : { infantry: garrison, ranged: 0 };
-    const towers = (s.buildings || []).filter(b => b.kind === 'tower' && b.progress >= 1 && !b.destroyed && b.crewAssigned > 0);
-    const towerCrew = Math.min(homeUnits.ranged, towers.reduce((n, b) => n + b.crewAssigned, 0));
-    const fieldUnits = { infantry: homeUnits.infantry, ranged: Math.max(0, homeUnits.ranged - towerCrew) }, fieldTotal = fieldUnits.infantry + fieldUnits.ranged;
-    for (let i = 0; i < present; i++) {
+    for (let i = 0; i < civilianCount; i++) {
       let person = layout.people[i];
       if (!person) {
         const h = noise(base + i * 31), h2 = noise(base + i * 131 + 17), phase = h * TAU;
@@ -395,23 +414,6 @@ export function createCrowds(THREE, scene) {
         // limbs move, but they are not counted as a second walking citizen.
         const spread = .26 + .10 * Math.floor(i / Math.max(1, layout.sites.length + layout.labs.length));
         x = dest.x + Math.sin(phase) * Math.min(spread, 1.35); z = dest.z + Math.cos(phase) * Math.min(spread, 1.35); yaw = Math.atan2(dest.x - x, dest.z - z); walk = 0; work = .7;
-      } else if (i < specialistCount + garrison) {
-        const dest = layout.barracks[0] || { x: s.x + 3.4, z: s.z + 2.4 }, slot = i - specialistCount;
-        militaryRole = slot < fieldUnits.infantry ? 'infantry' : 'ranged'; role = militaryRole === 'infantry' ? 2 : 7;
-        x = dest.x + (slot % 6 - 2.5) * .55; z = dest.z + Math.floor(slot / 6) * .60; yaw = Math.PI / 2; walk = 0; work = 0; action = 'garrison';
-        if (slot >= fieldTotal && towerCrew) {
-          let operator = slot - fieldTotal, tower = towers[0];
-          for (const candidate of towers) { if (operator < candidate.crewAssigned) { tower = candidate; break; } operator -= candidate.crewAssigned; }
-          x = tower.x + (operator ? .55 : -.55); z = tower.z + .45; action = 'tower-crew'; elevation = faction.species === 'human' ? 3.15 : 3.45;
-          attackTime = tower.lastAttackTime ?? -1000;
-        } else if (s.combat?.active) {
-          const position = combatFormationSlot(s, slot, { units: fieldUnits, alpha, x: mix(s.combat.prevX ?? s.combat.x, s.combat.x, alpha), z: mix(s.combat.prevZ ?? s.combat.z, s.combat.z, alpha) });
-          x = position.x; z = position.z; yaw = position.yaw; action = 'defending';
-          walk = (position.movementDistance ?? Math.hypot((s.combat.prevX ?? s.combat.x) - s.combat.x, (s.combat.prevZ ?? s.combat.z) - s.combat.z)) > .001 ? 1 : 0;
-          const attack = s.combat.roleAttacks?.[militaryRole];
-          if (attack?.indices?.includes(slot)) attackTime = attack.time;
-          if (s.combat.hitIndices?.includes(slot)) hitTime = s.combat.lastHitTime ?? -1000;
-        }
       } else {
         // A loop follows entrance → central road junction → second entrance →
         // junction. Fixed per-person speed gives real sub-pulse movement at1x.
@@ -422,14 +424,22 @@ export function createCrowds(THREE, scene) {
         yaw = leg.yaw; x = leg.x + leg.dx * t; z = leg.z + leg.dz * t;
         if (!leg.walking) { walk = 0; work = .3; }
       }
-      const collect = i < 3 || i === specialistCount + garrison;
+      const collect = i < 3 || i === specialistCount;
       const body = person.body;
       body.action = action; body.x = x; body.z = z; body.yaw = yaw; body.walk = walk; body.work = work; body.role = role; body.militaryRole = militaryRole; body.attackTime = attackTime; body.hitTime = hitTime; body.elevation = elevation;
       emitIndividual(body, militaryRole ? militaryFaction : faction, camera, collect);
     }
+    for (let i = 0; i < roster.length; i++) renderSoldier(roster[i], militaryFaction, camera, alpha, selectedId, i < 3);
   }
 
-  function renderGroup(g, faction, state, time, alpha, camera, selectedId) {
+  function renderGroup(g, faction, state, time, alpha, camera, selectedId, roster = []) {
+    if (g.kind === 'army') {
+      diagnostics.groupIndividuals += roster.length; diagnostics.armyIndividuals += roster.length;
+      // A broad party proxy would intercept the exact body's hit. The soldier
+      // inspector retains navigation back to its party and civilisation.
+      for (let i = 0; i < roster.length; i++) renderSoldier(roster[i], faction, camera, alpha, selectedId, i < 3 || g.id === selectedId && i < 6 || roster[i].role !== roster[i - 1]?.role);
+      return;
+    }
     const size = countOf(g.size); if (!size) return;
     const x = mix(finite(g.prevX, g.x), finite(g.x), alpha), z = mix(finite(g.prevZ, g.z), finite(g.z), alpha);
     let view = groupViews.get(g.id);
@@ -442,15 +452,14 @@ export function createCrowds(THREE, scene) {
     }
     if (view.step !== (state.step ?? state.tick)) { view.previousYaw = view.yaw; if (moved) view.yaw = desiredYaw; view.step = state.step ?? state.tick; }
     if (view.phase !== g.phase) { view.previousWorking = ['working', 'gathering'].includes(view.phase) ? 1 : 0; view.phase = g.phase; view.phaseStart = finite(state.time, time); }
-    const yaw = g.combat?.active ? g.combat.yaw : angleMix(view.previousYaw, view.yaw, alpha), sin = Math.sin(yaw), cos = Math.cos(yaw), isArmy = g.kind === 'army', isWorker = g.kind === 'worker', isWorking = ['working', 'gathering'].includes(g.phase);
+    const yaw = angleMix(view.previousYaw, view.yaw, alpha), sin = Math.sin(yaw), cos = Math.cos(yaw), isWorker = g.kind === 'worker', isWorking = ['working', 'gathering'].includes(g.phase);
     const workBlend = mix(view.previousWorking, isWorking ? 1 : 0, clamp((time - view.phaseStart) / .65));
-    const cols = isArmy ? Math.min(12, Math.max(4, Math.ceil(Math.sqrt(size * .9)))) : g.kind === 'scout' ? Math.min(2, size) : Math.min(4, Math.ceil(Math.sqrt(size * .7)));
-    const rows = Math.ceil(size / cols), spacing = isArmy ? .56 : .65;
+    const cols = g.kind === 'scout' ? Math.min(2, size) : Math.min(4, Math.ceil(Math.sqrt(size * .7)));
+    const rows = Math.ceil(size / cols), spacing = .65;
     const node = isWorking ? nodeIndex.get(g.targetId) : null, siteRadius = Math.max(1.2, Math.min(4.5, finite(node?.radius, 2.0)));
     const cargoAmount = typeof g.carrying === 'object' ? Object.values(g.carrying).reduce((n, x) => n + finite(x), 0) : finite(g.carrying);
-    const cargo = clamp(cargoAmount / Math.max(1, finite(g.capacity, size * 6))), phaseSeed = hash(g.id), role = ({ worker: 1, army: 2, scout: 3, trader: 4, colonist: 5 })[g.kind] || 0;
-    const units = g.units || { infantry: size, ranged: 0 };
-    diagnostics.groupIndividuals += size; if (isWorker) { diagnostics.workerIndividuals += size; diagnostics.workerCrewCount++; } if (isArmy) diagnostics.armyIndividuals += size;
+    const cargo = clamp(cargoAmount / Math.max(1, finite(g.capacity, size * 6))), phaseSeed = hash(g.id), role = ({ worker: 1, scout: 3, trader: 4, colonist: 5 })[g.kind] || 0;
+    diagnostics.groupIndividuals += size; if (isWorker) { diagnostics.workerIndividuals += size; diagnostics.workerCrewCount++; }
     view.proxy.position.set(x, ground(x, z) + .5, z); view.proxy.scale.set(isWorker ? 1.5 : Math.max(1.1, cols * spacing * .65), 1.0, isWorker ? 1.5 : Math.max(1.1, rows * spacing * .65)); view.proxy.rotation.y = yaw; view.proxy.updateMatrixWorld(); pickables.push(view.proxy);
     const models = isWorker ? 1 : size;
     for (let i = 0; i < models; i++) {
@@ -468,29 +477,25 @@ export function createCrowds(THREE, scene) {
           ox = mix(ox, Math.sin(angle) * radius, workBlend); oz = mix(oz, Math.cos(angle) * radius, workBlend); heading = angleMix(yaw, angle + Math.PI, workBlend);
         }
       }
-      let walk = moved ? 1 - workBlend : 0;
+      const walk = moved ? 1 - workBlend : 0;
       const work = isWorking ? .95 : 0;
-      let militaryRole = null, individualRole = role, attackTime = -1000, hitTime = -1000;
-      if (isArmy) {
-        const position = combatFormationSlot(g, i, { units, x, z, yaw, alpha });
-        ox = position.x - x; oz = position.z - z; heading = position.yaw; militaryRole = position.role; individualRole = militaryRole === 'infantry' ? 2 : 7;
-        if (Number.isFinite(position.movementDistance)) walk = position.movementDistance > .001 ? 1 : 0;
-        const attack = g.combat?.roleAttacks?.[militaryRole];
-        if (attack?.indices?.includes(i)) attackTime = attack.time;
-        if (g.combat?.hitIndices?.includes(i)) hitTime = g.combat.lastHitTime ?? -1000;
-      }
-      const collect = i < 2 || isArmy && i === units.infantry || g.id === selectedId && i < 6;
+      const collect = i < 2 || g.id === selectedId && i < 6;
       const body = person.body;
-      body.kind = g.kind; body.action = g.phase; body.x = x + ox; body.z = z + oz; body.yaw = heading; body.walk = walk; body.work = work; body.cargo = g.kind === 'trader' ? .75 : g.kind === 'colonist' ? .55 : cargo; body.role = individualRole; body.militaryRole = militaryRole; body.attackTime = attackTime; body.hitTime = hitTime; body.representedCount = isWorker ? size : 1; body.crewSize = size; body.selected = g.id === selectedId;
+      body.kind = g.kind; body.action = g.phase; body.x = x + ox; body.z = z + oz; body.yaw = heading; body.walk = walk; body.work = work; body.cargo = g.kind === 'trader' ? .75 : g.kind === 'colonist' ? .55 : cargo; body.role = role; body.militaryRole = null; body.attackTime = -1000; body.hitTime = -1000; body.representedCount = isWorker ? size : 1; body.crewSize = size; body.selected = g.id === selectedId;
       emitIndividual(body, faction, camera, collect);
     }
   }
 
-  function stateDigest(state) {
+  function stateDigest(state, roster) {
     // Normally step/time invalidate the frame. Also detect inspector/QA edits
     // during a pause: replacing or mutating a node, group, faction or building
     // must not reuse stale accounting or transforms at the same pulse.
-    return state.factions.map(f => `${f.id}:${f.species}:${f.color}:${f.defeatedBy}`).join('|') + ';' +
+    let soldiers = 2166136261;
+    for (const person of roster) {
+      soldiers = Math.imul(soldiers ^ hash(`${person.id}:${person.groupId}:${person.originId}:${person.role}:${person.species}:${person.commandFactionId}:${person.status}:${person.alive}:${person.positioned}`), 16777619);
+      for (const value of [person.x, person.z, person.prevX, person.prevZ, person.yaw, person.prevYaw, person.elevation, person.lastAttackTime, person.lastHitTime]) soldiers = Math.imul(soldiers ^ Math.round(finite(value) * 1e6), 16777619);
+    }
+    return soldiers + ';' + state.factions.map(f => `${f.id}:${f.species}:${f.color}:${f.defeatedBy}`).join('|') + ';' +
       state.settlements.map(s => `${s.id}:${s.factionId}:${s.occupiedBy}:${s.controllerId}:${s.x}:${s.z}:${s.radius}:${s.population}:${s.soldiers}:${s.military?.infantry}:${s.military?.ranged}:${s.combat?.active}:${s.combat?.lastHitTime}:${s.assigned?.researchers}:${s.assigned?.construction}:${s.assigned?.infrastructure}:` + (s.buildings || []).map(b => `${b.id}:${b.kind}:${b.x}:${b.z}:${b.progress}`).join(',')).join('|') + ';' +
       state.groups.map(g => `${g.id}:${g.originId}:${g.factionId}:${g.commandFactionId}:${g.controllerId}:${g.kind}:${g.size}:${g.units?.infantry}:${g.units?.ranged}:${g.combat?.active}:${g.formationRevision}:${g.combat?.roleAttacks?.infantry?.time}:${g.combat?.roleAttacks?.ranged?.time}:${g.combat?.lastHitTime}:${g.finished}:${g.x}:${g.z}:${g.prevX}:${g.prevZ}:${g.targetX}:${g.targetZ}:${g.phase}:${typeof g.carrying === 'object' ? JSON.stringify(g.carrying) : g.carrying}:${g.capacity}:${g.targetId}`).join('|') + ';' +
       (state.nodes || []).map(n => `${n.id}:${n.x}:${n.z}:${n.radius}:${n.amount}`).join('|');
@@ -501,27 +506,47 @@ export function createCrowds(THREE, scene) {
     alpha = clamp(finite(alpha, 1)); time = finite(time, finite(state.time));
     const camera = scene.userData.crowdCamera || scene.userData.camera;
     hasCamera = !!camera; if (camera) { camera.updateMatrixWorld(); clip.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse); frustum.setFromProjectionMatrix(clip); }
-    const digest = stateDigest(state), quality = scene.userData.quality, badgeViewport = workerBadges.setViewport(scene.userData.crowdViewport);
+    const world = state.renderWorldId ?? state, suppliedSoldiers = visibleSoldiers(state), digest = stateDigest(state, suppliedSoldiers), quality = scene.userData.quality, badgeViewport = workerBadges.setViewport(scene.userData.crowdViewport);
     // Exact paused-frame reuse. A changed camera, selection, simulation pulse,
     // interpolation or seed invalidates it; active motion is never throttled.
-    if (lastFrame && lastState === state && seed === state.seed && lastFrame.step === (state.step ?? state.tick) && lastFrame.time === time && lastFrame.alpha === alpha && lastFrame.selectedId === selectedId && lastFrame.camera === camera && lastFrame.digest === digest && lastFrame.quality === quality && lastFrame.badgeViewport === badgeViewport && (!camera || priorClip.equals(clip))) { diagnostics.reusedFrame = true; return; }
+    if (lastFrame && lastState === state && lastWorld === world && seed === state.seed && lastFrame.step === (state.step ?? state.tick) && lastFrame.time === time && lastFrame.alpha === alpha && lastFrame.selectedId === selectedId && lastFrame.camera === camera && lastFrame.digest === digest && lastFrame.quality === quality && lastFrame.badgeViewport === badgeViewport && (!camera || priorClip.equals(clip))) { diagnostics.reusedFrame = true; return; }
     lastFrame = { step: state.step ?? state.tick, time, alpha, selectedId, camera, digest, quality, badgeViewport }; priorClip.copy(clip);
-    timeUniform.value = time; samples = []; pickables = []; workerBadges.begin(camera);
-    if (seed !== state.seed || lastState !== state) { seed = state.seed; lastState = state; heights.clear(); homeLayouts.clear(); for (const view of groupViews.values()) view.proxy.removeFromParent(); groupViews.clear(); }
+    timeUniform.value = time; samples = []; pickables = []; workerBadges.begin(camera); soldierSelection.visible = false; soldierFrame++;
+    // Observer snapshots change every pulse, but their terrain and layouts
+    // belong to the same world. The opaque token also distinguishes a new run
+    // with the same seed; raw simulation callers retain object-identity resets.
+    if (seed !== state.seed || lastWorld !== world) { seed = state.seed; lastWorld = world; heights.clear(); homeLayouts.clear(); soldierViews.clear(); for (const view of groupViews.values()) view.proxy.removeFromParent(); groupViews.clear(); }
+    lastState = state;
     for (const pool of pools.values()) { pool.count = 0; pool.selectionIds.length = 0; }
-    Object.assign(diagnostics, { totalPopulation: 0, representedIndividuals: 0, visibleIndividuals: 0, culledIndividuals: 0, homePresentIndividuals: 0, homeVisibleIndividuals: 0, groupIndividuals: 0, groupVisibleIndividuals: 0, workerIndividuals: 0, representedWorkerIndividuals: 0, visibleWorkerIndividuals: 0, workerCrewCount: 0, visibleWorkerCrews: 0, drawnWorkerModels: 0, workerBadgeCount: 0, workerBadgeCapacity: 0, workerBadgeDrawCalls: 0, militaryIndividuals: 0, visibleMilitaryIndividuals: 0, armyIndividuals: 0, groupCount: 0, instances: 0, drawnModels: 0, detailedIndividuals: 0, simplifiedIndividuals: 0, overviewIndividuals: 0, reusedFrame: false, drawCallsEstimate: 0, triangleEstimate: 0, allocatedInstances: 0, instanceAllocationUnfulfilled: 0, homePresentBySettlement: {}, populationAccountingDelta: 0, terrainCacheSamples: 0, occlusionCulling: false });
+    Object.assign(diagnostics, { totalPopulation: 0, representedIndividuals: 0, visibleIndividuals: 0, culledIndividuals: 0, homePresentIndividuals: 0, homeVisibleIndividuals: 0, groupIndividuals: 0, groupVisibleIndividuals: 0, workerIndividuals: 0, representedWorkerIndividuals: 0, visibleWorkerIndividuals: 0, workerCrewCount: 0, visibleWorkerCrews: 0, drawnWorkerModels: 0, workerBadgeCount: 0, workerBadgeCapacity: 0, workerBadgeDrawCalls: 0, militaryIndividuals: 0, visibleMilitaryIndividuals: 0, armyIndividuals: 0, groupCount: 0, instances: 0, drawnModels: 0, detailedIndividuals: 0, simplifiedIndividuals: 0, overviewIndividuals: 0, reusedFrame: false, drawCallsEstimate: 0, triangleEstimate: 0, allocatedInstances: 0, instanceAllocationUnfulfilled: 0, homePresentBySettlement: {}, populationAccountingDelta: 0, terrainCacheSamples: 0, occlusionCulling: false, unpositionedSoldiers: 0 });
     nodeIndex = new Map((state.nodes || []).map(n => [n.id, n]));
-    const factions = new Map(state.factions.map(f => [f.id, f])), deployed = new Map(), militaryAway = new Map(), militaryAwayRoles = new Map(), liveGroups = new Set();
-    for (const g of state.groups) if (countOf(g.size) && !g.finished) { deployed.set(g.originId, (deployed.get(g.originId) || 0) + countOf(g.size)); if (g.kind === 'army') { militaryAway.set(g.originId, (militaryAway.get(g.originId) || 0) + countOf(g.size)); const roles = militaryAwayRoles.get(g.originId) || { infantry: 0, ranged: 0 }; roles.infantry += countOf(g.units?.infantry ?? g.size); roles.ranged += countOf(g.units?.ranged); militaryAwayRoles.set(g.originId, roles); } liveGroups.add(g.id); }
+    const factions = new Map(state.factions.map(f => [f.id, f])), deployed = new Map(), liveGroups = new Set();
+    factionIndex = factions;
+    const soldiersByHome = new Map(), soldiersByGroup = new Map(), orphanSoldiers = [];
+    const homeIds = new Set(state.settlements.map(home => home.id)), groupIds = new Set(state.groups.filter(group => !group.finished).map(group => group.id));
+    for (const person of suppliedSoldiers) {
+      if (person.alive === false || person.status === 'dead' || person.status === 'demobilized' || person.hp <= 0) continue;
+      const index = person.groupId ? soldiersByGroup : soldiersByHome, id = person.groupId || person.originId;
+      if (person.groupId ? !groupIds.has(id) : !homeIds.has(id)) { orphanSoldiers.push(person); continue; }
+      if (!index.has(id)) index.set(id, []); index.get(id).push(person);
+    }
+    for (const g of state.groups) {
+      const roster = g.kind === 'army' ? soldiersByGroup.get(g.id) || [] : null, size = roster ? roster.length : countOf(g.size);
+      if (!size || g.finished) continue;
+      deployed.set(g.originId, (deployed.get(g.originId) || 0) + size);
+      liveGroups.add(g.id);
+    }
     for (const s of state.settlements) {
       diagnostics.totalPopulation += countOf(s.population);
       const faction=factions.get(s.factionId),commander=factions.get(s.controllerId||settlementController(state,s));
       const militaryFaction=faction&&commander&&faction.id!==commander.id?{...faction,color:commander.color}:faction;
-      if(faction&&countOf(s.population))renderHome(s,faction,deployed.get(s.id)||0,militaryAway.get(s.id)||0,time,camera,militaryAwayRoles.get(s.id),alpha,militaryFaction);
+      if(faction&&countOf(s.population))renderHome(s,faction,deployed.get(s.id)||0,time,camera,alpha,militaryFaction,soldiersByHome.get(s.id)||[],selectedId);
     }
-    if (state.viewer?.mode === 'faction') for (const g of state.groups) if (!g.originId && liveGroups.has(g.id)) diagnostics.totalPopulation += countOf(g.size);
+    if (state.viewer?.mode === 'faction') for (const g of state.groups) if (!g.originId && liveGroups.has(g.id)) diagnostics.totalPopulation += g.kind==='army'?(soldiersByGroup.get(g.id)||[]).length:countOf(g.size);
     diagnostics.censusScope = state.viewer?.mode === 'faction' ? 'friendly-and-currently-visible' : 'whole-world';
-    for (const g of state.groups) { const native = factions.get(g.factionId), commander = factions.get(observedGroupController(state, g)); const faction = native && commander && native.id !== commander.id ? { ...native, color: commander.color } : native; if (faction && liveGroups.has(g.id)) { diagnostics.groupCount++; renderGroup(g, faction, state, time, alpha, camera, selectedId); } }
+    for (const g of state.groups) { const native = factions.get(g.factionId), commander = factions.get(observedGroupController(state, g)); const faction = native && commander && native.id !== commander.id ? { ...native, color: commander.color } : native; if (faction && liveGroups.has(g.id)) { diagnostics.groupCount++; renderGroup(g, faction, state, time, alpha, camera, selectedId,soldiersByGroup.get(g.id)||[]); } }
+    for (const person of orphanSoldiers) { diagnostics.totalPopulation++; if(person.groupId){diagnostics.groupIndividuals++;diagnostics.armyIndividuals++;}else diagnostics.homePresentIndividuals++; renderSoldier(person, null, camera, alpha, selectedId, samples.length < 3); }
+    for (const [id, body] of soldierViews) if (body.seenFrame !== soldierFrame) soldierViews.delete(id);
     for (const [id, view] of groupViews) if (!liveGroups.has(id)) { view.proxy.removeFromParent(); groupViews.delete(id); }
     const badges = workerBadges.finish();
     diagnostics.workerBadgeCount = badges.count; diagnostics.workerBadgeCapacity = badges.capacity; diagnostics.workerBadgeDrawCalls = badges.drawCalls;
@@ -542,6 +567,7 @@ export function createCrowds(THREE, scene) {
       if (sample.poolKey) sample.meshUuid = pools.get(sample.poolKey).mesh.uuid;
       if (sample.kind === 'worker') sample.badgeVisible = workerBadges.isVisible(sample.groupId);
     }
+    if (soldierSelection.visible) diagnostics.drawCallsEstimate++;
     diagnostics.drawnModels = diagnostics.instances;
     diagnostics.culledIndividuals = diagnostics.totalPopulation - diagnostics.visibleIndividuals;
     diagnostics.populationAccountingDelta = diagnostics.representedIndividuals - diagnostics.totalPopulation;
@@ -550,8 +576,8 @@ export function createCrowds(THREE, scene) {
   function dispose() {
     if (disposed) return; disposed = true;
     for (const pool of pools.values()) { pool.geometry.dispose(); pool.mesh.dispose(); }
-    for (const geometry of templates.values()) geometry.dispose(); material.dispose(); depthMaterial.dispose(); pickGeometry.dispose(); pickMaterial.dispose(); workerBadges.dispose(); root.removeFromParent();
-    pools.clear(); templates.clear(); groupViews.clear(); homeLayouts.clear(); heights.clear(); pickables = []; samples = [];
+    for (const geometry of templates.values()) geometry.dispose(); material.dispose(); depthMaterial.dispose(); pickGeometry.dispose(); pickMaterial.dispose(); selectionGeometry.dispose(); selectionMaterial.dispose(); workerBadges.dispose(); root.removeFromParent();
+    pools.clear(); templates.clear(); groupViews.clear(); homeLayouts.clear(); soldierViews.clear(); heights.clear(); pickables = []; samples = [];
   }
   return { update, getPickables: () => pickables, resolvePick: hit => workerBadges.resolvePick(hit) || (hit?.object?.visible && Number.isInteger(hit.instanceId) && hit.instanceId >= 0 && hit.instanceId < hit.object.count ? hit.object.userData.crowdSelectionIds?.[hit.instanceId] : null), dispose, diagnostics, getMotionSamples: () => samples.map(s => ({ ...s })) };
 }

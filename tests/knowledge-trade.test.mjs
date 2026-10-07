@@ -1,3 +1,4 @@
+import { setMilitary } from './roster-fixtures.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createSimulation } from '../src/sim/core.js';
@@ -18,7 +19,7 @@ function proposalState(seed) {
 
 test('barter proposals use stale contacts and self stores without reading hidden partner stocks, census, traits or disposition', () => {
   const a = proposalState('knowledge-trade'), b = structuredClone(a), [f, partner] = b.factions;
-  const hidden = b.settlements[1]; hidden.stock = { food: 0, water: 0, energy: 0, materials: 0 }; hidden.population = 2; hidden.soldiers = 0; hidden.homePresent = 2;
+  const hidden = b.settlements[1]; hidden.stock = { food: 0, water: 0, energy: 0, materials: 0 }; hidden.population = 2; setMilitary(b, hidden); hidden.homePresent = 2;
   partner.traits.cooperation = 0; partner.traits.aggression = 1;
   partner.relations[f.id] = { status: 'hostile', trust: 0, lastTrade: 79 };
   initializeLedger(b);

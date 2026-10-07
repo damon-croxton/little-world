@@ -1,3 +1,5 @@
+import { setMilitary, bindArmy, positionMilitary } from './roster-fixtures.mjs';
+import { returnMilitary } from '../src/sim/military.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
@@ -6,13 +8,17 @@ import { overviewFrame } from '../src/render/overview.js';
 
 function fixture() {
   const worker = (id, size, x, phase = 'outbound') => ({ id, size, x, z: 8, prevX: x - .4, prevZ: 8, targetX: x + 3, targetZ: 8, targetId: 'ore', originId: 'home', factionId: 'people', kind: 'worker', phase, carrying: { ore: 12, wood: 0 }, capacity: 60 });
-  return { seed: 'civilian-crew-render', step: 100, time: 10,
+  const state = { seed: 'civilian-crew-render', step: 100, time: 10,
     factions: [{ id: 'people', species: 'human', color: '#dca16b' }],
-    settlements: [{ id: 'home', factionId: 'people', x: 0, z: 0, population: 40, soldiers: 5, military: { infantry: 3, ranged: 2 }, assigned: {}, buildings: [] }],
+    settlements: [{ id: 'home', factionId: 'people', x: 0, z: 0, population: 40, health: 100, status: 'active', soldiers: 5, military: { infantry: 3, ranged: 2 }, assigned: {}, buildings: [] }],
     groups: [worker('outbound-crew', 11, -6), worker('mining-crew', 7, 6, 'working'),
       { ...worker('soldiers', 5, 12), kind: 'army', units: { infantry: 3, ranged: 2 } }, { ...worker('scouts', 2, -12), kind: 'scout' }],
     nodes: [{ id: 'ore', x: 9, z: 8, radius: 3, amount: 100 }]
   };
+  const groups = state.groups; state.groups = [];
+  setMilitary(state, state.settlements[0], { infantry: 3, ranged: 2 });
+  bindArmy(state, state.settlements[0], groups[2]); state.groups = groups;
+  positionMilitary(state); return state;
 }
 function setup(camera = false) {
   const state = fixture(), scene = new THREE.Scene();
@@ -84,6 +90,7 @@ test('crew motion, work, cargo and paused changes remain tied to the literal rep
 
 test('badge pooling survives growth, shrink, crew completion and render disposal', () => {
   const { state, scene, crowds } = setup(), original = state.groups[0];
+  returnMilitary(state, state.settlements[0], state.groups[2]);
   const labels = badgeMesh(scene), material = labels.material, texture = material.uniforms.glyphAtlas.value;
   for (const crews of [1, 70, 3, 71, 0]) {
     state.groups = Array.from({ length: crews }, (_, i) => ({ ...original, id: `crew-${i}`, size: i % 23 + 1, x: i % 9 * 2, prevX: i % 9 * 2 - .1 }));
@@ -97,7 +104,7 @@ test('badge pooling survives growth, shrink, crew completion and render disposal
   state.groups = [{ ...original, finished: true }]; state.step++; crowds.update(state, 10, null, 1);
   assert.equal(crowds.diagnostics.workerCrewCount, 0); assert.equal(crowds.diagnostics.workerBadgeCount, 0);
   assert.equal(crowds.diagnostics.homePresentIndividuals, 10);
-  assert.ok(crowds.getPickables().every(mesh => mesh.userData.crowdSelectionIds?.slice(0, mesh.count).every(id => id === 'home')), 'remaining inhabitants stay selectable without stale crew targets');
+  assert.ok(crowds.getPickables().every(mesh => mesh.userData.crowdSelectionIds?.slice(0, mesh.count).every(id => id === 'home' || state.settlements[0].soldierRoster.some(body => body.id === id))), 'remaining inhabitants stay selectable without stale crew targets');
   let textureDisposed = false, materialDisposed = false;
   texture.addEventListener('dispose', () => { textureDisposed = true; }); material.addEventListener('dispose', () => { materialDisposed = true; });
   crowds.dispose(); assert.ok(textureDisposed && materialDisposed); assert.equal(scene.children.length, 0);
@@ -141,6 +148,7 @@ test('full-world badge LOD preserves every worker model and keeps the selected c
 
 test('close overlapping crew badges choose stable IDs with selected priority and unchanged people', () => {
   const { state, scene, crowds } = setup(true), camera = scene.userData.camera, worker = state.groups[0];
+  returnMilitary(state, state.settlements[0], state.groups[2]);
   state.groups = ['c', 'b', 'a'].map(id => ({ ...worker, id, x: 0, prevX: 0, z: 8, prevZ: 8, size: 5 }));
   state.settlements[0].population = 25;
   camera.position.set(0, 30, 40); camera.lookAt(0, 2, 8);

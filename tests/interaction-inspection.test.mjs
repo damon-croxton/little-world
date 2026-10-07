@@ -1,3 +1,4 @@
+import { setMilitary, bindArmy, positionMilitary } from './roster-fixtures.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { parseHTML } from 'linkedom';
@@ -136,10 +137,13 @@ test('whole-world and faction inspection agree on nearby captive workers without
 
 test('occupied home troops and local crews use command tint while native species and civilian colours remain intact',()=>{
   const state=createSimulation('inspect-command-tint',{civCount:3}),home=state.settlements[1];
-  state.settlements=[home];home.population=15;home.soldiers=4;home.military={infantry:2,ranged:2};home.assigned={};
+  state.settlements=[home];home.population=15;setMilitary(state,home,{infantry:2,ranged:2});home.assigned={};
   home.buildings=[{id:'staffed-tower',kind:'tower',x:home.x+4,z:home.z,progress:1,hp:100,maxHp:100,crewAssigned:1}];
   state.groups=[{id:'commanded-army',factionId:home.factionId,commandFactionId:'f0',originId:home.id,kind:'army',size:2,units:{infantry:1,ranged:1},x:home.x+10,z:home.z,phase:'outbound'},
     {id:'local-workers',factionId:home.factionId,originId:home.id,kind:'worker',size:3,x:home.x+1,z:home.z,phase:'returning'}];
+  bindArmy(state,home,state.groups[0]);positionMilitary(state);
+  const towerBody=home.soldierRoster.find(body=>body.groupId==null&&body.role==='ranged');
+  Object.assign(towerBody,{towerId:'staffed-tower',x:home.x+4,z:home.z,prevX:home.x+4,prevZ:home.z,elevation:3.2,action:'tower-crew'});
   const scene=new THREE.Scene(),crowds=createCrowds(THREE,scene);
   const actualColor=sample=>{const result=new THREE.Color();scene.getObjectByProperty('uuid',sample.meshUuid).getColorAt(sample.instanceIndex,result);return result;};
   const tint=color=>new THREE.Color(color).lerp(new THREE.Color('#f0e5ca'),.12);
@@ -162,7 +166,8 @@ test('occupied home troops and local crews use command tint while native species
 });
 
 test('rendered civilians and individual soldiers resolve to their real scoped colony or party',()=>{
-  const state={seed:'body-picks',tick:0,step:0,time:0,factions:[{id:'f0',species:'human',color:'#dca16b'},{id:'f1',species:'machine',color:'#85bbbf'}],settlements:[{id:'home',factionId:'f0',x:0,z:0,population:9,soldiers:2,assigned:{},military:{infantry:1,ranged:1},buildings:[]},{id:'enemy',factionId:'f1',x:30,z:0,population:4,soldiers:0,assigned:{},buildings:[]}],groups:[{id:'soldiers',factionId:'f0',originId:'home',kind:'army',size:2,units:{infantry:1,ranged:1},x:12,z:12,prevX:12,prevZ:12,phase:'outbound'}],nodes:[]};
+  const state={seed:'body-picks',tick:0,step:0,time:0,factions:[{id:'f0',species:'human',color:'#dca16b'},{id:'f1',species:'machine',color:'#85bbbf'}],settlements:[{id:'home',factionId:'f0',x:0,z:0,population:9,health:100,status:'active',soldiers:2,assigned:{},military:{infantry:1,ranged:1},buildings:[]},{id:'enemy',factionId:'f1',x:30,z:0,population:4,soldiers:0,assigned:{},buildings:[]}],groups:[{id:'soldiers',factionId:'f0',originId:'home',kind:'army',size:2,units:{infantry:1,ranged:1},x:12,z:12,prevX:12,prevZ:12,phase:'outbound'}],nodes:[]};
+  const groups=state.groups;state.groups=[];setMilitary(state,state.settlements[0],{infantry:1,ranged:1});bindArmy(state,state.settlements[0],groups[0]);state.groups=groups;positionMilitary(state);
   const scene=new THREE.Scene(),crowds=createCrowds(THREE,scene);crowds.update(state,0,'soldiers');scene.updateMatrixWorld(true);
   try{
     for(const sample of [crowds.getMotionSamples().find(s=>s.settlementId==='home'),...crowds.getMotionSamples().filter(s=>s.groupId==='soldiers')]){
@@ -170,12 +175,12 @@ test('rendered civilians and individual soldiers resolve to their real scoped co
       assert.ok(crowds.getPickables().includes(mesh));
       const ray=new THREE.Raycaster(new THREE.Vector3(sample.x,sample.groundY+8,sample.z),new THREE.Vector3(0,-1,0));
       const hit=ray.intersectObject(mesh).find(hit=>hit.instanceId===sample.instanceIndex);assert.ok(hit,'a ray through the body must hit its rendered instance');
-      assert.equal(crowds.resolvePick(hit),sample.groupId||sample.settlementId);
+      assert.equal(crowds.resolvePick(hit),sample.soldierId||sample.groupId||sample.settlementId);
     }
     const enemySample=crowds.getMotionSamples().find(s=>s.settlementId==='enemy'),oldEnemyMesh=scene.getObjectByProperty('uuid',enemySample.meshUuid);
     const scoped={...state,viewer:{mode:'faction',factionId:'f0'},settlements:[state.settlements[0]],factions:[state.factions[0]]};
     crowds.update(scoped,0,'soldiers');assert.equal(oldEnemyMesh.count,0);
     assert.ok(!crowds.resolvePick({object:oldEnemyMesh,instanceId:enemySample.instanceIndex}));
-    for(const mesh of crowds.getPickables().filter(mesh=>mesh.userData.crowdSelectionIds))for(let i=0;i<mesh.count;i++)assert.ok(['home','soldiers'].includes(crowds.resolvePick({object:mesh,instanceId:i})));
+    for(const mesh of crowds.getPickables().filter(mesh=>mesh.userData.crowdSelectionIds))for(let i=0;i<mesh.count;i++)assert.ok(['home',...state.groups[0].soldierIds].includes(crowds.resolvePick({object:mesh,instanceId:i})));
   }finally{crowds.dispose();}
 });

@@ -10,7 +10,7 @@ Open **Battle sandbox · 24 vs 24** in the civilisation view, or visit
 `battle.html`. This separate prototype lets two AIs fight with infantry, ranged
 soldiers and scouts. Select a soldier to inspect its own health, target and
 decision. Start/pause, seed replay and team perspectives make the fight observable.
-The civilisation simulation and its aggregated civilian crews remain separate.
+The sandbox remains a small regression fixture alongside the full civilisation simulation.
 
 Battle soldiers have persistent identities, individual health and weapon clocks.
 Their physical positions determine reach and sight, hits damage the named target,
@@ -19,17 +19,26 @@ unit decisions; nearby threats, wounded withdrawal, ranged spacing and feasible
 pursuit affect each soldier. Team views hide unseen enemies. Whole-field viewing
 is an observer option and does not give the AI additional knowledge.
 
-This is the combat prototype, not yet a replacement for civilisation campaigns,
-training, garrisons or economic accounting. Those systems still use the existing
-group combat model. Integrating persistent soldiers into their full lifecycle is
-separate work. Benchmark reports distinguish Node CPU timings from browser and
-GPU performance; a tested small battle does not establish thousand-unit capacity.
+The main civilisation simulation now uses persistent infantry and ranged soldiers
+through paid training, home defense, expeditions, combat, retreat and return.
+A settlement retains each native citizen's identity; armies reference those same
+records. Wounds, weapon clocks and exact casualties survive transfers. Strategic
+objectives and home reserves guide the troops, while each soldier chooses reachable
+local engagements. Civilian crews retain their count badges and full economic
+accounting. Select an individual soldier to inspect its health and current action,
+then navigate to its army or home. Faction views expose only physically visible
+foreign soldiers and hide their health, clocks and orders.
+
+Benchmark reports distinguish Node CPU timings from browser and GPU performance;
+a tested small battle does not establish thousand-unit capacity.
 
 Focused verification:
 
 ```sh
 node --test tests/battle-simulation.test.mjs tests/battle-micro.test.mjs
 node tests/battle-audit.mjs --output screenshots/battle-audit.json
+node tests/world-individual-audit.mjs first-light tidal-garden iron-valley
+node tests/world-individual-browser.mjs
 ```
 
 The ordinary seeded audit checks exact health/death ledgers and records AI
@@ -142,8 +151,9 @@ New births and housing stop at 900 people per settlement; each independent facti
 ## Source map
 
 - `src/sim/core.js`, `economy.js`: physical work, settlement growth, paid construction and conservation.
-- `src/sim/military.js`, `defenses.js`: real role census, training and funded defensive planning.
-- `src/sim/strategy.js`, `combat.js`, `formations.js`, `conquest.js`, `control.js`: scouting, tactical decisions, physical contact, impacts, occupation and sovereignty.
+- `src/sim/soldiers.js`, `military.js`: authoritative retained soldier records, paid recruitment, deployment and demographic accounting.
+- `src/sim/defenses.js`: funded defensive planning and real tower operator assignments.
+- `src/sim/strategy.js`, `combat.js`, `individual-combat.js`, `formations.js`, `conquest.js`, `control.js`: scouting, tactical decisions, physical contact, impacts, occupation and sovereignty.
 - `src/sim/knowledge.js`, `progression.js`: visibility, returned intelligence, technology and commerce.
 - `src/world.js`, `config.js`, `sim/navigation.js`: seeded geography, civilisation count and collision-aware routes.
 - `src/render/`: terrain, buildings, instanced bodies, count-badged workers, fog and combat effects.

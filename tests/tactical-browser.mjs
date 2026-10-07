@@ -8,14 +8,15 @@ import { createHash } from 'node:crypto';
 import { configuration, launch } from './browser-v2.mjs';
 
 export async function controlledScenarios({ moduleRoot = '/src/' } = {}) {
-  const [{ createSimulation, stepSimulation, getSummary }, { terrainAt }, combat, formation, navigation, military, economy, strategy, defenses, knowledge] = await Promise.all([
+  const [{ createSimulation, stepSimulation, getSummary }, { terrainAt }, combat, formation, navigation, military, economy, strategy, defenses, knowledge, soldiers] = await Promise.all([
     import(`${moduleRoot}sim/core.js`), import(`${moduleRoot}world.js`), import(`${moduleRoot}sim/combat.js`),
     import(`${moduleRoot}sim/formations.js`), import(`${moduleRoot}sim/navigation.js`), import(`${moduleRoot}sim/military.js`),
-    import(`${moduleRoot}sim/economy.js`), import(`${moduleRoot}sim/strategy.js`), import(`${moduleRoot}sim/defenses.js`), import(`${moduleRoot}sim/knowledge.js`),
+    import(`${moduleRoot}sim/economy.js`), import(`${moduleRoot}sim/strategy.js`), import(`${moduleRoot}sim/defenses.js`), import(`${moduleRoot}sim/knowledge.js`), import(`${moduleRoot}sim/soldiers.js`),
   ]);
   const { stepCombat } = combat, { updateCombatFormation, combatFormationSlot } = formation;
   const { isSegmentTraversable, lineOfSight, invalidateNavigation, assessBreachRoute, findPath, moveAlongRoute, navigationDiagnostics } = navigation;
-  const { initializeMilitary, countMilitary, unitStats, queueTraining, advanceTraining } = military;
+  const { initializeMilitary, deployMilitary, unitStats, queueTraining, advanceTraining } = military;
+  const { createSoldierRecords, getSoldiers, syncSoldierCounts } = soldiers;
   const { emptyResources, initializeLedger, ledgerResidual, RESOURCES } = economy;
   const check = (condition, message) => { if (!condition) throw new Error(message); };
   const equal = (a, b, message) => check(JSON.stringify(a) === JSON.stringify(b), message);
@@ -36,7 +37,7 @@ export async function controlledScenarios({ moduleRoot = '/src/' } = {}) {
     const s = createSimulation(seed, { civCount: 3 }); s.groups = []; s.nodes = []; s.events = [];
     for (const home of s.settlements) {
       home.buildings = []; home.assigned = {}; home.population = 300; home.homePresent = 300; home.availableWorkers = 300;
-      home.stock = Object.fromEntries(RESOURCES.map(key => [key, 500])); initializeMilitary(home);
+      home.stock = Object.fromEntries(RESOURCES.map(key => [key, 500])); initializeMilitary(home, undefined, { state: s });
     }
     const [a, b] = s.factions;
     a.relations[b.id] = { status: 'hostile', trust: 0 }; b.relations[a.id] = { status: 'hostile', trust: 0 };
@@ -44,14 +45,30 @@ export async function controlledScenarios({ moduleRoot = '/src/' } = {}) {
     for (const [i, home] of s.settlements.entries()) Object.assign(home, point(center, 80 + i * 25, 60));
     initializeLedger(s); return { s, center, a, b, ha: s.settlements[0], hb: s.settlements[1] };
   }
+  // These controlled scenarios explicitly assign existing citizens a starting
+  // military role. Runtime synchronization never creates bodies from a count.
+  function recruit(s, home, units) {
+    const faction = s.factions.find(candidate => candidate.id === home.factionId);
+    createSoldierRecords(home, units, { state: s, faction, source: 'fixture',
+      statsByRole: Object.fromEntries(['infantry', 'ranged'].map(role => [role, unitStats(faction, role)])) });
+    syncSoldierCounts(s, home);
+    check(home.soldiers <= home.population, 'Fixture military exceeds its existing citizens');
+  }
+  function placeArmy(s, home, g, options = {}) {
+    deployMilitary(s, home, g);
+    for (const soldier of getSoldiers(s, g)) {
+      soldier.x = soldier.prevX = g.x; soldier.z = soldier.prevZ = g.z;
+    }
+    updateCombatFormation(s, g, g.units, 0, options);
+    check(getSoldiers(s, g).length === g.initialSize, 'Fixture did not deploy its exact existing roster');
+  }
   function army(s, home, id, size, position, extras = {}) {
     const units = extras.units || { infantry: size, ranged: 0 };
-    home.military.infantry += units.infantry; home.military.ranged += units.ranged;
-    home.soldiers = countMilitary(home.military); home.workers = home.population - home.soldiers;
+    recruit(s, home, units);
     const g = { id, kind: 'army', factionId: home.factionId, originId: home.id, units: { ...units }, size, initialSize: size,
       ...position, prevX: position.x, prevZ: position.z, targetX: position.x, targetZ: position.z, targetId: null,
       phase: 'outbound', speed: 0, morale: 100, supply: 100, carrying: emptyResources(), ...extras };
-    s.groups.push(g); return g;
+    placeArmy(s, home, g); s.groups.push(g); return g;
   }
   function pulse(s, strategic = false) {
     s.step++; s.time = s.step / 10; s.tick = Math.floor(s.time);
@@ -169,10 +186,11 @@ export async function controlledScenarios({ moduleRoot = '/src/' } = {}) {
     const { s, center, ha, hb } = fixture();
     army(s, ha, 'a-main', 30, point(center, -3)); army(s, hb, 'b-contact', 25, point(center, 3));
     const alternate = structuredClone(s), remote = alternate.settlements.find(p => p.id === hb.id);
-    remote.population = 800; remote.military = { infantry: 650, ranged: 100 }; remote.soldiers = 750;
+    remote.population = 800;
     remote.buildings.push({ id: 'secret-farm', kind: 'farm', x: remote.x, z: remote.z, progress: 1, hp: 160 });
     remote.trainingQueue = [{ id: 'secret-course', role: 'ranged', size: 40 }];
     army(alternate, remote, 'secret-force', 60, point(center, 60, 60));
+    recruit(alternate, remote, { infantry: 650 - remote.military.infantry, ranged: 100 - remote.military.ranged });
     const knowledge = plain(s.factions[0].knowledge);
     for (let i = 0; i < 20; i++) {
       pulse(s); pulse(alternate);
@@ -188,7 +206,9 @@ export async function controlledScenarios({ moduleRoot = '/src/' } = {}) {
     const enemy = { id: 'enemy', relations: {} }, ally = { id: 'ally', relations: { owner: { status: 'allied' } } };
     const home = { id: 'town', factionId: owner.id, x: -78, z: -120, population: 400, health: 100, wellbeing: 1, shortageDays: 0, military: { ranged: 9 }, buildings: [], status: 'town' };
     owner.knowledge.materials = { id: 'materials', kind: 'resource', resourceKind: 'materials', x: home.x + 30, z: home.z, amountEstimate: 1000, richnessEstimate: 1, observedTick: 100, reportedTick: 100 };
-    return { state: { seed: 'joined-screen', step: 1000, tick: 100, time: 100, factions: [owner, enemy, ally], settlements: [home], groups: [], walls: [] }, home, owner };
+    const state = { seed: 'joined-screen', step: 1000, tick: 100, time: 100, factions: [owner, enemy, ally], settlements: [home], groups: [], walls: [] };
+    initializeMilitary(home, { infantry: 0, ranged: 9 }, { state });
+    return { state, home, owner };
   }
   const standingWall = (id, x, z, length, hp = 300) => ({ id, factionId: 'enemy', kind: 'wall', x, z, rotation: Math.PI / 2, length, width: 1, hp, maxHp: hp, progress: 1 });
 
@@ -196,7 +216,7 @@ export async function controlledScenarios({ moduleRoot = '/src/' } = {}) {
     const s = createSimulation('joined-screen', { civCount: 3 }); s.groups = []; s.nodes = []; s.events = [];
     for (const [i, home] of s.settlements.entries()) {
       home.buildings = []; home.assigned = {}; home.population = 300; home.homePresent = 300;
-      home.x = 80 + i * 25; home.z = 80; initializeMilitary(home);
+      home.x = 80 + i * 25; home.z = 80; initializeMilitary(home, undefined, { state: s });
     }
     const [a, b] = s.factions, [ha, hb] = s.settlements;
     a.relations[b.id] = { status: 'hostile', trust: 0 }; b.relations[a.id] = { status: 'hostile', trust: 0 };
@@ -211,7 +231,7 @@ export async function controlledScenarios({ moduleRoot = '/src/' } = {}) {
     const { s, a, b, ha, hb } = auditFixture(); s.tick = 400; s.step = 4000; s.time = 400;
     for (const f of s.factions) { f.lastScout = 400; f.lastArmy = 400; }
     a.lastArmy = 0; a.traits.aggression = .9; a.traits.cooperation = .1;
-    Object.assign(ha, { x: -78, z: -120, population: 400, availableWorkers: 200 }); initializeMilitary(ha, { infantry: 120, ranged: 0 });
+    Object.assign(ha, { x: -78, z: -120, population: 400, availableWorkers: 200 }); initializeMilitary(ha, { infantry: 120, ranged: 0 }, { state: s });
     Object.assign(hb, { x: -30, z: -120 }); for (const key of Object.keys(ha.stock)) ha.stock[key] = 500;
     a.knowledge = { [hb.id]: { id: hb.id, kind: 'settlement', ownerId: b.id, x: hb.x, z: hb.z, observedTick: 390, reportedTick: 395,
       confidence: .9, status: 'active', populationEstimate: 100, soldiersEstimate: 20, healthEstimate: 100 } };
@@ -326,8 +346,11 @@ export async function controlledScenarios({ moduleRoot = '/src/' } = {}) {
     ] }; return { s, center: findGround(s) };
   }
   function formationArmy(s, center, id, factionId, units, offset, yaw = Math.PI / 2) {
-    const g = { id, kind: 'army', factionId, units, size: units.infantry + units.ranged, ...point(center, offset), speed: 3, combat: { active: true, yaw } };
-    s.groups.push(g); updateCombatFormation(s, g, units, 0, { yaw }); return g;
+    const home = { id: `${id}-home`, factionId, population: 300, ...point(center, offset), assigned: {} };
+    s.settlements.push(home); initializeMilitary(home, units, { state: s });
+    const g = { id, originId: home.id, kind: 'army', factionId, units, size: units.infantry + units.ranged, initialSize: units.infantry + units.ranged,
+      ...point(center, offset), speed: 3, combat: { active: true, yaw } };
+    placeArmy(s, home, g, { yaw }); s.groups.push(g); return g;
   }
   const slots = g => Object.values(g.formationSlots).flat();
   function formationPulse(s, entries) {
@@ -417,7 +440,7 @@ export async function controlledScenarios({ moduleRoot = '/src/' } = {}) {
 export async function runBrowser() {
   const config = configuration({ ...process.env, QA_OUTPUT_DIR: process.env.QA_OUTPUT_DIR || 'screenshots/ai-readability-tactical-browser', QA_VIDEO: '0' });
   const report = { startedAt: new Date().toISOString(), harness: 'tests/tactical-browser.mjs', scope: 'Controlled source-module outcomes in real Chrome, no renderer/video claims', node: process.versions, sourceHashes: {}, errors: [] };
-  for (const file of ['src/sim/combat.js', 'src/sim/strategy.js', 'src/sim/formations.js', 'src/sim/defenses.js', 'src/sim/navigation.js', 'tests/tactical-browser.mjs']) report.sourceHashes[file] = createHash('sha256').update(await readFile(file)).digest('hex');
+  for (const file of ['src/sim/combat.js', 'src/sim/individual-combat.js', 'src/sim/military.js', 'src/sim/soldiers.js', 'src/sim/strategy.js', 'src/sim/formations.js', 'src/sim/defenses.js', 'src/sim/navigation.js', 'tests/tactical-browser.mjs']) report.sourceHashes[file] = createHash('sha256').update(await readFile(file)).digest('hex');
   await mkdir(config.outputDir, { recursive: true });
   const browser = await launch(config);
   try {

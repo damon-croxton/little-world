@@ -71,11 +71,11 @@ export function createCombatEffects(THREE, scene) {
             from.set(mix(shot.from.x, shot.to.x, tail), mix(fy, ty, tail) + Math.sin(tail * Math.PI) * arc, mix(shot.from.z, shot.to.z, tail));
             to.set(mix(shot.from.x, shot.to.x, t), mix(fy, ty, t) + Math.sin(t * Math.PI) * arc, mix(shot.from.z, shot.to.z, t));
             if (t < .04) from.y -= .13;
-            if (segment('projectiles', from, to, e.tower ? 1.75 : 1, tint) && samples.length < 128) samples.push({ eventId: e.id, kind: e.type, sourceId: e.sourceId, targetId: e.targetId, x: to.x, y: to.y, z: to.z, progress: t, simulationTime: time });
+            if (segment('projectiles', from, to, e.tower ? 1.75 : 1, tint) && samples.length < 128) samples.push({ eventId: e.id, kind: e.type, sourceId: e.sourceId, targetId: e.targetId, sourceSoldierId: shot.sourceSoldierId || e.sourceSoldierId || null, targetSoldierId: shot.targetSoldierId || e.targetSoldierId || null, x: to.x, y: to.y, z: to.z, progress: t, simulationTime: time });
           } else {
             const swing = Math.sin(clamp(age / (duration + .16)) * Math.PI), reach = .4 + swing * .6;
             from.set(shot.from.x, fy, shot.from.z); to.set(mix(shot.from.x, shot.to.x, reach), mix(fy, ty, reach) + .2 * swing, mix(shot.from.z, shot.to.z, reach));
-            segment('strikes', from, to, swing * 1.4, tint);
+            if (segment('strikes', from, to, swing * 1.4, tint) && samples.length < 128) samples.push({ eventId: e.id, kind: e.type, sourceId: e.sourceId, targetId: e.targetId, sourceSoldierId: shot.sourceSoldierId || e.sourceSoldierId || null, targetSoldierId: shot.targetSoldierId || e.targetSoldierId || null, x: to.x, y: to.y, z: to.z, progress: reach, simulationTime: time });
           }
         }
       } else if (e.type === 'impact' && age <= .48) {
@@ -85,10 +85,10 @@ export function createCombatEffects(THREE, scene) {
       } else if (e.type === 'casualty' && age <= 2.2) {
         const fall = clamp(age / .42), sink = clamp((age - 1.5) / .7);
         for (let index = 0; index < (e.positions || []).length; index++) {
-          const p = e.positions[index], yaw = p.yaw || 0, h = ground(e, { ...p, height: .4 }, `dead${index}`);
+          const p = e.positions[index], yaw = p.yaw || 0, h = ground(e, { ...p, height: .4 + (p.elevation || 0) }, `dead${index}`);
           transform.position.set(p.x + Math.sin(yaw) * .22 * fall, h - .28 * fall - .15 * sink, p.z + Math.cos(yaw) * .22 * fall);
           transform.rotation.set(Math.PI * .5 * fall, yaw, .15 * fall); transform.scale.set(1 - sink * .5, e.species === 'machine' ? .7 : 1, e.species === 'hive' ? 1.3 : 1);
-          if (add('casualties', factionColors.get(e.factionId) || '#a8a597') && samples.length < 128) samples.push({ eventId: e.id, kind: 'casualty', targetId: e.targetId, x: transform.position.x, y: transform.position.y, z: transform.position.z, progress: fall, simulationTime: time });
+          if (add('casualties', factionColors.get(p.commandFactionId || e.factionId) || '#a8a597') && samples.length < 128) samples.push({ eventId: e.id, kind: 'casualty', targetId: e.targetId, soldierId: p.soldierId || e.targetSoldierId || null, targetSoldierId: p.soldierId || e.targetSoldierId || null, deathX: p.x, deathZ: p.z, x: transform.position.x, y: transform.position.y, z: transform.position.z, progress: fall, simulationTime: time });
         }
       } else if (e.type === 'collapse' && age <= 1.6) {
         for (let i = 0; i < 5; i++) {

@@ -1,8 +1,11 @@
+import { setMilitary, bindArmy, positionMilitary } from './roster-fixtures.mjs';
+import { getSoldiers, applySoldierDamage } from '../src/sim/soldiers.js';
+import { returnMilitary } from '../src/sim/military.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createSimulation, stepSimulation } from '../src/sim/core.js';
 import { initializeLedger, ledgerResidual } from '../src/sim/economy.js';
-import { initializeKnowledge, stepKnowledge, knownReports, knownResourceNodes, factionView, reportObservations, visibleToGroup, isExplored, knowledgeCell, KNOWLEDGE_GRID } from '../src/sim/knowledge.js';
+import { initializeKnowledge, stepKnowledge, knownReports, knownResourceNodes, factionView, reportObservations, visibleToGroup, lineOfSight, isExplored, knowledgeCell, KNOWLEDGE_GRID } from '../src/sim/knowledge.js';
 
 function fixture(seed = 'knowledge-fixture') {
   const state = createSimulation(seed);
@@ -29,7 +32,10 @@ test('factions have different current and explored views; omniscient view does n
   assert.deepEqual(av.nodes.map(n => n.id), ['near-a']); assert.deepEqual(bv.nodes.map(n => n.id), ['near-b']);
   assert.equal(av.settlements.length, 1); assert.equal(bv.settlements.length, 1);
   assert.notDeepEqual(a.visibility.visible, b.visibility.visible);
-  assert.equal(factionView(s), s); assert.equal(factionView(s, 'omniscient'), s);
+  for (const view of [factionView(s), factionView(s, 'omniscient')]) {
+    assert.equal(view.settlements, s.settlements); assert.equal(view.groups, s.groups);
+    assert.deepEqual(view.soldiers.map(body => body.id), s.settlements.flatMap(home => home.soldierRoster.filter(body => body.status === 'serving').map(body => body.id)));
+  }
   assert.deepEqual(s, before, 'render view lookup mutated simulation or reports');
 });
 
@@ -70,6 +76,7 @@ test('hidden place reports freeze, hidden units disappear, and regained sight re
   const s = fixture(), [f, other] = s.factions, [home, remote] = s.settlements;
   const g = scout(s, 'traveller', remote); s.groups.push(g);
   const enemy = { id: 'enemy-unit', factionId: other.id, originId: remote.id, kind: 'army', size: 9, x: remote.x + 2, z: remote.z, phase: 'outbound', units: { infantry: 6, ranged: 3 } };
+  setMilitary(s, remote, enemy.units); bindArmy(s, remote, enemy);
   s.groups.push(enemy); s.nodes = [node('remembered-ore', { x: remote.x + 3, z: remote.z })];
   stepKnowledge(s, { force: true }); tick(s);
   reportObservations(s, f, g.observations, { group: g });
@@ -77,7 +84,7 @@ test('hidden place reports freeze, hidden units disappear, and regained sight re
   const observedUnits = factionView(s, f.id).groups.find(p => p.id === enemy.id);
   assert.ok(observedUnits); assert.equal(observedUnits.targetId, null); assert.equal(observedUnits.originId, null);
   g.x = home.x; g.z = home.z; tick(s);
-  s.nodes[0].amount = 7; remote.population = 700; remote.homePresent = 700; remote.soldiers = 100; enemy.size = 200; tick(s, 3);
+  s.nodes[0].amount = 7; remote.population = 700; remote.homePresent = 700; setMilitary(s, remote, { infantry: 150, ranged: 50 }); delete enemy.soldierIds; enemy.units = { infantry: 150, ranged: 50 }; bindArmy(s, remote, enemy); tick(s, 3);
   assert.deepEqual(f.knowledge['remembered-ore'], report); assert.deepEqual(f.knowledge[remote.id], townReport);
   const view = factionView(s, f.id);
   assert.ok(!view.groups.some(p => p.id === enemy.id)); assert.ok(!view.settlements.some(p => p.id === remote.id));
@@ -105,13 +112,30 @@ test('unknown, future, and undelivered targets are never offered to strategic he
 
 test('own homes share current local sight, while destroyed towers contribute no sight', () => {
   const s = fixture(), [f] = s.factions, [home, remote] = s.settlements;
-  const resource = node('local-resource', { x: home.x + 3, z: home.z }); s.nodes = [resource];
-  home.buildings.push({ id: 'remote-tower', kind: 'tower', x: remote.x, z: remote.z, progress: 1, hp: 100 });
+  const resource = node('local-resource', { x: home.x + 3, z: home.z });
+  const towerResource = node('tower-resource', { x: remote.x + 1, z: remote.z });
+  s.nodes = [resource, towerResource];
+  const towerSite = Array.from({ length: 64 }, (_, index) => {
+    const angle = index / 64 * Math.PI * 2;
+    return { x: remote.x + Math.cos(angle) * 22, z: remote.z + Math.sin(angle) * 22 };
+  }).find(point => [remote, towerResource].every(target => lineOfSight(s, point, target, { maxRange: 26, fromHeight: 4.5, toHeight: 'population' in target ? 2 : 1.2, factionId: f.id })));
+  assert.ok(towerSite, 'the tower fixture needs a clear lane within its own sight range');
+  setMilitary(s, home, { infantry: 0, ranged: 2 });
+  const operators = getSoldiers(s, home);
+  const tower = { id: 'remote-tower', kind: 'tower', ...towerSite, progress: 1, hp: 100, requiredCrew: 2, crewAssigned: 2, crewSoldierIds: operators.map(body => body.id) };
+  home.buildings.push(tower);
+  for (const [index, body] of operators.entries()) {
+    const x = tower.x + (index ? .25 : -.25);
+    Object.assign(body, { towerId: tower.id, x, z: tower.z, prevX: x, prevZ: tower.z, positioned: true });
+    for (const target of [remote, towerResource]) assert.ok(Math.hypot(body.x - target.x, body.z - target.z) > 15, 'personal soldier sight would mask tower destruction');
+  }
   stepKnowledge(s, { force: true });
   assert.equal(f.knowledge[resource.id].amountEstimate, 400);
-  assert.ok(f.visibility.visibleIds[remote.id]);
-  home.buildings[0].hp = 0; home.buildings[0].destroyed = true; resource.amount = 90; tick(s);
-  assert.ok(!f.visibility.visibleIds[remote.id]);
+  assert.ok(f.visibility.visibleIds[remote.id]); assert.ok(f.visibility.visibleIds[towerResource.id]);
+  tower.hp = 0; tower.destroyed = true; resource.amount = 90; towerResource.amount = 7; tick(s);
+  assert.ok(!f.visibility.visibleIds[remote.id]); assert.ok(!f.visibility.visibleIds[towerResource.id]);
+  assert.ok(!factionView(s, f.id).nodes.some(candidate => candidate.id === towerResource.id));
+  assert.equal(f.knowledge[towerResource.id].amountEstimate, 400, 'destroyed tower refreshed an unseen deposit');
   assert.equal(f.knowledge[resource.id].amountEstimate, 90);
 });
 
@@ -181,40 +205,57 @@ test('stale incoming packets cannot overwrite fresher knowledge or mutate queued
 
 test('empty homes and explicitly uncrewed towers do not provide eyes in the field', () => {
   const s = fixture(), [f] = s.factions, [home, remote] = s.settlements;
-  home.homePresent = 0;
+  setMilitary(s, home); home.homePresent = 0;
   home.buildings = [{ id: 'uncrewed-tower', kind: 'tower', x: remote.x, z: remote.z, progress: 1, hp: 100, crewAssigned: 0 }];
   stepKnowledge(s, { force: true });
   assert.equal(f.visibility.visible.reduce((sum, value) => sum + value, 0), 0);
-  home.homePresent = 5; home.buildings[0].crewAssigned = 1; tick(s);
+  home.homePresent = 5; setMilitary(s, home, { infantry: 0, ranged: 2 });
+  const tower = home.buildings[0], operators = getSoldiers(s, home);
+  tower.crewAssigned = 2; tower.crewSoldierIds = operators.map(body => body.id);
+  for (const body of operators) Object.assign(body, { towerId: tower.id, x: tower.x, z: tower.z, prevX: tower.x, prevZ: tower.z, positioned: true });
+  tick(s);
   assert.ok(f.visibility.visibleIds[remote.id]);
 });
 
-test('already-seen foreign bodies refresh physical slots each pulse without discovering or reporting hidden targets', () => {
+test('already-seen foreign bodies refresh their exact projected positions without discovering or reporting hidden targets', () => {
   const s = fixture(), [f, other] = s.factions, [home, remote] = s.settlements;
-  const g = scout(s, 'body-watcher', remote), enemy = { id: 'seen-army', factionId: other.id, kind: 'army', size: 1, units: { infantry: 1, ranged: 0 }, x: remote.x + 2, z: remote.z, prevX: remote.x + 1.9, prevZ: remote.z, formationSlots: { infantry: [{ x: remote.x + 2, z: remote.z, prevX: remote.x + 1.9, prevZ: remote.z }], ranged: [] }, formationRevision: 1 };
+  const g = scout(s, 'body-watcher', remote), enemy = { id: 'seen-army', originId: remote.id, factionId: other.id, kind: 'army', size: 1, units: { infantry: 1, ranged: 0 }, x: remote.x + 2, z: remote.z, prevX: remote.x + 1.9, prevZ: remote.z };
+  setMilitary(s, remote, enemy.units); bindArmy(s, remote, enemy);
+  const enemyBody = getSoldiers(s, enemy)[0];
+  Object.assign(enemyBody, { x: enemy.x, z: enemy.z, prevX: enemy.prevX, prevZ: enemy.prevZ, positioned: true });
   s.groups = [g, enemy]; stepKnowledge(s, { force: true });
-  const before = structuredClone(f.knowledge), initial = factionView(s, f.id).groups.find(a => a.id === enemy.id);
-  assert.equal(initial.formationRevision, 1);
-  s.step++; s.time += .1; enemy.prevX = enemy.x; enemy.x += .2; enemy.formationSlots.infantry[0].x += .2; enemy.formationRevision++;
-  const now = factionView(s, f.id).groups.find(a => a.id === enemy.id);
-  assert.equal(now.x, enemy.x); assert.deepEqual(now.formationSlots, enemy.formationSlots); assert.equal(now.formationRevision, 2);
+  const before = structuredClone(f.knowledge), initialView = factionView(s, f.id);
+  const initial = initialView.soldiers.find(body => body.id === enemyBody.id);
+  assert.ok(initial); assert.equal(initial.groupId, enemy.id); assert.equal(initial.role, 'infantry');
+  for (const key of ['x', 'z', 'prevX', 'prevZ']) assert.equal(initial[key], enemyBody[key]);
+  for (const entity of [...initialView.groups, ...initialView.settlements]) {
+    assert.equal(entity.formationSlots, undefined); assert.equal(entity.soldierRoster, undefined); assert.equal(entity.soldierIds, undefined);
+  }
+  s.step++; s.time += .1; enemy.prevX = enemy.x; enemy.x += .2; enemyBody.prevX = enemyBody.x; enemyBody.x += .2;
+  const nowView = factionView(s, f.id), now = nowView.soldiers.find(body => body.id === enemyBody.id);
+  assert.equal(nowView.groups.find(group => group.id === enemy.id).x, enemy.x);
+  for (const key of ['x', 'z', 'prevX', 'prevZ']) assert.equal(now[key], enemyBody[key]);
+  assert.equal(now.x, initial.x + .2); assert.equal(now.prevX, initial.x);
   assert.deepEqual(f.knowledge, before);
-  Object.assign(enemy.formationSlots.infantry[0], { yaw: .4, prevYaw: .3, contactId: 'private-contact', contactIndex: 4, facingX: 234, facingZ: 345, steerSide: 1 });
+  Object.assign(enemyBody, { yaw: .4, prevYaw: .3, contactId: 'private-contact', contactIndex: 4, facingX: 234, facingZ: 345, steerSide: 1 });
   enemy.combat = { active: true, intent: 'intercept', reason: 'PRIVATE_TACTICAL_REASON', targetId: 'private-contact', localStrength: 100, enemyStrength: 50 };
   s.step++; s.time += .1;
-  const physical = factionView(s, f.id).groups.find(a => a.id === enemy.id);
-  assert.equal(physical.formationSlots.infantry[0].yaw, .4); assert.equal(physical.formationSlots.infantry[0].prevYaw, .3);
-  for (const key of ['contactId', 'contactIndex', 'facingX', 'facingZ', 'steerSide']) assert.equal(physical.formationSlots.infantry[0][key], undefined, key);
-  assert.equal(physical.combat.intent, undefined); assert.equal(physical.combat.reason, undefined); assert.equal(physical.combat.targetId, undefined);
+  const physicalView = factionView(s, f.id), physical = physicalView.soldiers.find(body => body.id === enemyBody.id);
+  assert.equal(physical.yaw, .4); assert.equal(physical.prevYaw, .3);
+  for (const key of ['contactId', 'contactIndex', 'facingX', 'facingZ', 'steerSide']) assert.equal(physical[key], undefined, key);
+  const observedCombat = physicalView.groups.find(group => group.id === enemy.id).combat;
+  assert.equal(observedCombat.intent, undefined); assert.equal(observedCombat.reason, undefined); assert.equal(observedCombat.targetId, undefined);
   s.step++; s.time += .1; g.x = home.x; g.z = home.z;
-  assert.ok(!factionView(s, f.id).groups.some(a => a.id === enemy.id), 'contact remained visible after every nearby observer left');
+  const hiddenView = factionView(s, f.id);
+  assert.ok(!hiddenView.groups.some(group => group.id === enemy.id), 'contact remained visible after every nearby observer left');
+  assert.ok(!hiddenView.soldiers.some(body => body.id === enemyBody.id), 'the exact soldier remained visible after its observer left');
   assert.deepEqual(f.knowledge, before);
 });
 
 test('occupation reveals local stores and captives without distant armies or the native command archive', () => {
   const s = fixture(), [victor, native] = s.factions, [capital, occupied] = s.settlements;
   occupied.occupiedBy = victor.id; native.defeatedBy = victor.id;
-  occupied.population = 150; occupied.homePresent = 80; occupied.soldiers = 70; occupied.military = { infantry: 60, ranged: 10 }; occupied.assigned = { military: 60, workers: 10 };
+  occupied.population = 150; occupied.homePresent = 80; setMilitary(s, occupied, { infantry: 60, ranged: 10 }); occupied.assigned = { military: 60, workers: 10 };
   occupied.trainingQueue = [{ secret: 'old military project' }]; occupied.stock.materials = 321;
   const distant = { x: -170, z: 160 };
   s.groups = [
@@ -222,6 +263,7 @@ test('occupation reveals local stores and captives without distant armies or the
     { id: 'unseen-native-workers', factionId: native.id, originId: occupied.id, kind: 'worker', size: 5, x: -170, z: -160 },
     { id: 'local-captive-workers', factionId: native.id, originId: occupied.id, kind: 'worker', size: 5, x: occupied.x + 2, z: occupied.z },
   ];
+  bindArmy(s, occupied, s.groups[0]);
   s.nodes = [node('held-local-resource', { x: occupied.x + 3, z: occupied.z }, 7)];
   native.knowledge.secret = { id: 'secret', kind: 'settlement', ownerId: 'unknown', x: 160, z: 160, observedTick: 0, reportedTick: 0, confidence: 1 };
   native.knowledge['held-local-resource'] = { id: 'held-local-resource', kind: 'resource', resourceKind: 'materials', x: occupied.x + 3, z: occupied.z, amountEstimate: 333, observedTick: 0, reportedTick: 0, confidence: .8 };
@@ -256,7 +298,7 @@ test('captured charts disclose only reports physically delivered there and prese
   native.knowledge['delivered-map'] = { id: 'delivered-map', kind: 'resource', resourceKind: 'materials', x: 150, z: 150, amountEstimate: 300, observedTick: 2, observedTime: 2, reportedTick: 7, reportedAtSettlementId: held.id, confidence: .8 };
   native.knowledge['remote-live-home'] = { id: 'remote-live-home', kind: 'settlement', ownerId: native.id, x: -150, z: -150, populationEstimate: 700, soldiersEstimate: 250, observedTick: 10, reportedTick: 10, reportedAtSettlementId: 'other-home', confidence: 1 };
   const army = { id: 'capture-party', factionId: victor.id, originId: capital.id, kind: 'army', size: 20, units: { infantry: 20, ranged: 0 }, x: held.x, z: held.z, observations: [] };
-  s.groups.push(army);
+  setMilitary(s, capital, army.units); bindArmy(s, capital, army); s.groups.push(army);
   const pop = s.settlements.reduce((sum, home) => sum + home.population, 0);
   assert.equal(occupySettlement(s, held, army), true);
   assert.equal(victor.knowledge['delivered-map'].observedTick, 2);
@@ -272,12 +314,12 @@ test('visible and occupied home bodies reflect same-pulse casualties and returns
   for (const occupiedView of [false, true]) {
     const s = fixture(`pulse-census-${occupiedView}`), [viewer, native] = s.factions, [capital, home] = s.settlements;
     if (occupiedView) home.occupiedBy = viewer.id;
-    home.population = 120; home.soldiers = 40; home.military = { infantry: 28, ranged: 12 };
+    home.population = 120; setMilitary(s, home, { infantry: 28, ranged: 12 });
     home.homePresent = 120; home.assigned = { military: 0, workers: 0 }; // Intentionally stale whole-cycle caches.
     const watcher = scout(s, 'census-watcher', home);
     const army = { id: 'census-army', factionId: native.id, originId: home.id, kind: 'army', size: 16, units: { infantry: 10, ranged: 6 }, x: -170, z: 160 };
     const workers = { id: 'census-workers', factionId: native.id, originId: home.id, kind: 'worker', size: 9, x: -170, z: -160 };
-    s.groups = [watcher, army, workers]; stepKnowledge(s, { force: true });
+    bindArmy(s, home, army); s.groups = [watcher, army, workers]; positionMilitary(s); stepKnowledge(s, { force: true });
     const storedReports = structuredClone(viewer.knowledge), rng = s.rng;
     const renderedHome = () => factionView(s, viewer.id).settlements.find(p => p.id === home.id);
     let current = renderedHome();
@@ -285,14 +327,15 @@ test('visible and occupied home bodies reflect same-pulse casualties and returns
     assert.deepEqual(current.military, { infantry: 18, ranged: 6 });
 
     // A local ranged defender dies after the cycle's assignments were cached.
-    home.population--; home.soldiers--; home.military.ranged--;
+    const defender = getSoldiers(s, home).find(body => body.role === 'ranged');
+    applySoldierDamage(s, defender.id, defender.hp);
     current = renderedHome();
     assert.equal(current.population, 94); assert.equal(current.soldiers, 23); assert.equal(current.workers, 71);
     assert.deepEqual(current.military, { infantry: 18, ranged: 5 });
 
     // Field losses reduce the party and home ledger together, leaving the local
     // bodies untouched even though the hidden native total has changed.
-    home.population -= 3; home.soldiers -= 3; home.military.infantry -= 3; army.size -= 3; army.units.infantry -= 3;
+    for (const body of getSoldiers(s, army).filter(body => body.role === 'infantry').slice(0, 3)) applySoldierDamage(s, body.id, body.hp);
     current = renderedHome();
     assert.equal(current.population, 94); assert.equal(current.soldiers, 23);
     assert.deepEqual(current.military, { infantry: 18, ranged: 5 });
@@ -300,7 +343,13 @@ test('visible and occupied home bodies reflect same-pulse casualties and returns
     // Returned crews no longer count as departures, before updateAssignments.
     workers.finished = true;
     current = renderedHome(); assert.equal(current.population, 103); assert.equal(current.workers, 80);
-    army.finished = true;
+    // Stage the actual surviving bodies at home before their census return.
+    army.x = home.x; army.z = home.z;
+    for (const [index, body] of getSoldiers(s, army).entries()) {
+      const x = home.x + (index % 4 - 1.5) * .6, z = home.z + (Math.floor(index / 4) - 1.5) * .6;
+      Object.assign(body, { x, z, prevX: x, prevZ: z, positioned: true });
+    }
+    returnMilitary(s, home, army); army.finished = true;
     current = renderedHome(); assert.equal(current.population, 116); assert.equal(current.soldiers, 36); assert.equal(current.workers, 80);
     assert.deepEqual(current.military, { infantry: 25, ranged: 11 });
     assert.equal(home.homePresent, 120); assert.equal(home.assigned.military, 0, 'view wrote to simulation job assignments');
@@ -341,11 +390,11 @@ test('native recon learns occupied-home control only through actual sight and a 
 test('foreign-command native auxiliaries provide sight and reports only to their commander without duplicate bodies', async () => {
   const { observeGroup } = await import('../src/sim/knowledge.js');
   const s = fixture('auxiliary-private-sight'), [commander, native] = s.factions, [capital, held] = s.settlements;
-  held.occupiedBy = commander.id; held.exileBaseFor = commander.id; held.trainingQueue = [{ id: 'commander-course', commandFactionId: commander.id, role: 'ranged', size: 2, progress: .5 }, { id: 'native-course', commandFactionId: native.id, role: 'infantry', size: 1, progress: .1 }]; held.population = 100; held.homePresent = 87; held.soldiers = 10; held.military = { infantry: 6, ranged: 4 }; held.assigned = { military: 10, scouts: 3 };
+  held.occupiedBy = commander.id; held.exileBaseFor = commander.id; held.trainingQueue = [{ id: 'commander-course', commandFactionId: commander.id, role: 'ranged', size: 2, progress: .5 }, { id: 'native-course', commandFactionId: native.id, role: 'infantry', size: 1, progress: .1 }]; held.population = 100; held.homePresent = 87; setMilitary(s, held, { infantry: 6, ranged: 4 }); held.assigned = { military: 10, scouts: 3 };
   const point = { x: -160, z: 140 };
   const army = { id: 'native-auxiliary-army', factionId: native.id, commandFactionId: commander.id, originId: held.id, kind: 'army', size: 10, units: { infantry: 6, ranged: 4 }, ...point, sightRadius: 8 };
   const scout = { id: 'native-auxiliary-scout', factionId: native.id, commandFactionId: commander.id, originId: held.id, kind: 'scout', size: 3, ...point, sightRadius: 8, observations: [] };
-  s.groups = [army, scout]; s.nodes = [node('auxiliary-discovery', point, 123)];
+  bindArmy(s, held, army); s.groups = [army, scout]; s.nodes = [node('auxiliary-discovery', point, 123)];
   stepKnowledge(s, { force: true }); observeGroup(s, scout);
   const commandView = factionView(s, commander.id), nativeView = factionView(s, native.id);
   assert.ok(commandView.nodes.some(n => n.id === 'auxiliary-discovery'));
@@ -369,7 +418,10 @@ test('foreign-command native auxiliaries provide sight and reports only to their
 
   // The native viewer may see the same bodies when they physically return into
   // local sight, but receives neither their remote orders nor their field reports.
-  army.x = scout.x = held.x + 1; army.z = scout.z = held.z; tick(s);
+  const dx = held.x + 1 - army.x, dz = held.z - army.z;
+  army.x = scout.x = held.x + 1; army.z = scout.z = held.z;
+  for (const body of getSoldiers(s, army)) Object.assign(body, { x: body.x + dx, z: body.z + dz, prevX: body.prevX + dx, prevZ: body.prevZ + dz });
+  tick(s);
   const seen = factionView(s, native.id), observed = seen.groups.filter(g => g.id === army.id || g.id === scout.id);
   assert.equal(observed.length, 2); assert.ok(observed.every(g => g.originId === null && g.knowledgeView === 'visible'));
   assert.ok(observed.every(g => g.targetId === null));

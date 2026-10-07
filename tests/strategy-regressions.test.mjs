@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createSimulation } from '../src/sim/core.js';
 import { stepStrategy } from '../src/sim/strategy.js';
-import { initializeMilitary } from '../src/sim/military.js';
+import { initializeMilitary, deployMilitary, getSoldiers } from '../src/sim/military.js';
 import { stepCombat } from '../src/sim/combat.js';
 import { stepProgression } from '../src/sim/progression.js';
 import { emptyResources, initializeLedger, ledgerResidual, RESOURCES } from '../src/sim/economy.js';
@@ -23,9 +23,23 @@ function fixture(seed, tick = 20) {
 // These explicit fixtures alter census deliberately before the ledger baseline.
 // They are tests only, never used to inflate browser or natural-run evidence.
 function finalizeFixture(state) {
-  for (const home of state.settlements) initializeMilitary(home, { infantry: home.soldiers, ranged: 0 });
-  for (const party of state.groups) if (party.kind === 'army') party.units = { infantry: party.size, ranged: 0 };
+  const armies = state.groups.filter(party => party.kind === 'army' && !party.finished).map(party => ({ party, size: party.size }));
+  for (const home of state.settlements) initializeMilitary(home, { infantry: home.soldiers, ranged: 0 }, { state });
+  for (const { party, size } of armies) {
+    party.size = size; party.units = { infantry: size, ranged: 0 }; delete party.soldierIds;
+    deployMilitary(state, state.settlements.find(home => home.id === party.originId), party);
+    placeSoldiers(state, party);
+  }
   initializeLedger(state);
+}
+
+function placeSoldiers(state, party, point = party) {
+  const soldiers = getSoldiers(state, party), columns = Math.ceil(Math.sqrt(soldiers.length)), rows = Math.ceil(soldiers.length / columns);
+  for (const [i, soldier] of soldiers.entries()) {
+    soldier.positioned = true;
+    soldier.x = soldier.prevX = point.x + (i % columns - (columns - 1) / 2) * .7;
+    soldier.z = soldier.prevZ = point.z + (Math.floor(i / columns) - (rows - 1) / 2) * .7;
+  }
 }
 function strategyPulse(state, dt = .1) {
   state.step++; state.tick = Math.floor(state.step / 10); state.time = state.step / 10;
@@ -57,7 +71,7 @@ function assertConserved(state) {
   }
 }
 
-test('destroyed and retreating armies cannot fight opponents or intercept caravans', () => {
+test('destroyed and retreating armies cannot initiate attacks or intercept caravans', () => {
   for (const destroyed of [true, false]) {
     const state = fixture(`regression-terminal-army-${destroyed}`);
     const [a, b] = state.factions, [ha, hb] = state.settlements;
@@ -71,8 +85,7 @@ test('destroyed and retreating armies cannot fight opponents or intercept carava
     finalizeFixture(state);
     const initialPopulation = population(state);
     strategyPulse(state);
-    assert.equal(state.stats.battles, 0, 'a terminal army started a battle');
-    assert.equal(a.experience.combat, 0);
+    assert.ok(!state.events.some(event => event.type === 'battle' && event.groupId === army.id), 'a terminal army started a battle');
     assert.equal(caravan.phase, 'outbound', 'a terminal army turned a caravan back');
     assert.equal(caravan.carrying.food, 100);
     assert.ok(!(state.pendingCombat || []).some(hit => hit.sourceId === army.id));

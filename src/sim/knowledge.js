@@ -2,8 +2,9 @@ import { hashSeed, clamp, distance } from '../shared.js';
 import { WORLD_RADIUS } from '../world.js';
 import { lineOfSight as navigationLineOfSight } from './navigation.js';
 import { factionController, settlementController, groupController } from './control.js';
+import { isServingSoldier, getSoldier, getSoldiers, soldierCounts } from './soldiers.js';
 
-// Sight belongs to physical homes and parties, never to individual render bodies.
+// Sight belongs to physical homes, civilian parties and authoritative soldiers.
 // There are three deliberately separate information layers:
 //   visibility: what any surviving friendly observer can currently see;
 //   visualMemory: last-seen places, useful to an observer but not a command feed;
@@ -22,6 +23,88 @@ const viewCache = new WeakMap();
 const rasterCache = new WeakMap();
 const sensorCache = new WeakMap();
 const observationIndexes = new WeakMap();
+const soldierVisionCache = new WeakMap();
+const renderWorldIds = new WeakMap();
+let nextRenderWorldId = 1;
+function renderWorldId(state) {
+  if (!renderWorldIds.has(state)) renderWorldIds.set(state, nextRenderWorldId++);
+  return renderWorldIds.get(state);
+}
+
+// Physical soldiers extend local sight without giving a distant capital their
+// observations. The hash is shared by view filtering and the sparse fog union.
+function soldierVision(state) {
+  const stamp = `${state.step ?? state.tick}:${state.soldierRevision || 0}:${state.navigationRevision || 0}`;
+  const prior = soldierVisionCache.get(state);
+  if (prior?.stamp === stamp) return prior;
+  const groups = new Map((state.groups || []).map(group => [group.id, group])), byFaction = new Map(), span = 15;
+  for (const home of state.settlements || []) for (const soldier of home.soldierRoster || []) {
+    if (!isServingSoldier(soldier) || !soldier.positioned) continue;
+    const group = soldier.groupId ? groups.get(soldier.groupId) : null;
+    if (soldier.groupId && (!group || group.finished)) continue;
+    const owner = group ? localGroupController(state, group) : settlementController(state, home);
+    if (!byFaction.has(owner)) byFaction.set(owner, { observers: [], bins: new Map() });
+    const entry = byFaction.get(owner), source = { id: soldier.id, x: soldier.x, z: soldier.z, factionId: owner, commandFactionId: owner, kind: 'army', size: 1, sightRadius: 15 };
+    const sensor = { source, group, home: group ? null : home };
+    entry.observers.push(sensor);
+    const key = `${Math.floor(source.x / span)}:${Math.floor(source.z / span)}`;
+    if (!entry.bins.has(key)) entry.bins.set(key, []);
+    entry.bins.get(key).push(sensor);
+  }
+  const value = { stamp, byFaction, groups, span }; soldierVisionCache.set(state, value); return value;
+}
+
+function soldierWitness(state, factionId, point, index = soldierVision(state)) {
+  const bins = index.byFaction.get(factionId)?.bins;
+  if (!bins || !finitePoint(point)) return null;
+  const { span } = index, r = 15;
+  for (let z = Math.floor((point.z - r) / span); z <= Math.floor((point.z + r) / span); z++) for (let x = Math.floor((point.x - r) / span); x <= Math.floor((point.x + r) / span); x++) {
+    for (const sensor of bins.get(`${x}:${z}`) || []) if (visibleToGroup(state, sensor.source, point, r)) return sensor;
+  }
+  return null;
+}
+
+function extendSoldierSight(state, faction, visibility, index) {
+  const observers = index.byFaction.get(faction.id)?.observers || [];
+  const candidates = new Set(), { minX, minZ, cellSize, width, height } = KNOWLEDGE_GRID;
+  for (const { source } of observers) {
+    const r = source.sightRadius;
+    for (let z = Math.max(0, Math.floor((source.z - r - minZ) / cellSize)); z <= Math.min(height - 1, Math.floor((source.z + r - minZ) / cellSize)); z++) {
+      for (let x = Math.max(0, Math.floor((source.x - r - minX) / cellSize)); x <= Math.min(width - 1, Math.floor((source.x + r - minX) / cellSize)); x++) {
+        const cell = z * width + x; if (!visibility.visible[cell]) candidates.add(cell);
+      }
+    }
+  }
+  for (const cell of candidates) {
+    const witness = soldierWitness(state, faction.id, knowledgeCellPoint(cell), index);
+    if (!witness) continue;
+    visibility.visible[cell] = visibility.explored[cell] = 1;
+    if (witness.group) { witness.group.explorationMask ??= new Uint8Array(CELL_COUNT); witness.group.explorationMask[cell] = 1; }
+    else visibility.commandExplored[cell] = 1;
+  }
+}
+
+function soldierViews(state, factionId = null, currentlySeen = null, actorIds = null) {
+  const groups = new Map((state.groups || []).map(group => [group.id, group])), result = [];
+  const now = state.time ?? state.tick;
+  const physical = ['id', 'factionId', 'nativeFactionId', 'species', 'role', 'status', 'alive', 'x', 'z', 'prevX', 'prevZ', 'yaw', 'prevYaw', 'vx', 'vz', 'positioned', 'elevation', 'lastAttackTime', 'lastHitTime', 'diedTime'];
+  for (const home of state.settlements || []) for (const soldier of home.soldierRoster || []) {
+    if (soldier.status === 'demobilized' || soldier.status === 'dead' && now - (soldier.diedTime ?? -Infinity) > 20) continue;
+    const group = soldier.groupId && groups.get(soldier.groupId), owner = group ? localGroupController(state, group) : settlementController(state, home);
+    const owned = !factionId || owner === factionId;
+    if (!owned && (!soldier.positioned || !currentlySeen(soldier))) continue;
+    const copy = owned ? Object.fromEntries(Object.entries(soldier).filter(([key]) => !key.startsWith('_')))
+      : Object.fromEntries(physical.filter(key => key in soldier).map(key => [key, soldier[key]]));
+    Object.assign(copy, { kind: 'soldier', commandFactionId: owner, controllerId: owner,
+      originId: owned || actorIds?.has(home.id) ? home.id : null,
+      groupId: !soldier.groupId ? null : owned || actorIds?.has(soldier.groupId) ? soldier.groupId : null,
+      knowledgeView: owned ? 'owned' : 'visible' });
+    if (copy.stats) copy.stats = { ...copy.stats, cost: { ...copy.stats.cost } };
+    if (copy.order) copy.order = { ...copy.order };
+    result.push(copy);
+  }
+  return result;
+}
 
 export function lineOfSight(state, from, to, options = {}) {
   return finitePoint(from) && finitePoint(to) && navigationLineOfSight(state, from, to, options);
@@ -64,7 +147,7 @@ export function initializeKnowledge(state, { reset = false } = {}) {
     state.pendingReports = [];
     for (const g of state.groups || []) { g.observations = []; delete g.explorationMask; delete g.lastTransmission; }
     state.knowledgeStep = -1;
-    viewCache.delete(state); rasterCache.delete(state); sensorCache.delete(state);
+    viewCache.delete(state); rasterCache.delete(state); sensorCache.delete(state); soldierVisionCache.delete(state);
   }
   return state;
 }
@@ -96,7 +179,8 @@ function sourcesFor(state, factionId) {
     if ((home.factionId !== factionId && controller !== factionId) || !alive(home) || (home.homePresent ?? home.population) <= 0) continue;
     const commandHome = controller === factionId ? home : null;
     sources.push({ source: { ...sourceRecord(home, 'settlement'), factionId }, home: commandHome });
-    for (const b of home.buildings || []) if (['tower', 'watchtower'].includes(b.kind) && b.progress >= 1 && !b.destroyed && (b.hp ?? b.health ?? 1) > 0 && (b.crewAssigned == null || b.crewAssigned > 0)) {
+    for (const b of home.buildings || []) if (['tower', 'watchtower'].includes(b.kind) && b.progress >= 1 && !b.destroyed && (b.hp ?? b.health ?? 1) > 0 &&
+      (b.crewSoldierIds || []).filter(id => { const soldier = getSoldier(state, id); return isServingSoldier(soldier) && !soldier.groupId && !soldier.withdrawing && soldier.positioned && distance(soldier, b) <= 1.6; }).length >= (b.requiredCrew || 2)) {
       sources.push({ source: { id: b.id, factionId, kind: 'tower', x: b.x, z: b.z, size: 1, sightRadius: 26 }, home: commandHome });
     }
   }
@@ -104,7 +188,15 @@ function sourcesFor(state, factionId) {
     if (!alive(g)) continue;
     const controller = localGroupController(state, g);
     if (!nativeGroupAccess(state, g, factionId) && controller !== factionId) continue;
-    sources.push({ source: { ...sourceRecord(g), factionId }, group: controller === factionId ? g : null });
+    let source = { ...sourceRecord(g), factionId };
+    if (g.kind === 'army' && Array.isArray(g.soldierIds)) {
+      // A route anchor ahead of its marching troops is not a physical observer.
+      const soldiers = soldierVision(state).byFaction.get(controller)?.observers.filter(sensor => sensor.group?.id === g.id) || [];
+      const witness = soldiers.reduce((best, sensor) => !best || distance(sensor.source, g) < distance(best.source, g) ? sensor : best, null);
+      if (!witness) continue;
+      source = { ...source, x: witness.source.x, z: witness.source.z };
+    }
+    sources.push({ source, group: controller === factionId ? g : null });
   }
   return sources;
 }
@@ -182,16 +274,17 @@ function nearbyObjects(index, source) {
 
 // Measurement error is stable within a cycle and never consumes the simulation's
 // random stream. Seeing or switching an observer view cannot change future life.
-export function observationFor(state, faction, object) {
+export function observationFor(state, faction, object, { sources = null } = {}) {
   const f = getFaction(state, faction), ownerId = 'population' in object ? settlementController(state, object) : object.claimedBy ? factionController(state, object.claimedBy) : object.commandFactionId ? groupController(state, object) : object.factionId || null;
   const nativeOwn = !!f && object.factionId === f.id, own = nativeOwn && (!object.commandFactionId || ownerId === f.id) || (!!f && ownerId === f.id);
   const kind = 'population' in object ? 'settlement' : 'size' in object ? 'group' : ['ford', 'mountain-pass'].includes(object.kind) || object.terrainKind === 'pass' ? 'terrain' : 'resource';
+  const visibleMilitary = !own && (kind === 'settlement' || object.kind === 'army') ? visibleSoldiersAt(state, f, object, sources).length : null;
   const error = own || kind === 'resource' ? 1 : .84 + (hashSeed(`${state.seed}:${f?.id}:${object.id}:${state.tick}`) % 3201) / 10000;
   const o = { id: object.id, kind, x: object.x, z: object.z, ownerId, nativeOwnerId: object.factionId || null, observedTick: state.tick, observedTime: state.time ?? state.tick, reportedTick: null, confidence: own ? 1 : kind === 'resource' ? .98 : .88 };
   if (kind === 'terrain') Object.assign(o, { terrainKind: 'pass', passKind: object.kind, name: object.name || (object.kind === 'ford' ? 'Surveyed ford' : 'Surveyed mountain pass'), width: object.width, axis: object.axis, confidence: 1 });
   else if (kind === 'resource') Object.assign(o, { resourceKind: object.kind, subtype: object.subtype, amountEstimate: Math.round(object.amount), abundanceEstimate: Math.round(object.amount), richnessEstimate: object.richness, regenerationEstimate: object.regeneration || 0, claimedBy: ownerId, claimSettlementId: object.claimSettlementId || null, radius: object.radius || 2.5 });
-  else if (kind === 'settlement') Object.assign(o, { name: object.name, populationEstimate: Math.max(0, Math.round((nativeOwn ? object.population : object.homePresent ?? object.population) * error)), soldiersEstimate: Math.max(0, Math.round((nativeOwn ? object.soldiers : Math.max(0, object.soldiers - (object.assigned?.military || 0))) * error)), healthEstimate: Math.round(clamp(object.health * error, 0, 100)), status: object.status || 'active', occupiedBy: object.occupiedBy || null, controllerId: ownerId, radius: object.radius || 8, ownerSpecies: state.factions.find(a => a.id === ownerId)?.species, nativeSpecies: state.factions.find(a => a.id === object.factionId)?.species });
-  else Object.assign(o, { groupKind: object.kind, unitType: object.unitType, sizeEstimate: Math.max(0, Math.round(object.size * error)), phase: object.phase });
+  else if (kind === 'settlement') Object.assign(o, { name: object.name, populationEstimate: Math.max(0, Math.round((nativeOwn ? object.population : visibleMilitary != null ? presentCensus(state, object).workers + visibleMilitary : presentCensus(state, object).population) * error)), soldiersEstimate: Math.max(0, Math.round((nativeOwn ? object.soldiers : visibleMilitary ?? presentCensus(state, object).soldiers) * error)), healthEstimate: Math.round(clamp(object.health * error, 0, 100)), status: object.status || 'active', occupiedBy: object.occupiedBy || null, controllerId: ownerId, radius: object.radius || 8, ownerSpecies: state.factions.find(a => a.id === ownerId)?.species, nativeSpecies: state.factions.find(a => a.id === object.factionId)?.species });
+  else Object.assign(o, { groupKind: object.kind, unitType: object.unitType, sizeEstimate: Math.max(0, Math.round((visibleMilitary ?? object.size) * error)), phase: object.phase });
   return o;
 }
 
@@ -227,21 +320,26 @@ function censusRevision(state) {
   return homes + ';' + parties;
 }
 
-function visualFormation(slots) {
-  if (!slots) return undefined;
-  const physical = new Set(['x', 'z', 'prevX', 'prevZ', 'yaw', 'prevYaw']);
-  return Object.fromEntries(Object.entries(slots).filter(([role]) => role === 'infantry' || role === 'ranged').map(([role, bodies]) => [role, bodies.map(body => Object.fromEntries(Object.entries(body).filter(([key]) => physical.has(key))))]));
+function visibleSoldiersAt(state, faction, entity, sources = null) {
+  const f = getFaction(state, faction);
+  if (!f) return [];
+  if (commandOwned(state, f.id, entity)) return getSoldiers(state, entity);
+  const base = sources || sourcesFor(state, f.id).map(entry => entry.source), index = soldierVision(state);
+  return getSoldiers(state, entity).filter(body => body.positioned && (base.some(source => visibleToGroup(state, source, body)) || (!sources && soldierWitness(state, f.id, body, index))));
 }
 
 function visualSnapshot(state, f, object, observation, sources = null) {
   if (observation.kind === 'terrain') return { ...observation, renderKind: 'terrain', knowledgeView: 'visible' };
-  const combat = object.combat ? { active: object.combat.active, x: object.combat.x, z: object.combat.z, yaw: object.combat.yaw, units: clone(object.combat.units), roleAttacks: clone(object.combat.roleAttacks), nextAttack: clone(object.combat.nextAttack), lastHitTime: object.combat.lastHitTime, hitIndices: clone(object.combat.hitIndices), prevX: object.combat.prevX, prevZ: object.combat.prevZ } : undefined;
+  const combat = object.combat ? { active: object.combat.active, x: object.combat.x, z: object.combat.z, yaw: object.combat.yaw, lastHitTime: object.combat.lastHitTime, prevX: object.combat.prevX, prevZ: object.combat.prevZ } : undefined;
   if (observation.kind === 'resource') return { ...observation, kind: object.kind, resourceKind: object.kind, amount: object.amount, maxAmount: object.maxAmount, richness: object.richness, regeneration: object.regeneration, displayRadius: object.displayRadius, renderKind: 'resource', knowledgeView: 'visible' };
-  if (observation.kind === 'group') return { ...observation, factionId: object.factionId, commandFactionId: object.commandFactionId, controllerId: localGroupController(state, object), kind: object.kind, size: object.size, initialSize: object.size, x: object.x, z: object.z, prevX: object.prevX ?? object.x, prevZ: object.prevZ ?? object.z, unitType: object.unitType, formationSlots: visualFormation(object.formationSlots), formationRevision: object.formationRevision, combat, units: object.units ? clone(object.units) : undefined, phase: object.phase, activity: object.activity, heading: object.heading, formation: object.formation, renderKind: 'group', knowledgeView: 'visible', originId: null, targetId: null, targetX: object.x, targetZ: object.z, carrying: emptyStock() };
+  const visibleMilitary = observation.kind === 'settlement' || object.kind === 'army' ? visibleSoldiersAt(state, f, object) : null;
+  const visualCount = visibleMilitary ? visibleMilitary.length : object.size;
+  if (observation.kind === 'group') return { ...observation, factionId: object.factionId, commandFactionId: object.commandFactionId, controllerId: localGroupController(state, object), kind: object.kind, size: visualCount, initialSize: visualCount, x: object.x, z: object.z, prevX: object.prevX ?? object.x, prevZ: object.prevZ ?? object.z, unitType: object.unitType, combat, units: visibleMilitary ? soldierCounts(visibleMilitary) : object.units ? clone(object.units) : undefined, phase: object.phase, activity: object.activity, heading: object.heading, formation: object.formation, renderKind: 'group', knowledgeView: 'visible', originId: null, targetId: null, targetX: object.x, targetZ: object.z, carrying: emptyStock() };
   const local = presentCensus(state, object);
+  if (visibleMilitary) { local.soldiers = visibleMilitary.length; local.military = soldierCounts(visibleMilitary); local.population = local.workers + local.soldiers; }
   // Actual present individuals may be drawn in line of sight, but a visible town
   // does not disclose away crews, hidden stores, jobs, queues or global census.
-  return { ...observation, factionId: object.factionId, lastFactionId: object.lastFactionId, occupiedBy: object.occupiedBy || null, controllerId: settlementController(state, object), formationSlots: visualFormation(object.formationSlots), formationRevision: object.formationRevision, combat, military: local.military, population: local.population, soldiers: local.soldiers, workers: local.workers, homePresent: local.population, health: object.health, radius: object.radius, level: object.level, buildings: (object.buildings || []).filter(b => sources ? sources.some(source => visibleToGroup(state, source, b)) : isVisible(state, f.id, b)).map(b => ({ id: b.id, kind: b.kind, x: b.x, z: b.z, rotation: b.rotation, progress: b.progress, health: b.health, hp: b.hp, maxHp: b.maxHp, destroyed: b.destroyed, width: b.width, isGate: b.isGate, gateWidth: b.gateWidth, operational: b.operational, crewAssigned: b.crewAssigned, wallEnd: clone(b.wallEnd), wallStart: clone(b.wallStart), from: clone(b.from), to: clone(b.to), length: b.length, open: b.open, gateOpen: b.gateOpen, topologyId: b.topologyId, topologySlot: b.topologySlot, joins: clone(b.joins) })), roads: [], worksites: [], assigned: {}, stock: emptyStock(), construction: null, renderKind: 'settlement', knowledgeView: 'visible' };
+  return { ...observation, factionId: object.factionId, lastFactionId: object.lastFactionId, occupiedBy: object.occupiedBy || null, controllerId: settlementController(state, object), combat, military: local.military, population: local.population, soldiers: local.soldiers, workers: local.workers, homePresent: local.population, health: object.health, radius: object.radius, level: object.level, buildings: (object.buildings || []).filter(b => sources ? sources.some(source => visibleToGroup(state, source, b)) || !!soldierWitness(state, f.id, b) : isVisible(state, f.id, b)).map(b => ({ id: b.id, kind: b.kind, x: b.x, z: b.z, rotation: b.rotation, progress: b.progress, health: b.health, hp: b.hp, maxHp: b.maxHp, destroyed: b.destroyed, width: b.width, isGate: b.isGate, gateWidth: b.gateWidth, operational: b.operational, crewAssigned: b.crewAssigned, wallEnd: clone(b.wallEnd), wallStart: clone(b.wallStart), from: clone(b.from), to: clone(b.to), length: b.length, open: b.open, gateOpen: b.gateOpen, topologyId: b.topologyId, topologySlot: b.topologySlot, joins: clone(b.joins) })), roads: [], worksites: [], assigned: {}, stock: emptyStock(), construction: null, renderKind: 'settlement', knowledgeView: 'visible' };
 }
 
 function rememberObservation(group, observation) {
@@ -281,10 +379,14 @@ export function observeGroup(state, group) {
   if (!alive(group)) return [];
   const f = getFaction(state, localGroupController(state, group)); if (!f) return [];
   initializeKnowledge(state);
-  const source = sourceRecord(group), result = [];
-  for (const object of nearbyObjects(objectBuckets(state), source)) {
-    if (object.id === group.id || commandOwned(state, f.id, object) || !visibleToGroup(state, group, object)) continue;
-    const o = observationFor(state, f, object); rememberObservation(group, o); result.push(o);
+  const sources = group.kind === 'army' && Array.isArray(group.soldierIds)
+    ? (soldierVision(state).byFaction.get(f.id)?.observers || []).filter(sensor => sensor.group?.id === group.id).map(sensor => sensor.source)
+    : [sourceRecord(group)];
+  const result = [], seen = new Set(), index = objectBuckets(state);
+  for (const source of sources) for (const object of nearbyObjects(index, source)) {
+    if (seen.has(object.id) || object.id === group.id || commandOwned(state, f.id, object) || !visibleToGroup(state, source, object)) continue;
+    seen.add(object.id);
+    const o = observationFor(state, f, object, { sources }); rememberObservation(group, o); result.push(o);
   }
   return result;
 }
@@ -293,9 +395,20 @@ export function stepKnowledge(state, { force = false } = {}) {
   initializeKnowledge(state);
   const step = state.step ?? state.tick * 10;
   if (!force && (state.knowledgeStep === step || step % KNOWLEDGE_GRID.updatePulses !== 0)) return false;
-  const index = objectBuckets(state), blockers = obstructionKey(state);
+  const index = objectBuckets(state), blockers = obstructionKey(state), bodySight = soldierVision(state);
   for (const f of state.factions) {
     const v = f.visibility, sources = sourcesFor(state, f.id), readings = new Map();
+    const receivers = new Map(), receiverKey = entry => entry.group?.id || entry.home?.id || `observer:${entry.source.id}`;
+    for (const entry of [...sources, ...(bodySight.byFaction.get(f.id)?.observers || [])]) {
+      const key = receiverKey(entry);
+      if (!receivers.has(key)) receivers.set(key, []);
+      receivers.get(key).push(entry.source);
+    }
+    const readFor = (object, entry) => {
+      const recipient = receiverKey(entry), key = `${recipient}|${object.id}`;
+      if (!readings.has(key)) readings.set(key, observationFor(state, f, object, { sources: receivers.get(recipient) }));
+      return readings.get(key);
+    };
     const factionBlockers = `${blockers}|${Object.entries(f.relations || {}).map(([id, r]) => `${id}:${r.status}`).join(',')}`;
     v.visible.fill(0); v.visibleIds = {}; v.current = {}; v.sources = sources.map(s => s.source);
     for (const { source, home, group } of sources) {
@@ -306,12 +419,32 @@ export function stepKnowledge(state, { force = false } = {}) {
         if (commandOwned(state, f.id, object)) { v.visibleIds[object.id] = true; continue; }
         if (!cachedSourceSight(state, source, object, sightCache)) continue;
         v.visibleIds[object.id] = true;
-        let o = readings.get(object.id);
-        if (!o) { o = observationFor(state, f, object); readings.set(object.id, o); }
+        const o = readFor(object, { source, home, group });
         if (!v.current[object.id]) v.current[object.id] = { observation: o, object };
         if (o.kind !== 'group') v.visualMemory[object.id] = { ...o };
         if (group) rememberObservation(group, o);
         if (home) reportObservations(state, f, [o], { method: 'home-sight', homeId: home.id });
+      }
+    }
+    extendSoldierSight(state, f, v, bodySight);
+    // Each command recipient records only what its actual soldiers saw. Deduped
+    // local bucket queries avoid rescanning the entire world for each body.
+    const witnessed = new Map();
+    for (const { source, home, group } of bodySight.byFaction.get(f.id)?.observers || []) {
+      const recipient = group || home;
+      if (!recipient) continue;
+      if (!witnessed.has(recipient.id)) witnessed.set(recipient.id, new Set());
+      const seen = witnessed.get(recipient.id);
+      for (const object of nearbyObjects(index, source)) {
+        if (seen.has(object.id)) continue;
+        if (commandOwned(state, f.id, object)) { v.visibleIds[object.id] = true; seen.add(object.id); continue; }
+        if (!visibleToGroup(state, source, object)) continue;
+        seen.add(object.id); v.visibleIds[object.id] = true;
+        const o = readFor(object, { source, home, group });
+        if (!v.current[object.id]) v.current[object.id] = { observation: o, object };
+        if (o.kind !== 'group') v.visualMemory[object.id] = { ...o };
+        if (group) rememberObservation(group, o);
+        else reportObservations(state, f, [o], { method: 'home-sight', homeId: home.id });
       }
     }
     // Replace every transient truth reference with an independent visual record.
@@ -331,7 +464,7 @@ export function isVisible(state, faction, pointOrObject) {
   if (!f || !finitePoint(pointOrObject)) return false;
   if (alive(pointOrObject) && ('size' in pointOrObject ? nativeGroupAccess(state, pointOrObject, f.id) || localGroupController(state, pointOrObject) === f.id : pointOrObject.factionId === f.id)) return true;
   const sources = f.visibility?.sources || sourcesFor(state, f.id).map(s => s.source);
-  return sources.some(source => visibleToGroup(state, source, pointOrObject));
+  return sources.some(source => visibleToGroup(state, source, pointOrObject)) || !!soldierWitness(state, f.id, pointOrObject);
 }
 
 // Planning uses command-known terrain. A remote scout's unretrieved map cannot
@@ -358,18 +491,25 @@ function publicFaction(f, known = true) {
 function pointOfEffect(effect) { return finitePoint(effect) ? effect : finitePoint(effect.position) ? effect.position : null; }
 
 export function factionView(state, factionId = null) {
-  if (!factionId || factionId === 'omniscient') return state;
-  const f = getFaction(state, factionId);
-  if (!f) return { seed: state.seed, tick: state.tick, step: state.step, time: state.time, config: state.config, season: state.season, bounds: state.bounds, factions: [], settlements: [], groups: [], nodes: [], knownPlaces: [], events: [], projectiles: [], combatEffects: [], stats: {}, tradeOffers: [], viewer: { mode: 'faction', factionId, invalid: true } };
-  const v = f.visibility || freshVisibility();
   let cache = viewCache.get(state);
   if (!cache) { cache = new Map(); viewCache.set(state, cache); }
-  const signature = `${state.step ?? state.tick}:${v.version}:${v.reportVersion || 0}:${state.combatEvents?.length || 0}:${censusRevision(state)}`;
+  if (!factionId || factionId === 'omniscient') {
+    const signature = `${state.step ?? state.tick}:${state.soldierRevision || 0}:${censusRevision(state)}`;
+    const prior = cache.get('omniscient');
+    if (prior?.signature === signature) return prior.view;
+    const view = { ...state, soldiers: soldierViews(state), renderWorldId: renderWorldId(state) };
+    cache.set('omniscient', { signature, view }); return view;
+  }
+  const f = getFaction(state, factionId);
+  if (!f) return { seed: state.seed, tick: state.tick, step: state.step, time: state.time, config: state.config, season: state.season, bounds: state.bounds, factions: [], settlements: [], groups: [], soldiers: [], nodes: [], knownPlaces: [], events: [], projectiles: [], combatEffects: [], stats: {}, tradeOffers: [], renderWorldId: renderWorldId(state), viewer: { mode: 'faction', factionId, invalid: true } };
+  const v = f.visibility || freshVisibility();
+  const signature = `${state.step ?? state.tick}:${state.soldierRevision || 0}:${v.version}:${v.reportVersion || 0}:${state.combatEvents?.length || 0}:${censusRevision(state)}`;
   const cached = cache.get(f.id);
   if (cached?.signature === signature) return cached.view;
   const settlements = [], groups = [], nodes = [], currentIds = new Set();
   const liveSources = sourcesFor(state, f.id).map(s => s.source);
-  const currentlySeen = point => liveSources.some(source => visibleToGroup(state, source, point));
+  const bodySight = soldierVision(state);
+  const currentlySeen = point => liveSources.some(source => visibleToGroup(state, source, point)) || !!soldierWitness(state, f.id, point, bodySight);
   const actors = new Map([...(state.settlements || []), ...(state.groups || [])].map(actor => [actor.id, actor]));
   for (const home of state.settlements || []) {
     const controllerId = settlementController(state, home);
@@ -428,10 +568,34 @@ export function factionView(state, factionId = null) {
   const memories = { ...v.visualMemory };
   for (const report of knownReports(state, f)) if (report.kind !== 'group' && (!memories[report.id] || memories[report.id].observedTick < report.observedTick)) memories[report.id] = report;
   const knownPlaces = Object.values(memories).filter(k => !currentIds.has(k.id)).map(k => ({ ...clone(k), knowledgeView: 'remembered', age: Math.max(0, state.tick - k.observedTick) }));
+  const soldiers = soldierViews(state, f.id, currentlySeen, currentIds);
+  const soldierIds = new Set(soldiers.map(soldier => soldier.id));
+  const knownIds = new Set([...currentIds, ...soldierIds]);
+  // A copy may describe its own orders, but cannot identify a body that has
+  // left sight. Never expose canonical ledgers or formation aliases to a view.
+  const cleanReferences = value => {
+    if (Array.isArray(value)) return value.map(cleanReferences);
+    if (!value || typeof value !== 'object' || ArrayBuffer.isView(value)) return value;
+    const result = {};
+    for (const [key, item] of Object.entries(value)) {
+      if (['soldierRoster', 'soldierIds', 'formationSlots', 'crewSoldierIds'].includes(key) || key.startsWith('_')) continue;
+      if ((key.endsWith('SoldierId') || ['soldierId', 'targetId', 'sourceId', 'ignoredTargetId', 'killedById'].includes(key)) && typeof item === 'string') result[key] = knownIds.has(item) ? item : null;
+      else result[key] = cleanReferences(item);
+    }
+    return result;
+  };
+  for (let i = 0; i < soldiers.length; i++) soldiers[i] = cleanReferences(soldiers[i]);
+  for (const collection of [settlements, groups]) for (let i = 0; i < collection.length; i++) collection[i] = cleanReferences(collection[i]);
+  for (const group of groups) if (group.kind === 'army' && group.knowledgeView === 'visible') {
+    const visible = soldiers.filter(soldier => soldier.groupId === group.id && soldier.alive && soldier.status === 'serving');
+    group.units = { infantry: visible.filter(soldier => soldier.role === 'infantry').length, ranged: visible.filter(soldier => soldier.role === 'ranged').length };
+    group.size = group.initialSize = visible.length;
+  }
   const identities = new Set([f.id]);
-  for (const record of [...settlements, ...groups, ...nodes, ...knownPlaces]) { if (record.factionId || record.ownerId) identities.add(record.factionId || record.ownerId); if (record.controllerId) identities.add(record.controllerId); if (record.nativeOwnerId) identities.add(record.nativeOwnerId); }
+
+  for (const record of [...settlements, ...groups, ...nodes, ...knownPlaces, ...soldiers]) { if (record.factionId || record.ownerId) identities.add(record.factionId || record.ownerId); if (record.controllerId) identities.add(record.controllerId); if (record.nativeOwnerId) identities.add(record.nativeOwnerId); }
   for (const k of knownReports(state, f)) if (k.ownerId) identities.add(k.ownerId);
-  const filterEffects = effects => (effects || []).filter(effect => { const point = pointOfEffect(effect); return point && currentlySeen(point); }).map(effect => ({ ...effect }));
+  const filterEffects = effects => (effects || []).filter(effect => { const point = pointOfEffect(effect); return point && currentlySeen(point); }).map(cleanReferences);
   const nativeHomeIds = new Set((state.settlements || []).filter(home => home.factionId === f.id).map(home => home.id));
   const visibleCells = v.visible.reduce((a, b) => a + b, 0), exploredCells = v.explored.reduce((a, b) => a + b, 0);
   const combatEvents = [];
@@ -453,14 +617,14 @@ export function factionView(state, factionId = null) {
     }
     if (!currentIds.has(safe.sourceId)) safe.sourceId = null;
     if (!currentIds.has(safe.targetId)) safe.targetId = null;
-    combatEvents.push(safe);
+    combatEvents.push(cleanReferences(safe));
   }
   const view = {
     seed: state.seed, tick: state.tick, step: state.step, time: state.time, config: state.config, bounds: state.bounds, season: state.season, outcome: state.outcome,
-    factions: state.factions.filter(a => identities.has(a.id)).map(a => a.id === f.id ? a : publicFaction(a)), settlements, groups, nodes, knownPlaces,
+    factions: state.factions.filter(a => identities.has(a.id)).map(a => a.id === f.id ? a : publicFaction(a)), settlements, groups, soldiers, nodes, knownPlaces,
     visibleNodeIds: nodes.map(n => n.id), combatEvents, projectiles: filterEffects(state.projectiles), combatEffects: filterEffects(state.combatEffects),
     events: (state.events || []).filter(e => e.factionId === f.id || e.defeatedId === f.id || e.type === 'victory' || (e.type === 'capture' && (e.previousControllerId === f.id || nativeHomeIds.has(e.settlementId))) || (e.otherFactionId === f.id && !e.pending && ['trade', 'diplomacy'].includes(e.type))),
-    tradeOffers: (state.tradeOffers || []).filter(o => o.factionId === f.id), stats: {}, terrain: { seed: state.seed },
+    tradeOffers: (state.tradeOffers || []).filter(o => o.factionId === f.id), stats: {}, terrain: { seed: state.seed }, renderWorldId: renderWorldId(state),
     viewer: { mode: 'faction', factionId, visibleCells, exploredCells, totalCells: CELL_COUNT, reportCount: knownReports(state, f).length, staleCount: knownPlaces.length, version: v.version, updatedTick: v.updatedTick },
   };
   cache.set(f.id, { signature, view });

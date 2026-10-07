@@ -1,3 +1,4 @@
+import { setMilitary, bindArmy, positionMilitary } from './roster-fixtures.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
@@ -16,13 +17,19 @@ function sceneAtOverview(aspect = 1.6) {
 // Covers every deployment type and all three species without a long sim run.
 function categories() {
   const factions = ['human', 'machine', 'hive'].map((species, i) => ({ id: `f${i}`, species, color: ['#f1a066', '#85ccbc', '#c4a2db'][i] }));
-  const settlements = factions.map((f, i) => ({ id: `s${i}`, factionId: f.id, x: i * 30 - 30, z: 0, population: 100, soldiers: 10, radius: 9, assigned: { researchers: 3, construction: 2, infrastructure: 4 }, buildings: [
+  const settlements = factions.map((f, i) => ({ id: `s${i}`, factionId: f.id, x: i * 30 - 30, z: 0, population: 100, health: 100, status: 'active', soldiers: 10, radius: 9, assigned: { researchers: 3, construction: 2, infrastructure: 4 }, buildings: [
     { id: `b${i}a`, kind: 'hub', x: i * 30 - 30, z: 0, progress: 1 },
     { id: `b${i}b`, kind: 'housing', x: i * 30 - 27, z: 3, progress: .7 },
     { id: `b${i}c`, kind: 'lab', x: i * 30 - 33, z: 3, progress: 1 }
   ] }));
   const groups = settlements.flatMap((s, i) => ['worker', 'army', 'scout', 'trader', 'colonist'].map((kind, j) => ({ id: `g${i}:${j}`, originId: s.id, factionId: s.factionId, kind, size: [6, 4, 3, 2, 5][j], x: s.x + j, z: 18, prevX: s.x + j - .1, prevZ: 17.9, targetX: s.x + 15, targetZ: 20, phase: kind === 'worker' ? 'working' : 'outbound', carrying: 6, capacity: 24, targetId: 'n0' })));
-  return { seed: 'render-contract', step: 100, tick: 10, time: 10, factions, settlements, groups, nodes: [{ id: 'n0', x: 0, z: 18, radius: 3, amount: 100 }] };
+  const state = { seed: 'render-contract', step: 100, tick: 10, time: 10, factions, settlements, groups: [], nodes: [{ id: 'n0', x: 0, z: 18, radius: 3, amount: 100 }] };
+  for (const home of settlements) {
+    setMilitary(state, home, { infantry: 10, ranged: 0 });
+    const army = groups.find(group => group.kind === 'army' && group.originId === home.id);
+    army.units = { infantry: army.size, ranged: 0 }; bindArmy(state, home, army);
+  }
+  state.groups = groups; positionMilitary(state); return state;
 }
 function visibleMeshes(scene) { const meshes = []; scene.traverse(o => { if (o.isInstancedMesh && o.visible && o.count) meshes.push(o); }); return meshes; }
 

@@ -1,3 +1,5 @@
+import { setMilitary, bindArmy } from './roster-fixtures.mjs';
+import { applySoldierDamage } from '../src/sim/soldiers.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { performance } from 'node:perf_hooks';
@@ -20,8 +22,10 @@ function fixture() {
   assert.ok(ground); return { s, center: { ...ground } };
 }
 function army(s, center, id, factionId, units, offset = 0, yaw = Math.PI / 2) {
-  const group = { id, kind: 'army', factionId, units, size: units.infantry + units.ranged, x: center.x + offset, z: center.z, speed: 3, combat: { active: true, yaw } };
-  s.groups.push(group); updateCombatFormation(s, group, units, 0, { yaw }); return group;
+  const home = { id: `${id}-home`, factionId, population: 300, x: center.x + offset, z: center.z, assigned: {} };
+  s.settlements.push(home); setMilitary(s, home, units);
+  const group = { id, originId: home.id, kind: 'army', factionId, units, size: units.infantry + units.ranged, x: center.x + offset, z: center.z, speed: 3, combat: { active: true, yaw } };
+  bindArmy(s, home, group); s.groups.push(group); updateCombatFormation(s, group, units, 0, { yaw }); return group;
 }
 const slots = entity => Object.values(entity.formationSlots).flat();
 function descriptor(entity) { return { id: entity.id, kind: 'group', x: entity.x, z: entity.z, units: entity.units, entity }; }
@@ -105,7 +109,7 @@ test('contact movement cannot cross an enemy wall or claim unreachable melee thr
   assert.equal(navigationDiagnostics(s).searches, 0);
 });
 
-test('physical slots are deterministic, pause-frozen, and preserve role/ordinal interpolation after casualties', () => {
+test('physical slots are deterministic, pause-frozen, and preserve survivor identity and interpolation after casualties', () => {
   function run() {
     const { s, center } = fixture();
     const a = army(s, center, 'a', 'a', { infantry: 12, ranged: 4 }, -2.6);
@@ -115,7 +119,8 @@ test('physical slots are deterministic, pause-frozen, and preserve role/ordinal 
     updateCombatFormation(s, a, a.units, 0, { contact: true, localTargets: [descriptor(b)] });
     assert.deepEqual(a, before, 'paused movement mutated its saved interpolation');
     const survivor = a.formationSlots.ranged[0];
-    a.units.infantry -= 2; a.size -= 2; pulse(s, [[a, b], [b, a]]);
+    for (const body of a.formationSlots.infantry.slice(0, 2)) applySoldierDamage(s, body.id, body.hp);
+    pulse(s, [[a, b], [b, a]]);
     assert.equal(a.formationSlots.infantry.length, 10); assert.equal(a.formationSlots.ranged[0], survivor);
     const rendered = combatFormationSlot(a, 10, { alpha: .5 });
     assert.equal(rendered.role, 'ranged'); assert.equal(rendered.x, (survivor.prevX + survivor.x) * .5); assert.equal(rendered.z, (survivor.prevZ + survivor.z) * .5);

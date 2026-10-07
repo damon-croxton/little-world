@@ -1,6 +1,6 @@
 import { clamp, distance, emit, random } from '../shared.js';
 import { terrainAt, WORLD_RADIUS } from '../world.js';
-import { allocateMilitary, applyMilitaryCasualties, availableMilitary, countMilitary, returnMilitary, demobilizeMilitary, refreshExileBases } from './military.js';
+import { allocateMilitary, applyMilitaryCasualties, availableMilitary, countMilitary, deployMilitary, getSoldiers, returnMilitary, demobilizeMilitary, refreshExileBases } from './military.js';
 import { stepCombat, canFight } from './combat.js';
 import { observeGroup, reportObservations, knownReports, visibleToGroup } from './knowledge.js';
 import { moveAlongRoute, isSegmentTraversable, findPath } from './navigation.js';
@@ -13,7 +13,6 @@ const MAX_GROUPS = 480;
 const factionOf = (s, id) => s.factions.find(f => f.id === id);
 const homeOf = (s, g) => s.settlements.find(p => p.id === g.originId);
 const alive = p => p && p.population > 0 && p.health > 0 && !['camp', 'ruin'].includes(p.status);
-const deployed = (s, p) => s.groups.reduce((n, g) => n + (g.kind === 'army' && !g.finished && g.originId === p.id ? g.size : 0), 0);
 const modifier = (f, key) => f.modifiers?.[key] ?? f.tech?.modifiers?.[key] ?? 1;
 const relation = (f, id) => f.relations[id] ?? { status: 'unknown', trust: 40 };
 const emptyCargo = () => ({ food: 0, water: 0, energy: 0, materials: 0 });
@@ -253,11 +252,18 @@ function power(s, f, size, supply, morale, terrain, defending = false) {
     (0.46 + Math.max(0, supply) * 0.0054) * (0.42 + Math.max(0, morale) * 0.0058);
 }
 
+function soldiersAtSettlement(s, g, town, radius = 5) {
+  return getSoldiers(s, g).filter(soldier => soldier.positioned && distance(soldier, town) <= radius &&
+    isSegmentTraversable(s, soldier, town, { factionId: groupController(s, g), radius: .15 }));
+}
+
 function raid(s, g, town) {
   const f = factionOf(s, groupController(s, g)), defender = factionOf(s, settlementController(s, town));
   const terrain = terrainAt(town.x, town.z, s.seed);
-  const garrison = Math.max(0, town.soldiers - deployed(s, town));
-  const attack = power(s, nativeProfile(s, g, f), g.size, g.supply, g.morale, terrain);
+  const present = soldiersAtSettlement(s, g, town).length;
+  if (!present) return;
+  const garrison = countMilitary(availableMilitary(s, town));
+  const attack = power(s, nativeProfile(s, g, f), present, g.supply, g.morale, terrain);
   const awayCivilians = s.groups.reduce((sum, party) => sum + (party.originId === town.id && party.kind !== 'army' && !party.finished ? party.size : 0), 0);
   const militia = town.occupiedBy ? 0 : Math.min(30, Math.max(0, town.population - town.soldiers - awayCivilians) * 0.055);
   const protection = 1.09 + terrain.roughness * 0.28 + (town.level - 1) * 0.08;
@@ -286,7 +292,7 @@ function raid(s, g, town) {
   // The tactical combat module alone applies military damage and deaths.
   // An empty garrison never stores future casualty debt.
   town.defenseCasualtyProgress = 0;
-  const canReachStores = isSegmentTraversable(s, g, town, { factionId: groupController(s, g), radius: .15 });
+  const canReachStores = present > 0;
   g.morale = Math.max(0, g.morale - (attack < defense ? 5.5 : g.siegeMode ? 0.9 : 1.6));
   g.supply = Math.max(0, g.supply - 1.6);
   if (g.finished) return;
@@ -299,10 +305,10 @@ function raid(s, g, town) {
     const pressure = canReachStores ? clamp((attack - defense * .30) * .24, 3, 18) : 0;
     if (pressure) town.defenseMorale = Math.max(0, town.defenseMorale - pressure * .20);
     town.health = Math.max(1, town.health - pressure);
-    const remainingDefenders = Math.max(0, town.soldiers - deployed(s, town));
+    const remainingDefenders = countMilitary(availableMilitary(s, town));
     g.reason = `Siege cycle ${g.siegeDays}: ${remainingDefenders} defenders remain; settlement integrity ${Math.round(town.health)}%; field supply ${Math.round(g.supply)}%.`;
     const brokenDefense = remainingDefenders <= Math.max(4, Math.floor(g.initialGarrison * .55)) || attack > defense * 1.25 || town.defenseMorale < 28;
-    if (g.siegeDays >= 6 && town.health <= 18 && brokenDefense && canReachStores && g.size >= 12 && g.supply >= 16 && g.morale >= 35) {
+    if (g.siegeDays >= 6 && town.health <= 18 && brokenDefense && canReachStores && present >= 12 && g.supply >= 16 && g.morale >= 35) {
       if (occupySettlement(s, town, g)) {
         s.stats.breaches = (s.stats.breaches ?? 0) + 1;
         if (!continueCampaign(s, g, town)) returnHome(s, g, 'The settlement capitulated; the surviving expedition is returning with its reports.');
@@ -371,6 +377,8 @@ function arriveArmy(s, g, cycleBoundary) {
   const f = factionOf(s, groupController(s, g));
   if (g.stagingTargetId && g.phase !== 'engaging') {
     const depot = s.settlements.find(p => p.id === g.stagingTargetId), purpose = g.stagingPurpose;
+    if (alive(depot) && settlementController(s, depot) === f.id && distance(g, depot) <= 1 &&
+      soldiersAtSettlement(s, g, depot, Math.max(5, depot.radius ?? 8)).length < g.size) return;
     g.stagingTargetId = null; g.stagingPurpose = null;
     if (!alive(depot) || settlementController(s, depot) !== f.id || distance(g, depot) > 1) { returnHome(s, g, 'The forward supply stop is no longer safe.', true); return; }
     const refill = Math.max(0, 100 - g.supply) / 100 * (g.provisionFactor || 1), costs = Object.fromEntries(Object.entries(provisions(nativeProfile(s, g, f), g.size, true)).map(([key, value]) => [key, value * refill]));
@@ -384,13 +392,17 @@ function arriveArmy(s, g, cycleBoundary) {
   }
   if (g.phase === 'returning' || g.phase === 'retreating') {
     const home = homeOf(s, g);
+    // The route centre can arrive before a wounded soldier or rear rank.
+    // Keep the expedition and its cargo/report commitment in the field until
+    // every surviving body has physically reached the home settlement.
+    if (home && soldiersAtSettlement(s, g, home, Math.max(5, home.radius ?? 8)).length < g.size) return;
     if (home) deposit(s, g, home);
     deliverReport(s, groupController(s, g), g.observations ?? [], g.id, 'expedition');
     emit(s, 'return', `${f.name}'s expedition returned with ${g.size} of ${g.initialSize} soldiers.`, f.id, { groupId: g.id, targetId: g.originId });
     const issuingFaction = factionOf(s, g.commandOrderFactionId || f.id);
     if (issuingFaction?.campaignOrders) delete issuingFaction.campaignOrders[g.id];
     returnMilitary(s, home, g);
-    if (home && ((home.occupiedBy && home.exileBaseFor !== groupController(s, g)) || f.defeatedBy || g.surrendered)) demobilizeMilitary(s, home, g.size);
+    if (home && ((home.occupiedBy && home.exileBaseFor !== groupController(s, g)) || f.defeatedBy || g.surrendered)) demobilizeMilitary(s, home, g.size, { soldierIds: g.soldierIds });
     return;
   }
   const target = s.settlements.find(p => p.id === g.targetId);
@@ -435,7 +447,7 @@ function updateGroups(s, dt, cycleBoundary) {
         ? Math.max(0, 100 * (1 - ((s.time ?? s.tick) - g.createdTick) / g.provisionCycles))
         : Math.max(0, g.supply - drain / modifier(f, 'supplyEfficiency') / (g.provisionFactor || 1));
       if (g.supply < 25) g.morale = Math.max(0, g.morale - 1.1);
-      if (g.phase === 'outbound' && (g.supply < (g.kind === 'army' ? armyReturnReserve(s, g, f) : 35) || g.morale < 40)) {
+      if ((g.phase === 'outbound' || g.kind === 'army' && g.phase === 'engaging') && (g.supply < (g.kind === 'army' ? armyReturnReserve(s, g, f) : 35) || g.morale < 40)) {
         returnHome(s, g, 'The supply reserve must cover the journey home.', g.kind === 'army');
       }
       if (g.supply === 0) casualties(s, g, g.kind === 'army' ? Math.max(0.2, g.size * 0.008) : g.kind === 'trader' ? Math.max(.04, g.size * .008) : .055);
@@ -593,7 +605,10 @@ function homeDefense(s, f, home, reports) {
   // only departure commitments until those soldiers/report couriers return.
   const reserve = Math.max(12, Math.ceil((available + committed) * .30), Math.ceil(reportedThreat), Math.ceil(observedThreat * 1.1));
   // Tower crews are members of the total home reserve, not additional people.
-  return { available, reserve, observedThreat, threatIds: threats.map(g => g.id).sort(), deployable: Math.max(0, available - Math.max(reserve, home.assigned?.towerCrew || 0)) };
+  // Quote the ready roster before choosing a destination: wounded returnees
+  // still count at home but cannot satisfy a new expedition's required force.
+  const deployable = countMilitary(allocateMilitary(s, home, Math.max(0, available - Math.max(reserve, home.assigned?.towerCrew || 0))));
+  return { available, reserve, observedThreat, threatIds: threats.map(g => g.id).sort(), deployable };
 }
 
 function reserveHomeDefense(s, f, homes, reports) {
@@ -677,7 +692,7 @@ function chooseExpedition(s, f, homes) {
   }
   if (!best) { if (s.tick % 12 === 0) f.intent = 'Seeking a fresh reachable rival report and waiting for temporary truces to expire.'; return; }
   const { p, k, need, deposit, frontierClaim } = best;
-  const size = best.size;
+  const units = allocateMilitary(s, p, best.size), size = countMilitary(units);
   const estimate = Math.max(1, k.soldiersEstimate ?? k.populationEstimate * 0.22);
   p.militaryTarget = clamp(.30 + f.traits.aggression * .10, .30, .40);
   if (size < 16) {
@@ -703,10 +718,11 @@ function chooseExpedition(s, f, homes) {
   const g = { id: 'g' + s.nextId++, factionId: p.factionId, commandFactionId: f.id, originId: p.id, kind: 'army',
     x: p.x, z: p.z, prevX: p.x, prevZ: p.z, targetX: stage?.x ?? k.x, targetZ: stage?.z ?? k.z, targetId: k.id, phase: 'outbound',
     missionTargetX: k.x, missionTargetZ: k.z, stagingHomeId: stage?.id ?? null, stagingTargetId: stage?.id ?? null, stagingPurpose: stage ? 'outbound' : null, provisionFactor,
-    size, initialSize: size, units: allocateMilitary(s, p, size), supply: 100, morale: 80 + f.traits.aggression * 12,
+    size, initialSize: size, units, supply: 100, morale: 80 + f.traits.aggression * 12,
     speed, campaign: true, reinforcement: best.reinforcement, homeReserve: best.reserve, missionOrderTick: s.tick, expectedTravelCycles, routeSupplyBudget: Math.round(routeSupplyBudget),
     carrying: emptyCargo(), observations: [], createdTick: s.tick, createdTime: s.time ?? s.tick, reason,
     intelligence: { observedTick: k.observedTick, reportedTick: k.reportedTick, confidence: k.confidence, populationEstimate: k.populationEstimate, soldiersEstimate: estimate } };
+  deployMilitary(s, p, g);
   s.groups.push(g);
   rememberCampaignOrder(s, g);
   f.lastArmy = s.tick;
@@ -741,7 +757,7 @@ export function stepStrategy(s, dt = 0.1) {
     for (const g of s.groups) if (dt > 0 && canFight(g) && g.phase === 'engaging' && g.combat?.targetKind === 'settlement' && g.combat.targetId === g.targetId) {
       const town = s.settlements.find(p => p.id === g.targetId);
       const owner = town && settlementController(s, town), commander = groupController(s, g);
-      if (alive(town) && owner !== commander && !['allied', 'trade'].includes(relation(factionOf(s, commander), owner).status) && visibleToGroup(s, g, town, 18) && (g.combat.exchangeStartedAt != null || g.combat.holding && countMilitary(availableMilitary(s, town)) <= 0 || distance(g, town) < 5)) raid(s, g, town);
+      if (alive(town) && owner !== commander && !['allied', 'trade'].includes(relation(factionOf(s, commander), owner).status) && visibleToGroup(s, g, town, 18)) raid(s, g, town);
     }
     fieldEncounters(s); updateConquest(s);
   }

@@ -1,10 +1,11 @@
 // Browser-portable controlled module checks. These are not natural gameplay,
 // rendered video, or performance evidence. The root harness owns browser I/O.
 export async function combatTargetScenarios({ moduleRoot = '/src/' } = {}) {
-  const [{ createSimulation }, { terrainAt }, { stepCombat, COMBAT_LIMITS }, { initializeMilitary, countMilitary },
-    { occupySettlement }, { lineOfSight }, { emptyResources, initializeLedger, ledgerResidual, RESOURCES }] = await Promise.all([
+  const [{ createSimulation }, { terrainAt }, { stepCombat, updateCombatFormation, COMBAT_LIMITS }, { initializeMilitary, countMilitary, deployMilitary, unitStats },
+    { occupySettlement }, { lineOfSight }, { emptyResources, initializeLedger, ledgerResidual, RESOURCES },
+    { createSoldierRecords, getSoldiers, syncSoldierCounts }] = await Promise.all([
     import(`${moduleRoot}sim/core.js`), import(`${moduleRoot}world.js`), import(`${moduleRoot}sim/combat.js`), import(`${moduleRoot}sim/military.js`),
-    import(`${moduleRoot}sim/conquest.js`), import(`${moduleRoot}sim/navigation.js`), import(`${moduleRoot}sim/economy.js`),
+    import(`${moduleRoot}sim/conquest.js`), import(`${moduleRoot}sim/navigation.js`), import(`${moduleRoot}sim/economy.js`), import(`${moduleRoot}sim/soldiers.js`),
   ]);
   const check = (condition, message) => { if (!condition) throw new Error(message); };
   const equal = (actual, expected, message) => check(JSON.stringify(actual) === JSON.stringify(expected), message);
@@ -14,7 +15,7 @@ export async function combatTargetScenarios({ moduleRoot = '/src/' } = {}) {
     const s = createSimulation('combat-physical-contract', { civCount: 3 }); s.groups = []; s.nodes = []; s.events = [];
     for (const home of s.settlements) {
       home.buildings = []; home.assigned = {}; home.population = 300; home.homePresent = 300; home.availableWorkers = 300;
-      home.stock = Object.fromEntries(RESOURCES.map(key => [key, 500])); initializeMilitary(home);
+      home.stock = Object.fromEntries(RESOURCES.map(key => [key, 500])); initializeMilitary(home, undefined, { state: s });
     }
     for (const a of s.factions) for (const b of s.factions) if (a !== b) a.relations[b.id] = { status: 'hostile', trust: 0 };
     if (!ground) outer: for (let z = -72; z < 72; z += 6) for (let x = -72; x < 72; x += 6) {
@@ -29,10 +30,22 @@ export async function combatTargetScenarios({ moduleRoot = '/src/' } = {}) {
     return { s, center, a: s.factions[0], b: s.factions[1], ha: s.settlements[0], hb: s.settlements[1], hc: s.settlements[2] };
   }
   function army(s, home, id, units, position) {
-    home.military.infantry += units.infantry; home.military.ranged += units.ranged; home.soldiers = countMilitary(home.military); home.workers = home.population - home.soldiers;
+    // Scenario setup assigns starting military roles to existing citizens. Its
+    // explicitly created records are deployed and physically placed once.
+    const faction = s.factions.find(candidate => candidate.id === home.factionId);
+    createSoldierRecords(home, units, { state: s, faction, source: 'fixture',
+      statsByRole: Object.fromEntries(['infantry', 'ranged'].map(role => [role, unitStats(faction, role)])) });
+    syncSoldierCounts(s, home);
+    check(home.soldiers <= home.population, 'Fixture military exceeds its existing citizens');
     const size = countMilitary(units), g = { id, kind: 'army', factionId: home.factionId, originId: home.id, units: { ...units }, size, initialSize: size,
       ...position, prevX: position.x, prevZ: position.z, targetX: position.x, targetZ: position.z, targetId: null, phase: 'outbound', speed: 0,
       morale: 100, supply: 100, carrying: emptyResources() };
+    deployMilitary(s, home, g);
+    for (const soldier of getSoldiers(s, g)) {
+      soldier.x = soldier.prevX = g.x; soldier.z = soldier.prevZ = g.z;
+    }
+    updateCombatFormation(s, g, g.units, 0);
+    check(getSoldiers(s, g).length === size, 'Fixture did not deploy its exact existing roster');
     s.groups.push(g); return g;
   }
   function pulse(s) { s.step++; s.time = s.step / 10; s.tick = Math.floor(s.time); stepCombat(s, .1); }
@@ -78,16 +91,17 @@ export async function combatTargetScenarios({ moduleRoot = '/src/' } = {}) {
     check(targetIds.includes(left.id) && targetIds.includes(right.id), 'One mixed army could not fire at two local hostile factions in one pulse');
     const counts = {};
     for (const role of ['infantry', 'ranged']) {
-      const indices = fired.filter(e => e.role === role).flatMap(e => e.shots.map(p => p.sourceIndex));
-      check(new Set(indices).size === indices.length, `A ${role} soldier attacked multiple targets within one cooldown`);
-      check(indices.length <= (role === 'infantry' ? COMBAT_LIMITS.infantryFrontage : COMBAT_LIMITS.rangedFrontage), `${role} exceeded its total frontage budget`);
-      counts[role] = indices.length;
+      const ids = fired.filter(e => e.role === role).flatMap(e => e.shots.map(p => p.sourceSoldierId));
+      check(new Set(ids).size === ids.length, `A ${role} soldier attacked multiple targets within one cooldown`);
+      check(ids.length <= main.units[role], `${role} launches exceeded the actual serving roster`);
+      check(ids.every(id => getSoldiers(s, main).some(soldier => soldier.id === id && soldier.role === role)), 'An attack lacked an existing named shooter');
+      counts[role] = ids.length;
     }
     check(main.combat.localTargetIds.length <= COMBAT_LIMITS.localTargets, 'Local target list exceeded its bound');
     cases.push({ name: 'one mixed force fires at two hostile factions simultaneously', passed: true, evidence: { targetIds, counts, primaryTargetId: main.combat.targetId, localTargetIds: main.combat.localTargetIds } });
   }
   {
-    const { s, center, ha, hb, hc } = fixture(); Object.assign(ha, center); initializeMilitary(ha, { infantry: 16, ranged: 16 });
+    const { s, center, ha, hb, hc } = fixture(); Object.assign(ha, center); initializeMilitary(ha, { infantry: 16, ranged: 16 }, { state: s });
     const left = army(s, hb, 'b-left', { infantry: 14, ranged: 14 }, point(center, -3));
     const right = army(s, hc, 'c-right', { infantry: 14, ranged: 14 }, point(center, 3));
     pulse(s); const targetIds = [...new Set(attacks(s, ha.id).map(e => e.targetId))];

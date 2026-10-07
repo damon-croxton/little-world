@@ -1,14 +1,15 @@
 import { settlementController } from './control.js';
 import { clamp, emit } from '../shared.js';
-import { RESOURCES, SURVIVAL_NEEDS, canAfford, spend, ledgerAdd } from './economy.js';
+import { RESOURCES, SURVIVAL_NEEDS, canAfford, spend } from './economy.js';
+import { SOLDIER_ROLES, createSoldierRecords, getSoldiers, soldierCounts, syncSoldierCounts, syncGroupSoldiers, killSoldier, touchSoldiers } from './soldiers.js';
+export { getSoldiers, getSoldier, applySoldierDamage, militaryAtHome } from './soldiers.js';
 
 // Every military count is a subset of an existing settlement population. Home
 // totals include expeditions; deployment moves a role, never creates a body.
-export const MILITARY_ROLES = Object.freeze(['infantry', 'ranged']);
+export const MILITARY_ROLES = SOLDIER_ROLES;
 export const emptyMilitary = () => ({ infantry: 0, ranged: 0 });
 const integer = value => Math.max(0, Math.floor(Number.isFinite(value) ? value : 0));
 export const countMilitary = units => MILITARY_ROLES.reduce((sum, role) => sum + integer(units?.[role]), 0);
-const serving = group => group.kind === 'army' && !group.finished && !group.militaryReturned && group.size > 0;
 const isActive = home => home.population > 0 && !['camp', 'ruin'].includes(home.status);
 const speciesOf = faction => faction?.species || 'human';
 
@@ -46,37 +47,39 @@ export function unitStats(species, role, faction = null) {
     trainingCycles: Math.max(4, Math.ceil(base.trainingCycles / (advantages.trainingRate || 1))) };
 }
 
-export function initializeMilitary(home, units = emptyMilitary()) {
-  home.military = Object.fromEntries(MILITARY_ROLES.map(role => [role, integer(units[role])]));
-  home.soldiers = countMilitary(home.military);
-  home.trainingQueue ||= [];
-  home.workers = Math.max(0, integer(home.population) - home.soldiers);
-  return home.military;
+export function initializeMilitary(home, units = emptyMilitary(), options = {}) {
+  const faction = options.faction || options.state?.factions?.find(candidate => candidate.id === home.factionId) || { id: home.factionId, species: home.nativeSpecies || 'human' };
+  // Explicit setup is the sole reset operation. Runtime synchronization never
+  // reads an edited aggregate as permission to create replacement citizens.
+  home.soldierRoster = [];
+  touchSoldiers(options.state);
+  home.militaryRosterVersion = 1;
+  home.nativeSpecies = faction.species || 'human';
+  createSoldierRecords(home, units, { ...options, faction,
+    statsByRole: Object.fromEntries(MILITARY_ROLES.map(role => [role, unitStats(home.nativeSpecies, role, faction)])) });
+  return syncSoldierCounts(options.state, home);
 }
 
 // This derives the legacy aggregate only. It deliberately does not repair an
 // impossible census by minting military roles or quietly deleting citizens.
 export function syncMilitary(state, home) {
-  if (!home.military) initializeMilitary(home, { infantry: integer(home.soldiers), ranged: 0 });
-  home.soldiers = countMilitary(home.military);
-  home.workers = Math.max(0, integer(home.population) - home.soldiers);
-  home.trainingQueue ||= [];
-  return home.military;
+  return syncSoldierCounts(state, home);
 }
 
 export function deployedMilitary(state, home) {
-  const result = emptyMilitary();
-  for (const group of state.groups || []) if (group.originId === home.id && serving(group)) {
-    for (const role of MILITARY_ROLES) result[role] += integer(group.units?.[role]);
-  }
-  return result;
+  return soldierCounts((home.soldierRoster || []).filter(soldier => soldier.groupId != null));
 }
 
 export function availableMilitary(state, home) {
   syncMilitary(state, home);
-  const deployed = deployedMilitary(state, home);
-  return Object.fromEntries(MILITARY_ROLES.map(role => [role, Math.max(0, home.military[role] - deployed[role])]));
+  return soldierCounts(getSoldiers(state, home));
 }
+
+// Wounded returnees remain serving members of the home garrison and census.
+// A new expedition can only order bodies able to follow its outward march;
+// the individual planner otherwise preserves their homeward withdrawal.
+const expeditionSoldiers = (state, home) => getSoldiers(state, home, { excludeTowerCrew: true })
+  .filter(soldier => !soldier.withdrawing && soldier.hp / soldier.maxHp > (soldier.role === 'ranged' ? .38 : .30));
 
 function splitUnits(available, requested, preferredRole) {
   const result = emptyMilitary(), total = countMilitary(available);
@@ -98,9 +101,28 @@ function splitUnits(available, requested, preferredRole) {
 // Register the returned composition on a new army immediately after this call.
 // The unchanged home total already includes these soldiers throughout travel.
 export function allocateMilitary(state, home, size) {
-  const available = availableMilitary(state, home);
-  available.ranged = Math.max(0, available.ranged - integer(home.assigned?.towerCrew));
+  syncMilitary(state, home);
+  const available = soldierCounts(expeditionSoldiers(state, home));
   return splitUnits(available, size);
+}
+
+// Allocation is a composition quote. Deployment claims actual, disjoint IDs
+// atomically before the newly constructed group is added to the world.
+export function deployMilitary(state, home, group) {
+  if (!home || !group || group.kind !== 'army' || group.originId !== home.id || group.militaryReturned || group.finished) return 0;
+  if (Array.isArray(group.soldierIds)) { syncGroupSoldiers(state, group); return group.size; }
+  const available = expeditionSoldiers(state, home);
+  const requested = group.units || splitUnits(soldierCounts(available), group.size);
+  const selected = MILITARY_ROLES.flatMap(role => available.filter(soldier => soldier.role === role).slice(0, integer(requested[role])));
+  group.soldierIds = selected.map(soldier => soldier.id);
+  for (const soldier of selected) {
+    soldier.groupId = group.id;
+    soldier.commandFactionId = group.commandFactionId || group.factionId || home.factionId;
+  }
+  if (selected.length) touchSoldiers(state);
+  syncGroupSoldiers(state, group);
+  refreshReservations(state, home);
+  return group.size;
 }
 
 export function trainingCount(home) {
@@ -221,7 +243,8 @@ export function advanceTraining(state, home, faction) {
     job.progress = 1 - job.remaining / job.duration;
     if (job.remaining > 0) continue;
     home.trainingQueue = home.trainingQueue.filter(candidate => candidate.id !== job.id);
-    home.military[job.role] += job.size;
+    createSoldierRecords(home, { [job.role]: job.size }, { state, faction, source: 'training', trainingJobId: job.id,
+      statsByRole: { [job.role]: unitStats(speciesOf(faction), job.role, faction) } });
     completed += job.size;
     state.stats.trained = (state.stats.trained || 0) + job.size;
     state.stats[`${job.role}Trained`] = (state.stats[`${job.role}Trained`] || 0) + job.size;
@@ -274,9 +297,16 @@ export function planTraining(state, home, faction) {
   }
 }
 
-export function demobilizeMilitary(state, home, amount) {
-  const removed = splitUnits(availableMilitary(state, home), amount);
-  for (const role of MILITARY_ROLES) home.military[role] -= removed[role];
+export function demobilizeMilitary(state, home, amount, options = {}) {
+  const ids = options.soldierIds ? new Set(options.soldierIds) : null;
+  const available = getSoldiers(state, home).filter(soldier => !ids || ids.has(soldier.id));
+  const removed = splitUnits(soldierCounts(available), amount);
+  for (const role of MILITARY_ROLES) for (const soldier of available.filter(candidate => candidate.role === role).slice(0, removed[role])) {
+    soldier.status = 'demobilized'; soldier.demobilizedTick = state.tick;
+    soldier.demobilizedTime = state.time ?? state.tick;
+    soldier.towerId = null;
+  }
+  if (countMilitary(removed)) touchSoldiers(state);
   refreshReservations(state, home);
   return countMilitary(removed);
 }
@@ -284,32 +314,21 @@ export function demobilizeMilitary(state, home, amount) {
 export function applyMilitaryCasualties(state, home, group, amount, options = {}) {
   if (!home || (group && (group.finished || group.militaryReturned))) return 0;
   syncMilitary(state, home);
-  const available = group ? group.units : availableMilitary(state, home);
-  const lost = splitUnits(available || emptyMilitary(), amount, options.role), count = countMilitary(lost);
-  if (!count) return 0;
-  if (group) {
-    const fraction = count / Math.max(1, group.size);
-    for (const kind of RESOURCES) {
-      const cargo = (group.carrying?.[kind] || 0) * fraction;
-      if (group.carrying) group.carrying[kind] -= cargo;
-      ledgerAdd(state, kind, 'lost', cargo);
-    }
-    if (group.capacity != null) group.capacity *= 1 - fraction;
-    if (group.cargoCapacity != null) group.cargoCapacity *= 1 - fraction;
-    for (const role of MILITARY_ROLES) group.units[role] -= lost[role];
-    group.size = countMilitary(group.units);
-    if (!group.size) group.finished = true;
+  const ids = options.soldierIds ? new Set(options.soldierIds) : null;
+  const available = getSoldiers(state, group || home).filter(soldier => !ids || ids.has(soldier.id));
+  const lost = splitUnits(soldierCounts(available), amount, options.role);
+  let count = 0;
+  for (const role of MILITARY_ROLES) for (const soldier of available.filter(candidate => candidate.role === role).slice(0, lost[role])) {
+    if (killSoldier(state, soldier, options)) count++;
   }
-  for (const role of MILITARY_ROLES) home.military[role] -= lost[role];
-  home.population -= count;
-  state.stats.deaths += count;
-  state.stats.militaryDeaths = (state.stats.militaryDeaths || 0) + count;
   refreshReservations(state, home);
   return count;
 }
 
 export function returnMilitary(state, home, group) {
-  if (!group || group.militaryReturned) return false;
+  if (!home || !group || group.militaryReturned) return false;
+  for (const soldier of getSoldiers(state, group)) soldier.groupId = null;
+  touchSoldiers(state);
   group.militaryReturned = true;
   group.finished = true;
   refreshReservations(state, home);

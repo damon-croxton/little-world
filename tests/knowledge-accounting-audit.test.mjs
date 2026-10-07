@@ -1,3 +1,4 @@
+import { setMilitary, recruitMilitary, bindArmy } from './roster-fixtures.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
@@ -6,7 +7,6 @@ import { createSimulation, stepSimulation } from '../src/sim/core.js';
 import { stepCombat } from '../src/sim/combat.js';
 import { stepStrategy } from '../src/sim/strategy.js';
 import { visibleToGroup } from '../src/sim/knowledge.js';
-import { initializeMilitary, countMilitary } from '../src/sim/military.js';
 import { assessBreachRoute, invalidateNavigation } from '../src/sim/navigation.js';
 import { createCrowds } from '../src/render/crowds.js';
 import { createEntities } from '../src/render/entities.js';
@@ -26,18 +26,18 @@ function localFixture() {
   s.groups = []; s.nodes = []; s.events = [];
   for (const [i, home] of s.settlements.entries()) {
     home.buildings = []; home.assigned = {}; home.population = 300; home.homePresent = 300;
-    home.x = 80 + i * 25; home.z = 80; initializeMilitary(home);
+    home.x = 80 + i * 25; home.z = 80; setMilitary(s, home);
   }
   const [a, b] = s.factions, [ha, hb] = s.settlements;
   a.relations[b.id] = { status: 'hostile', trust: 0 }; b.relations[a.id] = { status: 'hostile', trust: 0 };
   return { s, a, b, ha, hb, center: { x: -60, z: -120 } };
 }
 function army(s, home, id, x, z, size = 12) {
-  home.military.infantry += size; home.soldiers = countMilitary(home.military); home.workers = home.population - home.soldiers;
+  recruitMilitary(s, home, { infantry: size, ranged: 0 });
   const group = { id, kind: 'army', factionId: home.factionId, originId: home.id, units: { infantry: size, ranged: 0 },
     size, initialSize: size, x, z, prevX: x, prevZ: z, targetX: x + 14, targetZ: z, targetId: null,
     phase: 'outbound', speed: 0, morale: 100, supply: 100, carrying: { food: 0, water: 0, energy: 0, materials: 0 } };
-  s.groups.push(group); return group;
+  bindArmy(s, home, group); s.groups.push(group); return group;
 }
 function pulse(s) { s.step++; s.time = s.step / 10; s.tick = Math.floor(s.time); stepCombat(s, .1); }
 
@@ -63,7 +63,7 @@ test('audit: visible enemy private reserves, morale and upgrades do not change t
     const { s, ha, hb, center } = localFixture();
     army(s, ha, 'a-observer', center.x - 3, center.z, 20);
     if (kind === 'army') army(s, hb, 'b-contact', center.x + 3, center.z, 30);
-    else { Object.assign(hb, { x: center.x + 3, z: center.z }); initializeMilitary(hb, { infantry: 30, ranged: 0 }); }
+    else { Object.assign(hb, { x: center.x + 3, z: center.z }); setMilitary(s, hb, { infantry: 30, ranged: 0 }); }
     const alternate = structuredClone(s), enemyHome = alternate.settlements.find(h => h.id === hb.id);
     const enemyFaction = alternate.factions.find(f => f.id === hb.factionId);
     enemyFaction.tech.level = 4;
@@ -87,7 +87,7 @@ test('audit: an unseen enemy wall cannot cancel a reported expedition before any
   s.tick = 400; s.step = 4000; s.time = 400;
   for (const f of s.factions) { f.lastScout = 400; f.lastArmy = 400; }
   a.lastArmy = 0; a.traits.aggression = .9; a.traits.cooperation = .1;
-  Object.assign(ha, { x: -78, z: -120, population: 400, availableWorkers: 200 }); initializeMilitary(ha, { infantry: 120, ranged: 0 });
+  Object.assign(ha, { x: -78, z: -120, population: 400, availableWorkers: 200 }); setMilitary(s, ha, { infantry: 120, ranged: 0 });
   Object.assign(hb, { x: -30, z: -120 });
   for (const key of Object.keys(ha.stock)) ha.stock[key] = 500;
   a.knowledge = { [hb.id]: { id: hb.id, kind: 'settlement', ownerId: b.id, x: hb.x, z: hb.z, observedTick: 390, reportedTick: 395,

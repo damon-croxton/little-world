@@ -35,6 +35,101 @@ async function projectedPick(kind) {
     }).filter(p => p.id && p.id === p.frontId && p.clear && p.depth < 1 && p.x > 240 && p.x < 1260 && p.y > 150 && p.y < 850);
   }, kind);
 }
+// Persistent soldiers are selected from their actual visible mesh instances.
+// Use the same first-hit geometry as the pointer code; an army centre or broad
+// party proxy cannot stand in for a selectable individual body.
+async function exposedArmyBodies(armyIds) {
+  return page.evaluate(async armyIds => {
+    const THREE = await import('three'), w = littleworld, armies = new Set(armyIds);
+    const wanted = new Map(w.state.settlements.flatMap(home => home.soldierRoster || [])
+      .filter(person => person.status === 'serving' && person.alive && person.hp > 0 && armies.has(person.groupId))
+      .map(person => [person.id, person.groupId]));
+    const crowds = w.renderers.crowds, all = [...w.renderers.buildings.getPickables(), ...crowds.getPickables()];
+    const ray = new THREE.Raycaster(), matrix = new THREE.Matrix4(), points = [];
+    const canvas = w.renderer.domElement, rect = canvas.getBoundingClientRect();
+    for (const mesh of crowds.getPickables()) {
+      if (!mesh.isInstancedMesh || !mesh.visible || !mesh.userData.crowdSelectionIds) continue;
+      for (let index = 0; index < mesh.count; index++) {
+        const id = mesh.userData.crowdSelectionIds[index]; if (!wanted.has(id)) continue;
+        mesh.getMatrixAt(index, matrix);
+        for (const height of [.45, .65, .25, .85]) {
+          const p = new THREE.Vector3(0, height, 0).applyMatrix4(matrix).applyMatrix4(mesh.matrixWorld).project(w.camera);
+          const x = rect.left + (p.x * .5 + .5) * rect.width, y = rect.top + (-p.y * .5 + .5) * rect.height;
+          if (p.z < -1 || p.z > 1 || x < 8 || x >= innerWidth - 8 || y < 8 || y >= innerHeight - 8 || document.elementFromPoint(x, y) !== canvas) continue;
+          ray.setFromCamera(new THREE.Vector2(p.x, p.y), w.camera);
+          const hit = ray.intersectObjects(all, true)[0];
+          const frontId = hit && (crowds.resolvePick(hit) || w.renderers.buildings.resolvePick?.(hit) || hit.object.userData.buildingId || hit.object.userData.groupId || hit.object.userData.settlementId);
+          if (frontId !== id || !hit.object.isInstancedMesh) continue;
+          points.push({ id, groupId: wanted.get(id), x, y, meshUuid: mesh.uuid, instanceIndex: index,
+            frontId, frontMeshUuid: hit.object.uuid, frontInstanceIndex: hit.instanceId, frontIsInstancedMesh: true, matrix: Array.from(matrix.elements) });
+          break;
+        }
+      }
+    }
+    return points;
+  }, armyIds);
+}
+
+async function inspectArmyThroughSoldier(armyIds) {
+  let points = await exposedArmyBodies(armyIds);
+  if (!points.length) {
+    const candidates = await page.evaluate(ids => {
+      const w = littleworld, armies = new Set(ids), center = w.controls.target;
+      return w.state.settlements.flatMap(home => home.soldierRoster || [])
+        .filter(person => person.status === 'serving' && person.alive && person.hp > 0 && armies.has(person.groupId))
+        .sort((a, b) => Math.hypot(a.x - center.x, a.z - center.z) - Math.hypot(b.x - center.x, b.z - center.z))
+        .slice(0, 8).map(person => ({ id: person.id, x: person.x, z: person.z }));
+    }, armyIds);
+    for (const candidate of candidates) {
+      for (const side of [1, -1]) {
+        await pin(candidate.x, candidate.z, 17, side); points = await exposedArmyBodies(armyIds);
+        if (points.length) break;
+      }
+      if (points.length) break;
+    }
+  }
+  assert.ok(points.length, 'No exposed natural soldier instance could be inspected by an actual canvas click');
+  const point = points[0]; await page.mouse.click(point.x, point.y); await settle();
+  const selected = await page.evaluate(async () => {
+    const w = littleworld, s = w.state, { groupController } = await import(new URL('./src/sim/control.js', location.href).href);
+    const body = s.settlements.flatMap(home => home.soldierRoster || []).find(person => person.id === w.view.selectedId);
+    const group = body && s.groups.find(party => party.id === body.groupId), native = body && s.factions.find(f => f.id === (body.nativeFactionId || body.factionId));
+    const controller = group && s.factions.find(f => f.id === groupController(s, group));
+    const rows = Object.fromEntries([...document.querySelectorAll('.soldier-detail .identity-reading > div')]
+      .map(row => [row.querySelector('dt').innerText, row.querySelector('dd').innerText]));
+    return { selectedId: w.view.selectedId, body: body ? { id: body.id, groupId: body.groupId, nativeFactionId: body.nativeFactionId || body.factionId, role: body.role, species: body.species } : null,
+      group: group ? { id: group.id, soldierIds: [...group.soldierIds], units: { ...group.units }, nativeFactionId: group.factionId, controllerId: groupController(s, group) } : null,
+      nativeName: native?.name, controllerName: controller?.name, rows, inspector: document.querySelector('.inspector').innerText,
+      sample: w.getMotionSamples().find(person => person.soldierId === w.view.selectedId) || null };
+  });
+  assert.equal(selected.selectedId, point.id, 'Canvas click selected a different soldier');
+  assert.equal(selected.body?.id, point.id); assert.equal(selected.body.groupId, point.groupId);
+  assert.equal(selected.group?.id, point.groupId); assert.ok(selected.group.soldierIds.includes(point.id));
+  assert.equal(selected.body.nativeFactionId, selected.group.nativeFactionId);
+  assert.equal(await page.locator('.soldier-detail').count(), 1);
+  assert.equal(selected.rows.Identity, point.id); assert.equal(selected.rows['Controlled by'], selected.controllerName);
+  assert.ok(selected.rows['Native identity']?.startsWith(`${selected.nativeName} · `));
+  assert.match(selected.inspector, /Health/); assert.match(selected.inspector, /Weapon/);
+  assert.ok(selected.sample?.visible, 'Selected soldier has no visible rendered model');
+  assert.equal(selected.sample.representedCount, 1); assert.equal(selected.sample.badgeText, null);
+  await shot('natural-soldier-inspection');
+  const partyButton = page.locator('.soldier-detail button[data-action="select"]').filter({ hasText: 'Inspect army party' });
+  assert.equal(await partyButton.count(), 1); assert.equal(await partyButton.getAttribute('data-value'), point.groupId);
+  await partyButton.click(); await settle();
+  const party = await page.evaluate(() => {
+    const rows = Object.fromEntries([...document.querySelectorAll('.selection-body > .identity-reading > div')]
+      .map(row => [row.querySelector('dt').innerText, row.querySelector('dd').innerText]));
+    return { selectedId: littleworld.view.selectedId, rows, composition: document.querySelector('.party-detail .military-composition')?.innerText,
+      inspector: document.querySelector('.inspector').innerText };
+  });
+  assert.equal(party.selectedId, point.groupId, 'The soldier inspector did not navigate to its exact army');
+  assert.equal(await page.locator('.party-detail').count(), 1);
+  assert.equal(party.rows['Controlled by'], selected.controllerName);
+  assert.ok(party.rows['Native identity']?.startsWith(`${selected.nativeName} · `));
+  assert.ok(party.composition?.includes(`${selected.group.units.infantry} infantry`));
+  assert.ok(party.composition?.includes(`${selected.group.units.ranged} ranged`));
+  return { point, selected, party };
+}
 async function recordBattle() {
   const result = await page.evaluate(async () => {
     const w = littleworld, stream = w.renderer.domElement.captureStream(30), chunks = [], frames = [];
@@ -109,15 +204,8 @@ try {
   assert.ok(battle, 'No natural battle with simultaneous engaging armies found within 450 cycles');
   const { from, to } = battle.hit.shot; await pin((from.x + to.x) / 2, (from.z + to.z) / 2, 22);
   if (!baseline) {
-    const armyIds = new Set(battle.armies.map(g => g.id)); let inspectedArmy = null;
-    for (const point of (await projectedPick('group')).filter(p => armyIds.has(p.id))) {
-      await page.mouse.click(point.x, point.y); await settle(); const selected = await observe();
-      if (armyIds.has(selected.selectedId)) { inspectedArmy = selected; break; }
-    }
-    assert.ok(inspectedArmy, 'No visible natural army could be inspected by an actual canvas click');
-    assert.match(inspectedArmy.inspector, /infantry|ranged|soldier/i);
-    assert.match(inspectedArmy.inspector, /controlled by|native identity/i);
-    report.checks.push({ name: 'Natural army canvas click exposes its force and command identity', observed: inspectedArmy });
+    const inspected = await inspectArmyThroughSoldier(battle.armies.map(group => group.id));
+    report.checks.push({ name: 'Natural soldier canvas click and inspector party button expose exact identity, army composition and command', observed: inspected });
   }
   report.checks.push({ name: 'Natural simultaneous combat observed', observed: battle }); await shot('natural-battle'); await recordBattle(); await shot('natural-battle-end');
   assert.deepEqual(report.errors, []);

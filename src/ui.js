@@ -1,7 +1,8 @@
 import { factionController, settlementController } from './sim/control.js';
 import { MILITARY_BUILDINGS, MILITARY_UNITS } from './sim/military.js';
 import { normalizeConfig, MIN_CIV_COUNT, MAX_CIV_COUNT } from './config.js';
-import { observedBuilding, observedGroupController } from './selection.js';
+import { observedBuilding, observedGroupController, observedSoldier } from './selection.js';
+import { soldierInspectionMarkup, soldierLabel } from './soldier-inspection.js';
 
 const SPECIES = {
   human: { name: 'Human settlers', short: 'Human', mark: 'I', food: 'Provisions', water: 'Water', energy: 'Power', materials: 'Materials' },
@@ -161,17 +162,19 @@ export function createUI(root, actions) {
     const factions = list(state?.factions);
     const resource = list(state?.nodes).find(item => item.id === view.selectedId);
     const knownPlace = list(state?.knownPlaces).find(item => item.id === view.selectedId);
-    const group = groups.find(item => item.id === view.selectedId);
+    const soldierSelection = state && observedSoldier(state, view.selectedId);
+    const soldier = soldierSelection?.soldier;
+    const group = soldierSelection?.group || groups.find(item => item.id === view.selectedId);
     const buildingSelection = state && observedBuilding(state, view.selectedId);
     const building = buildingSelection?.building;
-    const settlement = buildingSelection?.settlement || settlements.find(item => item.id === view.selectedId) || (group ? settlements.find(item => item.id === group.originId) : settlements.find(item => item.factionId === view.selectedId && !isRuin(item)) || settlements.find(item => item.factionId === view.selectedId || item.lastFactionId === view.selectedId)) || (!group ? settlements[0] : null);
-    const controllerId = group ? observedGroupController(state, group) : settlement ? settlement.controllerId || settlementController(state, settlement) : null;
+    const settlement = soldierSelection?.settlement || buildingSelection?.settlement || settlements.find(item => item.id === view.selectedId) || (group ? settlements.find(item => item.id === group.originId) : settlements.find(item => item.factionId === view.selectedId && !isRuin(item)) || settlements.find(item => item.factionId === view.selectedId || item.lastFactionId === view.selectedId)) || (!group && !soldier ? settlements[0] : null);
+    const controllerId = soldier?.commandFactionId || (group ? observedGroupController(state, group) : settlement ? settlement.controllerId || settlementController(state, settlement) : null);
     const controller = factions.find(item => item.id === controllerId);
-    const nativeFaction = factions.find(item => item.id === (group?.factionId || settlement?.factionId));
-    const faction = factions.find(item => item.id === (resource ? lastFactionId : knownPlace?.ownerId || ((group || building) ? controllerId : null) || settlement?.factionId || settlement?.lastFactionId || view.selectedId)) || factions[0];
+    const nativeFaction = factions.find(item => item.id === (soldier?.nativeFactionId || group?.factionId || settlement?.factionId));
+    const faction = factions.find(item => item.id === (resource ? lastFactionId : knownPlace?.ownerId || ((soldier || group || building) ? controllerId : null) || settlement?.factionId || settlement?.lastFactionId || view.selectedId)) || factions[0];
     if (!resource && faction) lastFactionId = faction.id;
-    const nativeSpecies = factions.find(item => item.id === (group?.factionId || settlement?.factionId))?.species || faction?.species;
-    return { settlement, group, building, resource, knownPlace, faction, controller, nativeFaction, species: SPECIES[nativeSpecies] || SPECIES.human };
+    const nativeSpecies = soldier?.species || nativeFaction?.species || faction?.species;
+    return { settlement, group, soldier, building, resource, knownPlace, faction, controller, nativeFaction, species: SPECIES[nativeSpecies] || SPECIES.human };
   }
 
   function onClick(event) {
@@ -475,9 +478,21 @@ export function createUI(root, actions) {
   }
 
   function renderSelection(current) {
-    const { settlement, group, building, resource, knownPlace, faction, controller, species } = current;
+    const { settlement, group, soldier, building, resource, knownPlace, faction, controller, species } = current;
     const selectedActor = group || settlement;
     const foreign = state.viewer?.mode === 'faction' && !resource && (![selectedActor?.controllerId || (group ? observedGroupController(state,group) : settlement ? settlementController(state,settlement) : null), selectedActor?.nativeFactionId || selectedActor?.factionId].includes(state.viewer.factionId) || (group?.knowledgeView === 'visible' && !group.originId && group.knowledgeControl !== 'occupied'));
+    if (soldier) {
+      const observed=state.viewer?.mode==='faction'&&(soldier.knowledgeView==='visible'||soldier.commandFactionId!==state.viewer.factionId);
+      const fallen=soldier.alive===false||soldier.status==='dead';
+      const inspector=root.querySelector('.inspector');inspector.classList.remove('inspector-ruin','inspector-camp');inspector.style.setProperty('--selection-color',color(controller?.color));
+      setHTML(slots['selection-header'],`<div class="selection-kicker"><span class="eyebrow">${fallen?'Fallen soldier':observed?'Observed soldier':'Soldier in focus'}</span><span class="species-mark">${species.mark}</span></div><h2>${esc(soldierLabel(soldier))}</h2><div class="selection-affiliation"><i></i><span>${esc(controller?.name||'Unknown controller')}</span><small>${esc(species.short)}</small></div>`);
+      for(const [tab,label] of [['life','Soldier'],['intelligence','Context'],['record','Record']]){const button=root.querySelector(`#atlas-tab-${tab}`);button.textContent=label;button.setAttribute('aria-selected',String(activeTab===tab));button.tabIndex=activeTab===tab?0:-1;}
+      slots['selection-body'].setAttribute('aria-labelledby',`atlas-tab-${activeTab}`);
+      const privateFaction=!observed&&(state.viewer?.mode!=='faction'||faction?.id===state.viewer.factionId);
+      setHTML(slots['selection-body'],soldierInspectionMarkup(current,state)+(activeTab==='intelligence'&&privateFaction?intelligenceMarkup(current):activeTab==='record'&&privateFaction?recordMarkup(current):''));
+      renderSelectionAction(soldier.id,fallen?'View fallen soldier':view.followId===soldier.id?'Following soldier':'Follow soldier',fallen?'Observed death':observed?'Visible observation':group?'Serving with this party':'Home garrison');
+      return;
+    }
     if (building) {
       const inspector=root.querySelector('.inspector');inspector.classList.remove('inspector-ruin','inspector-camp');inspector.style.setProperty('--selection-color',color(controller?.color));
       setHTML(slots['selection-header'],`<div class="selection-kicker"><span class="eyebrow">${foreign?'Observed building':'Building in focus'}</span><span class="species-mark">${species.mark}</span></div><h2>${esc(buildingLabel(building.kind,current.nativeFaction?.species))}</h2><div class="selection-affiliation"><i></i><span>${esc(controller?.name || 'Unknown controller')}</span><small>${esc(settlement.name || species.short)}</small></div>`);

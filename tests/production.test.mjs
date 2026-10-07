@@ -1,7 +1,8 @@
+import { setMilitary, bindArmy } from './roster-fixtures.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  MILITARY_ROLES, MILITARY_BUILDINGS, unitStats, initializeMilitary, countMilitary,
+  MILITARY_ROLES, MILITARY_BUILDINGS, unitStats, countMilitary,
   queueTraining, advanceTraining, cancelTraining, trainingCount, trainingCost,
   allocateMilitary, availableMilitary, applyMilitaryCasualties, applyHomeCasualties,
   demobilizeMilitary, returnMilitary, militaryBuildingPlan,
@@ -16,8 +17,8 @@ function fixture(species = 'human', role = 'infantry') {
     health: 100, wellbeing: 1, shortageDays: 0, status: 'active', stock: { food: 1000, water: 1000, energy: 1000, materials: 1000 }, capacity: 1000,
     assigned: { civilianAway: 0, workers: 0, researchers: 6, construction: 10, infrastructure: 4, military: 0, training: 0 },
     buildings: [{ id: 'b0', kind: spec.building, x: 0, z: 0, progress: 1, hp: 160, maxHp: 160 }], availableWorkers: 66 };
-  initializeMilitary(home, { infantry: 10, ranged: 4 });
   const state = { seed: 'production-test', tick: 1, step: 10, time: 1, nextId: 1, events: [], factions: [faction], settlements: [home], groups: [], nodes: [], tradeOffers: [], stats: { deaths: 0 } };
+  setMilitary(state, home, { infantry: 10, ranged: 4 });
   initializeLedger(state);
   return { state, home, faction, spec };
 }
@@ -167,7 +168,7 @@ test('deployment, role casualties, cargo loss and return preserve exact military
   assert.equal(countMilitary(units), 10);
   const group = { id: 'army', originId: home.id, kind: 'army', units, size: 10, carrying: { food: 10, water: 0, energy: 0, materials: 0 }, capacity: 12, cargoCapacity: 12 };
   home.stock.food -= 10;
-  state.groups.push(group);
+  bindArmy(state, home, group); state.groups.push(group);
   const original = { ...units };
   assert.equal(home.soldiers, 14);
   assert.equal(countMilitary(availableMilitary(state, home)), 4);
@@ -192,10 +193,10 @@ test('deployment, role casualties, cargo loss and return preserve exact military
 
 test('home scarcity cancels unsupported trainees and never kills citizens already deployed elsewhere', () => {
   const { state, home, faction } = fixture();
-  initializeMilitary(home, { infantry: 8, ranged: 2 });
+  setMilitary(state, home, { infantry: 8, ranged: 2 });
   home.population = 18;
   home.assigned = { researchers: 0, construction: 0, infrastructure: 0 };
-  state.groups.push({ id: 'workers', originId: home.id, kind: 'worker', size: 5 }, { id: 'army', originId: home.id, kind: 'army', size: 8, units: { infantry: 6, ranged: 2 } });
+  state.groups.push({ id: 'workers', originId: home.id, kind: 'worker', size: 5 }, bindArmy(state, home, { id: 'army', originId: home.id, kind: 'army', size: 8, units: { infantry: 6, ranged: 2 } }));
   assert.ok(queueTraining(state, home, faction, 'infantry', 3, { civilianReserve: 0, reserves: {} }));
   assert.equal(applyHomeCasualties(state, home, 10), 5);
   assert.equal(home.population, 13);
@@ -229,7 +230,7 @@ test('tower crew reserves existing ranged troops and cannot be duplicated into d
 
 test('demobilization releases only home soldiers and production planning replaces a destroyed producer', () => {
   const { state, home, faction } = fixture();
-  state.groups.push({ id: 'army', originId: home.id, kind: 'army', size: 8, units: { infantry: 6, ranged: 2 } });
+  state.groups.push(bindArmy(state, home, { id: 'army', originId: home.id, kind: 'army', size: 8, units: { infantry: 6, ranged: 2 } }));
   assert.equal(demobilizeMilitary(state, home, 100), 6);
   assert.deepEqual(home.military, { infantry: 6, ranged: 2 });
   assert.equal(home.population, 100);
@@ -440,7 +441,7 @@ test('a physically visible armed rival secures a worksite and civilians bring th
   const army = { id: 'claim-guard', factionId: rival.factionId, originId: rival.id, kind: 'army', size: 6, initialSize: 6, units: { infantry: 6, ranged: 0 },
     x: node.x + .5, z: node.z, targetX: rival.x, targetZ: rival.z, targetId: rival.id, phase: 'returning', speed: 2.8, supply: 100, morale: 90,
     carrying: { food: 0, water: 0, energy: 0, materials: 0 }, observations: [], createdTick: 0 };
-  state.groups = [worker, army]; initializeLedger(state);
+  bindArmy(state, rival, army); state.groups = [worker, army]; initializeLedger(state);
   stepSimulation(state, 1);
   assert.equal(worker.phase, 'returning');
   assert.equal(worker.extractedTotal, 0);
@@ -461,7 +462,7 @@ test('conquest changes physical resource control and command reporting while pre
   const army = { id: 'occupation-fixture', factionId: victor.id, originId: victorHome.id, kind: 'army', size: countMilitary(units), initialSize: countMilitary(units), units,
     x: home.x, z: home.z, targetX: victorHome.x, targetZ: victorHome.z, targetId: victorHome.id, phase: 'returning', speed: 2.8, supply: 100, morale: 90,
     carrying: { food: 0, water: 0, energy: 0, materials: 0 }, observations: [], createdTick: 0 };
-  state.groups = [army]; initializeLedger(state);
+  bindArmy(state, victorHome, army); state.groups = [army]; initializeLedger(state);
   const census = state.settlements.reduce((sum, town) => sum + town.population, 0), stores = { ...home.stock }, remoteStores = { ...victorHome.stock };
   assert.equal(occupySettlement(state, home, army), true);
   assert.equal(home.factionId, native.id);
@@ -487,7 +488,7 @@ function exileFixture() {
   const commander = { id: 'f1', name: 'Exiled humans', species: 'human', traits: { aggression: .7 }, modifiers: {}, advantages: { trainingRate: 1.55, unitCost: 1.05 }, knowledge: {}, history: [] };
   const nativeHome = { ...structuredClone(home), id: 's1', factionId: commander.id, name: 'Lost human capital', population: 80, occupiedBy: faction.id,
     buildings: [{ id: 'human-producer', kind: 'barracks', x: 10, z: 0, progress: 1, hp: 160, maxHp: 160 }], x: 10 };
-  initializeMilitary(home, { infantry: 0, ranged: 0 }); initializeMilitary(nativeHome, { infantry: 0, ranged: 0 });
+  setMilitary(state, home); setMilitary(state, nativeHome);
   home.occupiedBy = commander.id;
   state.factions.push(commander); state.settlements.push(nativeHome);
   initializeLedger(state);

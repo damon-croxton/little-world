@@ -1,3 +1,4 @@
+import { setMilitary, bindArmy } from './roster-fixtures.mjs';
 // Independent DOM/knowledge contract checks. These do not render CSS, WebGL, or
 // native mobile gestures; the fixtures pass through the real factionView filter.
 import test from 'node:test';
@@ -50,6 +51,7 @@ test('a visible foreign party never borrows the first owned home or invents its 
   const enemy = { id: 'observed-enemy', factionId: enemyHome.factionId, originId: enemyHome.id,
     kind: 'army', size: 12, units: { infantry: 8, ranged: 4 }, x: home.x + 2, z: home.z,
     phase: 'outbound', supply: 83, morale: 79, targetId: home.id, targetX: home.x, targetZ: home.z };
+  setMilitary(state, enemyHome, enemy.units); bindArmy(state, enemyHome, enemy);
   state.groups.push(enemy);
   stepKnowledge(state, { force: true });
   const t = setup(state, home.factionId, enemy.id);

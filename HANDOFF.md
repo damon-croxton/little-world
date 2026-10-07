@@ -1,3 +1,45 @@
+# Persistent soldiers in the main civilisation world — 2026-10-07
+
+The user approved moving the validated individual combat into LittleWorld itself.
+This section supersedes the older prototype-only boundary below. Development
+continues exclusively in this saved cloud checkout; ordinary main pushes and
+Pages publishing are authorized. Preserve previous release evidence.
+
+Native settlements retain permanent soldier records. Paid completed training
+creates identities, expeditions reference them, and exact casualties debit the
+same population and cargo ledgers once. Deployment, retreat, reinforcement and
+return preserve individual HP, weapon clocks and identity. Civilian work crews
+remain aggregated and count-badged. The battle sandbox remains a regression fixture.
+
+Individual combat uses spatial target queries, physical line of sight, bounded
+pursuit, local spacing and shared navigation. Every eligible soldier can attack;
+only visual effect retention is capped. Towers reserve actual ranged identities
+and require their physical presence. Captures and delayed impacts recheck current
+control. Army route anchors provide no sight independently of actual troops.
+Soldier sightings extend the fog mask without telepathically delivering field
+reports. Scoped views contain a flat visible roster, with foreign health, intent,
+weapon clocks and hidden identity references removed.
+
+The new main-world harness is `tests/world-individual-browser.mjs`, alongside
+`tests/world-individual-audit.mjs` and focused roster/combat/presentation tests.
+It discovers an untouched natural seeded battle, clicks an actual soldier mesh,
+records nominal 1x canvas playback, and checks portrait/landscape touch emulation.
+Record actual simulated and wall seconds separately. Node and software-browser
+measurements do not establish physical-phone or foreground-GPU performance.
+
+A long campaign caught an unreachable withdrawal path storing infinite length;
+its cache now retains an explicit unreachable result with null length, without
+moving the soldier or weakening the finite-state audit. Severely wounded troops
+remain in their actual native ledger and cannot be remobilized into an expedition
+whose marching order they cannot follow. This adds no healing, civilian reminting,
+or new military quota policy.
+
+Release status is determined by the exact source SHA, terminal build/deploy/live
+Actions results, public `build.json`, and saved reports under ignored
+`screenshots/world-*`. Per-push CI remains bounded; deep suites remain manual.
+The earlier 600–1,200-cycle balance target is historical, not an acceptance timer
+or a current measured promise. Do not force campaign outcomes to meet a horizon.
+
 # Individual-soldier prototype — 2026-10-07
 
 The user approved starting the combat rebuild with a separate 24-vs-24 battle.

@@ -1,9 +1,10 @@
+import { setMilitary, recruitMilitary, bindArmy } from './roster-fixtures.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createSimulation } from '../src/sim/core.js';
 import { terrainAt } from '../src/world.js';
 import { stepCombat, updateCombatFormation, COMBAT_LIMITS } from '../src/sim/combat.js';
-import { initializeMilitary, countMilitary } from '../src/sim/military.js';
+import { countMilitary } from '../src/sim/military.js';
 import { occupySettlement } from '../src/sim/conquest.js';
 import { lineOfSight, invalidateNavigation } from '../src/sim/navigation.js';
 import { emptyResources, initializeLedger, ledgerResidual, RESOURCES } from '../src/sim/economy.js';
@@ -15,7 +16,7 @@ function fixture() {
   s.groups = []; s.nodes = []; s.events = [];
   for (const home of s.settlements) {
     home.buildings = []; home.assigned = {}; home.population = 300; home.homePresent = 300; home.availableWorkers = 300;
-    home.stock = Object.fromEntries(RESOURCES.map(key => [key, 500])); initializeMilitary(home);
+    home.stock = Object.fromEntries(RESOURCES.map(key => [key, 500])); setMilitary(s, home);
   }
   for (const a of s.factions) for (const b of s.factions) if (a !== b) a.relations[b.id] = { status: 'hostile', trust: 0 };
   let center;
@@ -31,11 +32,11 @@ function fixture() {
 }
 const point = (center, x = 0, z = 0) => ({ x: center.x + x, z: center.z + z });
 function army(s, home, id, units, position, extras = {}) {
-  home.military.infantry += units.infantry; home.military.ranged += units.ranged; home.soldiers = countMilitary(home.military); home.workers = home.population - home.soldiers;
+  recruitMilitary(s, home, units);
   const size = countMilitary(units), g = { id, kind: 'army', factionId: home.factionId, originId: home.id, units: { ...units }, size, initialSize: size,
     ...position, prevX: position.x, prevZ: position.z, targetX: position.x, targetZ: position.z, targetId: null, phase: 'outbound', speed: 0,
     morale: 100, supply: 100, carrying: emptyResources(), ...extras };
-  s.groups.push(g); return g;
+  bindArmy(s, home, g); s.groups.push(g); return g;
 }
 function pulse(s) { s.step++; s.time = s.step / 10; s.tick = Math.floor(s.time); stepCombat(s, .1); }
 function attackEvents(s, sourceId) { return s.combatEvents.filter(e => ['melee', 'projectile'].includes(e.type) && e.sourceId === sourceId); }
@@ -85,9 +86,10 @@ test('one mixed army attacks separate locally reachable enemies in the same puls
   const targets = new Set(attackEvents(s, main.id).map(e => e.targetId));
   assert.ok(targets.has(left.id) && targets.has(right.id), 'the whole army fired only at its single primary target');
   for (const role of ['infantry', 'ranged']) {
-    const events = attackEvents(s, main.id).filter(e => e.role === role), indices = events.flatMap(e => e.shots.map(p => p.sourceIndex));
-    assert.equal(new Set(indices).size, indices.length, 'a soldier attacked two targets during one role cooldown');
-    assert.ok(indices.length <= (role === 'infantry' ? 18 : 24));
+    const events = attackEvents(s, main.id).filter(e => e.role === role), ids = events.flatMap(e => e.shots.map(p => p.sourceSoldierId));
+    assert.equal(new Set(ids).size, ids.length, 'a soldier attacked two targets during one role cooldown');
+    assert.ok(ids.length <= main.units[role]);
+    assert.ok(ids.every(id => main.soldierIds.includes(id)), 'a strike lacked an existing shooter identity');
   }
 });
 
@@ -119,7 +121,7 @@ test('pending troop damage is cancelled when a target capitulates or the faction
 test('pending captured-tower shots recheck the tower settlement controller', () => {
   const { s, center, ha, hb, a } = fixture(); Object.assign(hb, point(center, 3));
   const tower = { id: 'captured-tower', kind: 'tower', ...point(center, 2), progress: 1, hp: 300, operational: true, range: 18, crewAssigned: 2 };
-  hb.buildings.push(tower); initializeMilitary(hb, { infantry: 0, ranged: 2 });
+  hb.buildings.push(tower); setMilitary(s, hb, { infantry: 0, ranged: 2 });
   const target = army(s, ha, 'a-outside', { infantry: 0, ranged: 20 }, point(center, -3));
   pulse(s); assert.ok(s.pendingCombat.some(hit => hit.sourceId === tower.id && hit.targetId === target.id));
   assert.equal(occupySettlement(s, hb, target), true); assert.equal(hb.occupiedBy, a.id);
@@ -129,7 +131,7 @@ test('pending captured-tower shots recheck the tower settlement controller', () 
 });
 
 test('a garrison fights two local factions even while their armies target each other', () => {
-  const { s, center, ha, hb, hc } = fixture(); Object.assign(ha, center); initializeMilitary(ha, { infantry: 16, ranged: 16 });
+  const { s, center, ha, hb, hc } = fixture(); Object.assign(ha, center); setMilitary(s, ha, { infantry: 16, ranged: 16 });
   const left = army(s, hb, 'b-left', { infantry: 14, ranged: 14 }, point(center, -3));
   const right = army(s, hc, 'c-right', { infantry: 14, ranged: 14 }, point(center, 3));
   pulse(s);

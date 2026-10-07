@@ -1,3 +1,4 @@
+import { setMilitary, bindArmy } from './roster-fixtures.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { parseHTML } from 'linkedom';
@@ -44,7 +45,7 @@ test('settings and field guide stay mutually exclusive through repeated opens',(
 });
 
 test('paid production inspector shows actual queue and role counts without creating orders',()=>{
-  const t=setup();try{const home=t.state.settlements[0];home.military={infantry:9,ranged:5};home.soldiers=14;home.trainingQueue=[{id:'qa-order',role:'ranged',size:3,buildingId:'qa-range',progress:.5,remaining:9}];home.assigned.training=3;home.buildings.push({id:'qa-range',kind:'range',x:home.x+5,z:home.z,progress:1,hp:160,maxHp:160});t.update();const text=t.root.querySelector('.military-reading').textContent;assert.match(text,/Field Range/);assert.match(text,/3 Trail archer/);assert.match(text,/50%/);assert.match(text,/costs already paid/);assert.equal(home.trainingQueue.length,1);}finally{t.dispose();}
+  const t=setup();try{const home=t.state.settlements[0];setMilitary(t.state,home,{infantry:9,ranged:5});home.trainingQueue=[{id:'qa-order',role:'ranged',size:3,buildingId:'qa-range',progress:.5,remaining:9}];home.assigned.training=3;home.buildings.push({id:'qa-range',kind:'range',x:home.x+5,z:home.z,progress:1,hp:160,maxHp:160});t.update();const text=t.root.querySelector('.military-reading').textContent;assert.match(text,/Field Range/);assert.match(text,/3 Trail archer/);assert.match(text,/50%/);assert.match(text,/costs already paid/);assert.equal(home.trainingQueue.length,1);}finally{t.dispose();}
 });
 
 test('foreign and remembered inspectors withhold stores, production queues and live hidden state',()=>{
@@ -110,7 +111,7 @@ test('own tactical inspector explains decisions while foreign observation hides 
   const t=setup();try{
     const home=t.state.settlements[0];
     const army={id:'ui-tactical-army',kind:'army',factionId:home.factionId,originId:home.id,size:12,units:{infantry:8,ranged:4},phase:'retreating',supply:75,morale:61,combat:{intent:'retreat',reason:'Observed defenders outnumber our supported force.',localStrength:12,enemyStrength:44}};
-    t.state.groups.push(army);t.view.selectedId=army.id;t.update();
+    setMilitary(t.state,home,army.units);bindArmy(t.state,home,army);t.state.groups.push(army);t.view.selectedId=army.id;t.update();
     const decision=t.root.querySelector('.tactical-reading');assert.ok(decision);assert.match(decision.textContent,/Retreat/);assert.match(decision.textContent,/Observed defenders outnumber/);assert.match(decision.textContent,/Own force\s*12/);assert.match(decision.textContent,/Estimated opposition\s*44/);
     t.view.perspective='f1';t.update({...t.state,viewer:{mode:'faction',factionId:'f1'},knownPlaces:[]});
     assert.equal(t.root.querySelector('.tactical-reading'),null);assert.doesNotMatch(t.root.querySelector('.inspector').textContent,/Observed defenders outnumber/);

@@ -3,6 +3,7 @@ import { hashSeed, random, clamp, distance, emit } from '../shared.js';
 import { generateWorld, terrainAt } from '../world.js';
 import { createFactions, stepProgression } from './progression.js';
 import { stepStrategy } from './strategy.js';
+import { initializeSoldierPositions } from './combat.js';
 import { settlementController, groupController } from './control.js';
 import { moveAlongRoute, findPath, isPointTraversable } from './navigation.js';
 import { initializeKnowledge, stepKnowledge, visibleToGroup, observationFor, reportObservations, knownReports, knownResourceNodes } from './knowledge.js';
@@ -94,7 +95,7 @@ function makeSettlement(state, faction, point, population, founding = false) {
     : ['hub', 'housing', 'housing', 'housing', 'housing', 'storage', 'workshop', 'farm', 'power'];
   for (const kind of kinds) { const building = buildingRecord(state, s, kind, 1); if (building) s.buildings.push(building); }
   const militia = founding ? 0 : 10 + Math.floor(faction.traits.aggression * 6);
-  initializeMilitary(s, { infantry: militia - Math.floor(militia * .3), ranged: Math.floor(militia * .3) });
+  initializeMilitary(s, { infantry: militia - Math.floor(militia * .3), ranged: Math.floor(militia * .3) }, { state, faction });
   s.startingMilitia = { ...s.military };
   refreshBuildings(state, s, faction); s.lastCycleStock = { ...s.stock };
   return s;
@@ -128,7 +129,7 @@ export function createSimulation(seed = 'littleworld', options = {}) {
     emit(s, 'founding', `${f.name} establish ${home.name} with ${home.population} individuals, including ${home.soldiers} already-trained militia, and ${home.buildings.length} civic buildings.`, f.id, { settlementId: home.id });
   }
   for (const node of s.nodes) { node.maxAmount ??= node.amount; node.regeneration ??= 0; node.radius ??= 2.5; }
-  initializeLedger(s); updateAssignments(s); updateSummaries(s); initializeKnowledge(s); stepKnowledge(s, { force: true });
+  initializeLedger(s); updateAssignments(s); initializeSoldierPositions(s); updateSummaries(s); initializeKnowledge(s); stepKnowledge(s, { force: true });
   return s;
 }
 
@@ -137,12 +138,12 @@ function updateAssignments(state) {
   const researchers = Object.fromEntries(state.factions.map(f => [f.id, Math.max(0, Math.floor(f.researchWorkers || 0))]));
   for (const home of state.settlements) {
     const f = factionOf(state, home), a = { workers: 0, scouts: 0, traders: 0, colonists: 0, military: 0, civilianAway: 0, researchers: 0, construction: 0, infrastructure: 0, training: 0, towerCrew: 0 };
+    syncMilitary(state, home);
     for (const g of state.groups) if (g.originId === home.id && !g.finished && g.size > 0) {
       if (g.kind === 'army') a.military += g.size; else if (g.kind === 'worker') a.workers += g.size; else if (g.kind === 'scout') a.scouts += g.size; else if (g.kind === 'trader') a.traders += g.size; else if (g.kind === 'colonist') a.colonists += g.size;
     }
     a.civilianAway = a.workers + a.scouts + a.traders + a.colonists;
     home.population = Math.max(0, Math.floor(home.population));
-    syncMilitary(state, home);
     home.workers = Math.max(0, home.population - home.soldiers); home.homePresent = Math.max(0, home.population - a.civilianAway - a.military);
     a.training = trainingCount(home);
     let available = Math.max(0, home.workers - a.civilianAway - a.training);

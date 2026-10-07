@@ -1,10 +1,12 @@
+import { getSoldier, getSoldiers } from '../src/sim/soldiers.js';
+import { setMilitary, recruitMilitary, bindArmy, positionMilitary } from './roster-fixtures.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import { createSimulation } from '../src/sim/core.js';
 import { terrainAt } from '../src/world.js';
 import { combatFormationSlot, updateCombatFormation, formationSize, stepCombat } from '../src/sim/combat.js';
-import { initializeMilitary, countMilitary } from '../src/sim/military.js';
+import { countMilitary } from '../src/sim/military.js';
 import { isSegmentTraversable, lineOfSight, invalidateNavigation } from '../src/sim/navigation.js';
 import { createCombatEffects } from '../src/render/combat.js';
 import { createCrowds } from '../src/render/crowds.js';
@@ -13,7 +15,7 @@ import { emptyResources, initializeLedger, ledgerResidual } from '../src/sim/eco
 function fixture() {
   const s = createSimulation('combat-physical-contract', { civCount: 3 });
   s.groups = []; s.nodes = []; s.events = [];
-  for (const p of s.settlements) { p.buildings = []; p.assigned = {}; p.population = 200; p.homePresent = 200; initializeMilitary(p); }
+  for (const p of s.settlements) { p.buildings = []; p.assigned = {}; p.population = 200; p.homePresent = 200; setMilitary(s, p); }
   const [a, b] = s.factions;
   a.relations[b.id] = { status: 'hostile', trust: 0 }; b.relations[a.id] = { status: 'hostile', trust: 0 };
   let center;
@@ -26,10 +28,10 @@ function fixture() {
   initializeLedger(s); return { s, center, a, b, ha: s.settlements[0], hb: s.settlements[1] };
 }
 function army(s, p, id, units, point) {
-  initializeMilitary(p, units);
+  recruitMilitary(s, p, units);
   const g = { id, kind: 'army', factionId: p.factionId, originId: p.id, units: { ...units }, size: countMilitary(units), initialSize: countMilitary(units),
     x: point.x, z: point.z, prevX: point.x, prevZ: point.z, targetX: point.x, targetZ: point.z, targetId: null, phase: 'outbound', speed: 0, morale: 100, supply: 100, carrying: emptyResources() };
-  s.groups.push(g); return g;
+  bindArmy(s, p, g); s.groups.push(g); return g;
 }
 function pulse(s) { s.step++; s.time = s.step / 10; s.tick = Math.floor(s.time); stepCombat(s, .1); }
 function matrices(scene) {
@@ -49,13 +51,14 @@ test('formation roles, firing origins and rendered bodies share deterministic po
   const samples = crowds.getMotionSamples().filter(p => p.groupId === a.id);
   assert.ok(samples.some(p => p.militaryRole === 'infantry')); assert.ok(samples.some(p => p.militaryRole === 'ranged'));
   for (const p of samples) {
-    const index = +p.id.split(':').at(-1), slot = combatFormationSlot(a, index);
+    const slot = getSoldier(s, p.soldierId);
+    assert.ok(a.soldierIds.includes(slot.id));
     assert.equal(p.x, slot.x); assert.equal(p.z, slot.z); assert.equal(p.militaryRole, slot.role);
   }
   assert.equal(crowds.diagnostics.representedIndividuals, s.settlements.reduce((n, p) => n + p.population, 0));
   assert.equal(crowds.diagnostics.populationAccountingDelta, 0);
   const shot = s.combatEvents.find(e => e.sourceId === a.id && e.type === 'projectile');
-  assert.ok(shot && shot.shots.every(p => p.sourceIndex >= a.units.infantry), 'ranged fire was attributed to infantry');
+  assert.ok(shot && shot.shots.every(p => getSoldier(s, p.sourceSoldierId)?.role === 'ranged'), 'ranged fire was attributed to infantry');
   crowds.dispose();
 });
 
@@ -96,7 +99,7 @@ test('combat effects are bounded, pause-frozen, read-only and expire on simulati
   const { s, center, ha, hb } = fixture();
   army(s, ha, 'archers', { infantry: 0, ranged: 24 }, { x: center.x - 3, z: center.z });
   army(s, hb, 'guards', { infantry: 24, ranged: 0 }, { x: center.x + 3, z: center.z });
-  for (let i = 0; i < 65; i++) pulse(s);
+  for (let i = 0; i < 500 && !s.combatEvents?.some(event => event.type === 'casualty'); i++) pulse(s);
   const scene = new THREE.Scene(), effects = createCombatEffects(THREE, scene), copy = structuredClone(s);
   effects.update(s, s.time); const first = matrices(scene), samples = effects.getMotionSamples();
   effects.update(s, s.time);
@@ -111,8 +114,10 @@ test('combat effects are bounded, pause-frozen, read-only and expire on simulati
 test('scoped faction census includes visible foreign groups without inventing hidden home population', () => {
   const { s, center, ha, hb } = fixture();
   const g = army(s, hb, 'visible-foreign', { infantry: 6, ranged: 3 }, center);
+  positionMilitary(s);
+  const observedSoldiers = getSoldiers(s, g).map(body => ({ ...body, originId: null }));
   g.originId = null;
-  const view = { ...s, settlements: [ha], groups: [g], viewer: { mode: 'faction', factionId: ha.factionId } };
+  const view = { ...s, settlements: [ha], groups: [g], soldiers: [...getSoldiers(s, ha), ...observedSoldiers], viewer: { mode: 'faction', factionId: ha.factionId } };
   const scene = new THREE.Scene(), crowds = createCrowds(THREE, scene); crowds.update(view, 0, g.id, 1);
   assert.equal(crowds.diagnostics.totalPopulation, ha.population + g.size);
   assert.equal(crowds.diagnostics.representedIndividuals, ha.population + g.size);

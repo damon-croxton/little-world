@@ -1,8 +1,9 @@
 import { distance } from '../shared.js';
 import { terrainAt } from '../world.js';
 import { MILITARY_ROLES, countMilitary, unitStats } from './military.js';
-import { isSegmentTraversable, lineOfSight } from './navigation.js';
+import { isSegmentTraversable, lineOfSight, navigationDiagnostics } from './navigation.js';
 import { settlementController, groupController } from './control.js';
+import { getSoldiers } from './soldiers.js';
 
 const amount = x => Math.max(0, Math.floor(Number.isFinite(x) ? x : 0));
 const ownerOf = (s, entity) => 'population' in entity ? settlementController(s, entity) : groupController(s, entity);
@@ -10,6 +11,7 @@ const rolesOf = entity => entity.units || entity.combat?.units || { infantry: am
 const baseOf = (entity, options) => ({ x: options.x ?? entity.combat?.x ?? entity.x, z: options.z ?? entity.combat?.z ?? entity.z });
 const BODY_SPACE = .46, BODY_RADIUS = .16, CELL = .8;
 const collisionWorlds = new WeakMap();
+const segmentCaches = new WeakMap();
 const sq = (a, b) => (a.x - b.x) ** 2 + (a.z - b.z) ** 2;
 const cellKey = (x, z) => (x + 8192) * 16384 + z + 8192;
 const pointKey = p => cellKey(Math.floor(p.x / CELL), Math.floor(p.z / CELL));
@@ -25,7 +27,7 @@ function physicalWorld(s) {
   world = { stamp, groups: s.groups, homes: s.settlements, bins: new Map(), records: new Map() };
   collisionWorlds.set(s, world);
   for (const entity of [...(s.groups || []), ...(s.settlements || [])]) {
-    if (!entity.formationSlots || entity.finished || entity.militaryReturned || ('population' in entity ? !entity.combat?.active : entity.kind !== 'army')) continue;
+    if (!entity.formationSlots || entity.finished || entity.militaryReturned || (!('population' in entity) && entity.kind !== 'army')) continue;
     const units = rolesOf(entity);
     for (const role of MILITARY_ROLES) for (let i = 0; i < Math.min(amount(units[role]), entity.formationSlots[role]?.length || 0); i++) addBody(world, entity, role, i, entity.formationSlots[role][i]);
   }
@@ -34,19 +36,49 @@ function physicalWorld(s) {
 function addBody(world, entity, role, ordinal, body) {
   let record = world.records.get(body);
   if (!record) { record = { entity, role, ordinal, body }; world.records.set(body, record); }
+  Object.assign(record, { entity, role, ordinal });
   record.key = pointKey(body);
+  record.cellX = Math.floor(body.x / CELL); record.cellZ = Math.floor(body.z / CELL);
   if (!world.bins.has(record.key)) world.bins.set(record.key, new Set());
   world.bins.get(record.key).add(record);
 }
 function removeBody(world, body) { const record = world.records.get(body); if (record) world.bins.get(record.key)?.delete(record); }
 function liveBody(record) {
   const { entity, role, ordinal, body } = record;
-  return !entity.finished && !entity.militaryReturned && entity.formationSlots?.[role]?.[ordinal] === body && ordinal < amount(rolesOf(entity)[role]) && (!('population' in entity) || entity.combat?.active);
+  return body.alive !== false && !entity.finished && !entity.militaryReturned && entity.formationSlots?.[role]?.[ordinal] === body;
 }
-function nearby(world, point, radius, visit) {
+function nearby(world, point, radius, visit, candidates = null) {
   const x0 = Math.floor((point.x - radius) / CELL), x1 = Math.floor((point.x + radius) / CELL), z0 = Math.floor((point.z - radius) / CELL), z1 = Math.floor((point.z + radius) / CELL);
+  if (candidates) {
+    // Filtering one larger ordered rectangle preserves exactly the original
+    // cell/Set traversal order for each smaller steering query.
+    for (const record of candidates) if (record.cellX >= x0 && record.cellX <= x1 && record.cellZ >= z0 && record.cellZ <= z1 && liveBody(record) && visit(record) === false) return false;
+    return true;
+  }
   for (let z = z0; z <= z1; z++) for (let x = x0; x <= x1; x++) for (const record of world.bins.get(cellKey(x, z)) || []) if (liveBody(record) && visit(record) === false) return false;
   return true;
+}
+function cachedSegments(s, body, physical, version) {
+  let cache = segmentCaches.get(s);
+  if (!cache || cache.version !== version || cache.seed !== s.seed) {
+    cache = { version, seed: s.seed, bodies: new WeakMap() }; segmentCaches.set(s, cache);
+  }
+  let entry = cache.bodies.get(body);
+  if (!entry) { entry = { x: body.x, z: body.z, factionId: physical.factionId, radius: physical.radius, ready: false, points: new Map() }; cache.bodies.set(body, entry); }
+  else if (entry.x !== body.x || entry.z !== body.z || entry.factionId !== physical.factionId || entry.radius !== physical.radius) {
+    entry.x = body.x; entry.z = body.z; entry.factionId = physical.factionId; entry.radius = physical.radius; entry.ready = false; entry.points.clear();
+  } else entry.ready = true;
+  // Moving bodies retain the direct path. Stationary bodies can reuse exact
+  // failed steering/anchor rays until position or wall permissions change.
+  if (!entry.ready) return point => isSegmentTraversable(s, body, point, physical);
+  return point => {
+    const key = `${point.x}:${point.z}`;
+    if (entry.points.has(key)) return entry.points.get(key);
+    const clear = isSegmentTraversable(s, body, point, physical);
+    entry.points.set(key, clear);
+    if (entry.points.size > 128) entry.points.delete(entry.points.keys().next().value);
+    return clear;
+  };
 }
 function pointClear(world, point, self, spacing = BODY_SPACE) {
   return nearby(world, point, spacing, record => record.body === self || sq(point, record.body) >= spacing * spacing - 1e-9);
@@ -55,7 +87,7 @@ function relativeClosest(dx, dz, vx, vz) {
   const v2 = vx * vx + vz * vz, t = v2 ? Math.max(0, Math.min(1, -(dx * vx + dz * vz) / v2)) : 0;
   return (dx + vx * t) ** 2 + (dz + vz * t) ** 2;
 }
-function stepClear(world, body, point) {
+function stepClear(world, body, point, candidates = null) {
   const vx = point.x - body.x, vz = point.z - body.z, radius = Math.hypot(vx, vz) + BODY_SPACE + .65;
   return nearby(world, body, radius, record => {
     const peer = record.body; if (peer === body) return true;
@@ -69,7 +101,7 @@ function stepClear(world, body, point) {
       if (relativeClosest(body.x - px, body.z - pz, vx - peer.x + px, vz - peer.z + pz) < Math.min(BODY_SPACE * BODY_SPACE, start) - 1e-8) return false;
     }
     return true;
-  });
+  }, candidates);
 }
 
 export function formationSize(units) {
@@ -89,7 +121,7 @@ export function combatFormationSlot(entity, index, options = {}) {
   if (physical && options.physical !== false) {
     const alpha = Math.max(0, Math.min(1, options.alpha ?? 1)), physicalYaw = physical.yaw ?? yaw, oldYaw = physical.prevYaw ?? physicalYaw;
     return { x: (physical.prevX ?? physical.x) + (physical.x - (physical.prevX ?? physical.x)) * alpha, z: (physical.prevZ ?? physical.z) + (physical.z - (physical.prevZ ?? physical.z)) * alpha,
-      yaw: oldYaw + shortestAngle(physicalYaw - oldYaw) * alpha, role, index, physical: true,
+      yaw: oldYaw + shortestAngle(physicalYaw - oldYaw) * alpha, role, index, physical: true, soldierId: physical.id,
       movementDistance: Math.hypot(physical.x - (physical.prevX ?? physical.x), physical.z - (physical.prevZ ?? physical.z)) };
   }
   const roleCount = amount(units[role]), row = Math.floor(ordinal / shape.columns), rowCount = Math.min(shape.columns, roleCount - row * shape.columns);
@@ -214,7 +246,13 @@ function contactGoal(s, world, body, role, spec, targets, center, shape, physica
 // Tactical callers supply only locally visible targets. Soldiers use bounded
 // local candidate positions and their squad's existing route; none run A*.
 export function updateCombatFormation(s, entity, units, dt = .1, options = {}) {
-  if (!(dt > 0) && entity.formationSlots && MILITARY_ROLES.every(role => entity.formationSlots[role]?.length === amount(units[role]))) return;
+  const soldiers = getSoldiers(s, entity, { excludeTowerCrew: options.excludeTowerCrew ?? false });
+  // Slots are a view of the serving roster, never a source of replacement bodies.
+  const previous = entity.formationSlots, next = { infantry: [], ranged: [] };
+  for (const body of soldiers) next[body.role].push(body);
+  const sameMembership = previous && MILITARY_ROLES.every(role => previous[role]?.length === next[role].length && previous[role].every((body, i) => body === next[role][i]));
+  if (!sameMembership) entity.formationSlots = next;
+  if (!(dt > 0) && sameMembership && soldiers.every(body => body.positioned)) return;
   const center = { x: options.x ?? entity.x, z: options.z ?? entity.z };
   const yaw = options.yaw ?? entity.combat?.yaw ?? Math.atan2((entity.targetX ?? center.x) - center.x, (entity.targetZ ?? center.z) - center.z);
   const shape = formationSize(units), physical = { factionId: ownerOf(s, entity), radius: BODY_RADIUS };
@@ -228,53 +266,63 @@ export function updateCombatFormation(s, entity, units, dt = .1, options = {}) {
     entity.formationTrail.push({ ...center });
     if (entity.formationTrail.length > 48) entity.formationTrail.shift();
   }
-  entity.formationSlots ??= { infantry: [], ranged: [] };
   const world = physicalWorld(s);
+  if (!sameMembership) for (const role of MILITARY_ROLES) {
+    const members = new Set(entity.formationSlots[role]);
+    for (const body of previous?.[role] || []) if (!members.has(body)) removeBody(world, body);
+  }
+  const topologyVersion = dt > 0 ? navigationDiagnostics(s).topologyVersion : 0;
   let index = 0, changed = false;
   for (const role of MILITARY_ROLES) {
-    const count = amount(units[role]), slots = entity.formationSlots[role] ??= [], spec = unitStats(species, role, faction);
+    const slots = entity.formationSlots[role], count = slots.length, spec = unitStats(species, role, faction);
     for (let i = count; i < slots.length; i++) removeBody(world, slots[i]);
     if (slots.length > count) { slots.length = count; changed = true; }
     for (let ordinal = 0; ordinal < count; ordinal++, index++) {
       const rank = combatFormationSlot(entity, index, { units, ...center, yaw, physical: false });
       let body = slots[ordinal];
-      if (!body) { body = slots[ordinal] = deployBody(s, world, rank, center, yaw, physical); addBody(world, entity, role, ordinal, body); changed = true; }
+      if (!body.positioned) { removeBody(world, body); Object.assign(body, deployBody(s, world, rank, center, yaw, physical), { positioned: true }); addBody(world, entity, role, ordinal, body); changed = true; }
       else if (!world.records.has(body)) addBody(world, entity, role, ordinal, body);
+      else Object.assign(world.records.get(body), { entity, role, ordinal });
       if (!(dt > 0)) continue;
       body.prevX = body.x; body.prevZ = body.z; body.prevYaw = body.yaw ?? yaw;
-      let desired = targets ? contactGoal(s, world, body, role, spec, targets, center, shape, physical, reservations) : null;
-      const inContact = !!desired;
+      body.vx = 0; body.vz = 0;
+      const traversable = cachedSegments(s, body, physical, topologyVersion);
+      const plan = options.individualPlans?.get(body.id);
+      let desired = plan?.goal ?? (targets ? contactGoal(s, world, body, role, spec, targets, center, shape, physical, reservations) : null);
+      const inContact = plan ? !!plan.facing : !!desired;
       desired ??= rank;
-      if (!inContact) {
+      if (!inContact || plan) {
         delete body.contactId; delete body.contactIndex; delete body.contactHolding; delete body.facingX; delete body.facingZ;
         // Follow the shared route through a pass before spreading back into a
         // rank. Only already-computed squad waypoints can be used here.
-        if (sq(body, desired) > .04 && !isSegmentTraversable(s, body, desired, physical)) {
+        if (sq(body, desired) > .04 && !traversable(desired)) {
           const route = entity.navigation, anchors = [center, ...entity.formationTrail.slice().reverse(), ...(route?.waypoints || []).slice(Math.max(0, (route?.index || 0) - 1), (route?.index || 0) + 1)];
-          const anchor = anchors.find(point => sq(body, point) > .04 && isSegmentTraversable(s, body, point, physical));
+          const anchor = anchors.find(point => sq(body, point) > .04 && traversable(point));
           if (anchor) desired = anchor;
         }
       }
       const dx = desired.x - body.x, dz = desired.z - body.z, remaining = Math.hypot(dx, dz);
-      const facing = inContact ? Math.atan2(body.facingX - body.x, body.facingZ - body.z) : yaw;
+      const facing = plan?.facing ? Math.atan2(plan.facing.x - body.x, plan.facing.z - body.z) : inContact ? Math.atan2(body.facingX - body.x, body.facingZ - body.z) : yaw;
       body.yaw = Number.isFinite(facing) ? facing : yaw;
       if (remaining < .035) { world.records.get(body).movedStamp = world.stamp; changed = true; continue; }
       const pulse = s.step ?? s.tick ?? 0;
       if (body.movementStep == null || pulse < body.movementStep || pulse - body.movementStep >= 5) { body.movementFactor = terrainAt(body.x, body.z, s.seed).movement; body.movementStep = pulse; }
-      const pace = inContact ? spec.speed : (options.speed ?? entity.speed ?? spec.speed) + .9;
-      const step = Math.min(remaining, Math.max(.8, pace * Math.max(.18, body.movementFactor)) * Math.min(dt, .1));
+      const pace = plan?.speed ?? (inContact ? spec.speed : (options.speed ?? entity.speed ?? spec.speed) + .9);
+      const step = Math.min(remaining, Math.max(0, pace * Math.max(.18, body.movementFactor)) * Math.min(dt, .1));
+      const candidates = [];
+      nearby(world, body, step + BODY_SPACE + .65 + 1e-9, record => { candidates.push(record); });
       let rx = 0, rz = 0;
       nearby(world, body, .72, record => {
         const peer = record.body, d2 = sq(body, peer);
         if (peer !== body && d2 > .000001 && d2 < .72 ** 2) { const d = Math.sqrt(d2), force = (.72 - d) * .8 / d; rx += (body.x - peer.x) * force; rz += (body.z - peer.z) * force; }
-      });
+      }, candidates);
       const heading = Math.atan2(dz / remaining + rz, dx / remaining + rx), side = body.steerSide ?? (ordinal % 2 ? -1 : 1);
       let next = null, score = -step * .05;
       for (const fraction of [1, .5]) {
         for (const turn of [0, .45 * side, -.45 * side, .9 * side, -.9 * side, 1.35 * side, -1.35 * side, 1.65 * side, -1.65 * side]) {
           const point = { x: body.x + Math.cos(heading + turn) * step * fraction, z: body.z + Math.sin(heading + turn) * step * fraction };
           const progress = remaining - distance(point, desired) - Math.abs(turn) * .012;
-          if (progress <= score || !stepClear(world, body, point) || !isSegmentTraversable(s, body, point, physical)) continue;
+          if (progress <= score || !stepClear(world, body, point, candidates) || !traversable(point)) continue;
           score = progress; next = point;
           if (turn === 0) break;
         }
@@ -289,6 +337,7 @@ export function updateCombatFormation(s, entity, units, dt = .1, options = {}) {
         addBody(world, entity, role, ordinal, body);
       }
       world.records.get(body).movedStamp = world.stamp; changed = true;
+      body.vx = (body.x - body.prevX) / dt; body.vz = (body.z - body.prevZ) / dt;
     }
   }
   if (changed) entity.formationRevision = (entity.formationRevision || 0) + 1;

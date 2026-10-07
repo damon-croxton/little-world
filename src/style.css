@@ -304,6 +304,8 @@ button.world-label.selected::after { content: ''; position: absolute; bottom: -5
 .ledger-list > div { padding: 9px 0; border-bottom: 1px solid #cedbbb0c; }
 .ledger-list dt { font-size: 10px; color: var(--muted); }
 .ledger-list dd { margin: 0; font: 14px Georgia, serif; color: #e0dfc8; }
+.soldier-detail .ledger-list dd { max-width: 68%; overflow-wrap: anywhere; text-align: right; }
+.soldier-detail .text-button { display: flex; margin-top: 10px; white-space: normal; text-align: left; }
 .ledger-note { padding-bottom: 18px; }
 .worker-job { padding: 16px 0; border-bottom: 1px solid var(--line); }
 .worker-job .site-job-link { margin-top: 12px; }
