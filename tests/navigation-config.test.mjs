@@ -48,7 +48,7 @@ test('the larger island adds usable, supplied frontier rather than empty sea', (
   const world = generateWorld('expanded-frontier');
   assert.equal(world.nodes.length, WORLD_RESOURCE_SITES);
   const frontier = world.nodes.filter(node => Math.hypot(node.x, node.z) > 132);
-  assert.ok(frontier.length > 60, 'new land lacks resource destinations');
+  assert.ok(frontier.length > WORLD_RESOURCE_SITES * .12, 'scarce frontier still needs a distributed share of resource destinations');
   assert.ok(frontier.every(node => terrainAt(node.x, node.z, 'expanded-frontier').traversable));
   assert.ok(Math.max(...frontier.map(node => Math.hypot(node.x, node.z))) > 154);
   // The simulation boundary lies in visible deep water, never through dry land.

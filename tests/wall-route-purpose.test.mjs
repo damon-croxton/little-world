@@ -80,7 +80,8 @@ test('small towns fund connected protection; later reports cannot scatter an est
   const right = defenseBuildingPlan(state, home, owner);
   assert.deepEqual(right.from, gate.to);
   home.buildings.push({ ...right, id: 'right', progress: 1 });
-  assert.equal(defenseBuildingPlan(state, home, owner), null, 'small-town budget exceeded');
+  for(let i=3;i<7;i++){const plan=defenseBuildingPlan(state,home,owner);assert.ok(plan,'longer connected small-town screen stopped early');assert.equal(plan.topologyId,gate.topologyId);home.buildings.push({...plan,id:`extended-${i}`,progress:1});invalidateNavigation(state);}
+  assert.equal(defenseBuildingPlan(state, home, owner), null, 'seven-piece small-town budget exceeded');
 });
 
 test('a destroyed gate is rebuilt on the original joined endpoints', () => {

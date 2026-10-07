@@ -2,6 +2,16 @@ import { updateCombatFormation } from '../src/sim/formations.js';
 export { initializeSoldierPositions as positionMilitary } from '../src/sim/combat.js';
 import { initializeMilitary, deployMilitary, unitStats } from '../src/sim/military.js';
 import { getSoldiers, createSoldierRecords, syncSoldierCounts } from '../src/sim/soldiers.js';
+import { refreshHousing, housingDemand } from '../src/sim/housing.js';
+
+// Training/ownership fixtures explicitly supply completed quarters; they do
+// not bypass the runtime housing gate by editing its derived capacity.
+export function houseExistingPopulation(home, faction, spare = 24) {
+  let index = 0;
+  while (refreshHousing(home, faction) < housingDemand(home) + spare) {
+    home.buildings.push({ id: `${home.id}:fixture-house:${index}`, kind: 'housing', progress: 1, hp: 160, maxHp: 160, x: home.x + 3 * index++, z: home.z + 16 });
+  }
+}
 
 // Explicit scenario construction only. Runtime code never repairs counts into
 // soldiers; these helpers give legacy test scenarios actual citizen records.

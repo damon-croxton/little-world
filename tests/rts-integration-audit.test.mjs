@@ -1,5 +1,5 @@
 import { getSoldier, getSoldiers } from '../src/sim/soldiers.js';
-import { setMilitary, recruitMilitary, bindArmy } from './roster-fixtures.mjs';
+import { houseExistingPopulation, setMilitary, recruitMilitary, bindArmy } from './roster-fixtures.mjs';
 // Independent contract audit. Controlled fixtures are not natural-population or
 // browser-performance evidence; natural multi-seed evidence lives in balance.mjs.
 import test from 'node:test';
@@ -447,6 +447,7 @@ test('one exile base trains paid native citizens with explicit command and loses
   ha.occupiedBy = b.id; hb.occupiedBy = a.id; hc.occupiedBy = a.id;
   const producer = unitStats(b.species, 'infantry').building;
   hb.buildings.push({ id: 'audit-exile-producer', kind: producer, x: hb.x, z: hb.z, progress: 1, hp: 160 });
+  houseExistingPopulation(hb, b);
   refreshExileBases(state);
   assert.equal(hb.exileBaseFor, a.id); assert.equal(commandFactionForHome(state, hb), a.id);
   assert.equal(state.settlements.filter(h => h.exileBaseFor === a.id).length, 1);

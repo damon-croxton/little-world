@@ -95,7 +95,7 @@ test('replaying the same world clears abandoned dirty setup fields',()=>{
 test('crew diagnostics distinguish actual people, weighted visibility and drawn models',()=>{
   const t=setup();try{
     const actual=t.state.settlements.reduce((sum,home)=>sum+home.population,0);
-    t.view.diagnostics.crowds={totalPopulation:actual,representedIndividuals:actual,visibleIndividuals:actual,culledIndividuals:0,drawnModels:actual-20,visibleWorkerIndividuals:22,drawnWorkerModels:2,visibleMilitaryIndividuals:14};
+    t.view.diagnostics.crowds={totalPopulation:actual,representedIndividuals:actual,visibleIndividuals:actual,culledIndividuals:0,drawnModels:actual-20,visibleWorkerIndividuals:22,drawnWorkerModels:2,visibleMilitaryIndividuals:14,housedIndividuals:0};
     t.update();
     const rows=Object.fromEntries([...t.root.querySelectorAll('.render-counts > div')].map(row=>[row.querySelector('dt').textContent,row.querySelector('dd').textContent]));
     assert.equal(rows['Actual population'],actual.toLocaleString('en'));
@@ -103,7 +103,7 @@ test('crew diagnostics distinguish actual people, weighted visibility and drawn 
     assert.equal(rows['Drawn crowd models'],(actual-20).toLocaleString('en'));
     assert.equal(rows['Workers represented'],'22');assert.equal(rows['Worker crew models'],'2');
     assert.match(t.root.querySelector('[data-slot="world-scale"]').textContent,new RegExp((actual-20).toLocaleString('en')+' models'));
-    assert.match(t.root.querySelector('[data-slot="render-accounting"]').textContent,/count badge.*Soldiers are drawn individually/);
+    assert.match(t.root.querySelector('[data-slot="render-accounting"]').textContent,/count badge.*housing.*Soldiers and single scouts are drawn individually/);
   }finally{t.dispose();}
 });
 

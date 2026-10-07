@@ -159,8 +159,8 @@ test('occupied home troops and local crews use command tint while native species
       assert.match(sample.poolKey,/^machine:/,'a command colour must never replace the native body species');
       nearColor(actualColor(sample),tint(state.factions[0].color));
     }
-    const civilian=samples.find(sample=>sample.settlementId===home.id&&!sample.militaryRole);assert.ok(civilian);
-    nearColor(actualColor(civilian),tint(state.factions[1].color));
+    assert.ok(!samples.some(sample=>sample.settlementId===home.id&&!sample.militaryRole), 'residents do not reappear as decorative crowd bodies');
+    assert.equal(crowds.diagnostics.housedIndividuals,8); assert.equal(home.factionId,state.factions[1].id);
     assert.deepEqual(state,unchanged,'observer attribution does not mutate simulation authority');
   }finally{crowds.dispose();}
 });
@@ -168,19 +168,20 @@ test('occupied home troops and local crews use command tint while native species
 test('rendered civilians and individual soldiers resolve to their real scoped colony or party',()=>{
   const state={seed:'body-picks',tick:0,step:0,time:0,factions:[{id:'f0',species:'human',color:'#dca16b'},{id:'f1',species:'machine',color:'#85bbbf'}],settlements:[{id:'home',factionId:'f0',x:0,z:0,population:9,health:100,status:'active',soldiers:2,assigned:{},military:{infantry:1,ranged:1},buildings:[]},{id:'enemy',factionId:'f1',x:30,z:0,population:4,soldiers:0,assigned:{},buildings:[]}],groups:[{id:'soldiers',factionId:'f0',originId:'home',kind:'army',size:2,units:{infantry:1,ranged:1},x:12,z:12,prevX:12,prevZ:12,phase:'outbound'}],nodes:[]};
   const groups=state.groups;state.groups=[];setMilitary(state,state.settlements[0],{infantry:1,ranged:1});bindArmy(state,state.settlements[0],groups[0]);state.groups=groups;positionMilitary(state);
+  state.groups.push({id:'own-scout',kind:'scout',factionId:'f0',originId:'home',size:1,x:2,z:2,phase:'outbound'},{id:'enemy-scout',kind:'scout',factionId:'f1',originId:'enemy',size:1,x:30,z:2,phase:'outbound'});
   const scene=new THREE.Scene(),crowds=createCrowds(THREE,scene);crowds.update(state,0,'soldiers');scene.updateMatrixWorld(true);
   try{
-    for(const sample of [crowds.getMotionSamples().find(s=>s.settlementId==='home'),...crowds.getMotionSamples().filter(s=>s.groupId==='soldiers')]){
+    for(const sample of [crowds.getMotionSamples().find(s=>s.groupId==='own-scout'),...crowds.getMotionSamples().filter(s=>s.groupId==='soldiers')]){
       assert.ok(sample);const mesh=scene.getObjectByProperty('uuid',sample.meshUuid);
       assert.ok(crowds.getPickables().includes(mesh));
       const ray=new THREE.Raycaster(new THREE.Vector3(sample.x,sample.groundY+8,sample.z),new THREE.Vector3(0,-1,0));
       const hit=ray.intersectObject(mesh).find(hit=>hit.instanceId===sample.instanceIndex);assert.ok(hit,'a ray through the body must hit its rendered instance');
       assert.equal(crowds.resolvePick(hit),sample.soldierId||sample.groupId||sample.settlementId);
     }
-    const enemySample=crowds.getMotionSamples().find(s=>s.settlementId==='enemy'),oldEnemyMesh=scene.getObjectByProperty('uuid',enemySample.meshUuid);
-    const scoped={...state,viewer:{mode:'faction',factionId:'f0'},settlements:[state.settlements[0]],factions:[state.factions[0]]};
+    const enemySample=crowds.getMotionSamples().find(s=>s.groupId==='enemy-scout'),oldEnemyMesh=scene.getObjectByProperty('uuid',enemySample.meshUuid);
+    const scoped={...state,viewer:{mode:'faction',factionId:'f0'},settlements:[state.settlements[0]],factions:[state.factions[0]],groups:state.groups.filter(g=>g.factionId==='f0'),soldiers:state.settlements[0].soldierRoster};
     crowds.update(scoped,0,'soldiers');assert.equal(oldEnemyMesh.count,0);
     assert.ok(!crowds.resolvePick({object:oldEnemyMesh,instanceId:enemySample.instanceIndex}));
-    for(const mesh of crowds.getPickables().filter(mesh=>mesh.userData.crowdSelectionIds))for(let i=0;i<mesh.count;i++)assert.ok(['home',...state.groups[0].soldierIds].includes(crowds.resolvePick({object:mesh,instanceId:i})));
+    for(const mesh of crowds.getPickables().filter(mesh=>mesh.userData.crowdSelectionIds))for(let i=0;i<mesh.count;i++)assert.ok(['own-scout',...state.groups[0].soldierIds].includes(crowds.resolvePick({object:mesh,instanceId:i})));
   }finally{crowds.dispose();}
 });

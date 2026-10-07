@@ -1,3 +1,4 @@
+import { houseExistingPopulation } from './roster-fixtures.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
@@ -55,6 +56,7 @@ test('only funded completed training creates new retained identities, once per c
     seedMilitary(state, home, { infantry: 2, ranged: 1 });
     const original = [...home.soldierRoster], population = home.population;
     home.buildings.push({ id: `${home.id}-producer`, kind: spec.building, progress: 1, hp: 160, maxHp: 160, x: home.x, z: home.z });
+    houseExistingPopulation(home, faction);
     const job = queueTraining(state, home, faction, 'ranged', 3, { reserves: {} }); assert.ok(job);
     assert.deepEqual(home.soldierRoster, original, 'queued civilians became soldiers before completing training');
     at(state, job.startedTick + job.duration - 1); assert.equal(advanceTraining(state, home, faction), 0);

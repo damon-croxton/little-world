@@ -42,7 +42,7 @@ test('full housing stops births and surplus residential construction without del
   const home = state.settlements[0];
   holdResearchAndScouts(state);
   home.population = SIM_LIMITS.populationPerSettlement;
-  while (home.buildings.filter(b => b.kind === 'housing').length < 24) {
+  while (home.buildings.filter(b => b.kind === 'housing').length < Math.ceil(((SIM_LIMITS.populationPerSettlement + home.soldiers + 6) / .85 - 16) / 28)) {
     home.buildings.push({ ...home.buildings[1], id: `housing-fixture-${home.buildings.length}`, kind: 'housing' });
   }
   for (const kind of RESOURCES) home.stock[kind] = 1000;
@@ -50,7 +50,7 @@ test('full housing stops births and surplus residential construction without del
   const houses = home.buildings.filter(b => b.kind === 'housing').length;
   stepSimulation(state, 200);
   assert.equal(home.population, SIM_LIMITS.populationPerSettlement);
-  assert.equal(home.housingCapacity, SIM_LIMITS.populationPerSettlement);
+  assert.equal(home.housingCapacity, 16 + houses * 28);
   assert.equal(home.buildings.filter(b => b.kind === 'housing').length, houses);
   assert.ok(home.buildings.some(b => b.kind === 'storage' && b.createdTick > 0), 'a full settlement did not redirect construction to needed storage');
   auditState(state);
