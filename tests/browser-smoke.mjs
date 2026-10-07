@@ -115,7 +115,8 @@ async function accept() {
   await check('Mouse resume and pause advance then freeze the simulation', async () => {
     const before = await page.evaluate(() => littleworld.state.step);
     await page.locator('[data-action="speed"][data-value="2"]').click();
-    await button('pause').click(); await page.waitForFunction(step => littleworld.state.step > step, before);
+    // Choosing a speed starts playback through the real control action.
+    await page.waitForFunction(step => littleworld.state.step > step, before);
     const framePulses = await page.evaluate(() => new Promise(resolve => {
       const counts = []; let previous = littleworld.state.step;
       const sample = () => { const step = littleworld.state.step; counts.push(step - previous); previous = step; if (counts.length < 10) requestAnimationFrame(sample); else resolve(counts); };
