@@ -413,7 +413,7 @@ export function stepKnowledge(state, { force = false } = {}) {
     v.visible.fill(0); v.visibleIds = {}; v.current = {}; v.sources = sources.map(s => s.source);
     for (const { source, home, group } of sources) {
       if (group) group.explorationMask ??= new Uint8Array(CELL_COUNT);
-      rasterSight(state, source, v.visible, v.explored, home ? v.commandExplored : null, group?.explorationMask, factionBlockers);
+      rasterSight(state, source, v.visible, v.explored, home || group?.kind === 'scout' ? v.commandExplored : null, group?.explorationMask, factionBlockers);
       const sightCache = sourceSightCache(state, source, factionBlockers);
       for (const object of nearbyObjects(index, source)) {
         if (commandOwned(state, f.id, object)) { v.visibleIds[object.id] = true; continue; }
@@ -424,6 +424,7 @@ export function stepKnowledge(state, { force = false } = {}) {
         if (o.kind !== 'group') v.visualMemory[object.id] = { ...o };
         if (group) rememberObservation(group, o);
         if (home) reportObservations(state, f, [o], { method: 'home-sight', homeId: home.id });
+        else if (group?.kind === 'scout') reportObservations(state, f, [o], { method: 'scout-sight', group, explorationMask: null });
       }
     }
     extendSoldierSight(state, f, v, bodySight);
@@ -467,8 +468,8 @@ export function isVisible(state, faction, pointOrObject) {
   return sources.some(source => visibleToGroup(state, source, pointOrObject)) || !!soldierWitness(state, f.id, pointOrObject);
 }
 
-// Planning uses command-known terrain. A remote scout's unretrieved map cannot
-// silently teach the capital where to build a wall or settle a new outpost.
+// Planning uses only terrain actually surveyed by homes, live scouts or
+// delivered field maps. Live scout sight never exposes cells outside its LOS.
 export function isExplored(state, faction, point) {
   const f = getFaction(state, faction), cell = knowledgeCell(point);
   return cell >= 0 && !!f?.visibility?.commandExplored[cell];

@@ -100,7 +100,7 @@ test('audit: an unseen enemy wall cannot cancel a reported expedition before any
   });
   assert.ok(enemyHome.buildings.every(wall => !visibleToGroup(alternate, ha, wall)), 'wall fixture was visible to the command');
   if (scoutAware) {
-    const scout = { id: 'unreturned-scout', kind: 'scout', factionId: a.id, originId: ha.id, size: 4, initialSize: 4,
+    const scout = { id: 'unreturned-worker', kind: 'worker', factionId: a.id, originId: ha.id, size: 4, initialSize: 4,
       x: hb.x - 5, z: hb.z, targetX: hb.x - 5, targetZ: hb.z, phase: 'outbound', speed: 0, supply: 100, morale: 100,
       carrying: { food: 0, water: 0, energy: 0, materials: 0 }, observations: [], createdTick: 390 };
     s.groups.push(scout); alternate.groups.push(structuredClone(scout));
@@ -114,7 +114,7 @@ test('audit: an unseen enemy wall cannot cancel a reported expedition before any
   // compare the full mission contract independent of its allocated identity.
   const mission = state => { const { id, ...order } = deployed(state); return order; };
   assert.deepEqual(mission(alternate), mission(s), 'hidden enemy construction changed report-based mobilization');
-  assert.equal(alternate.factions[0].knowledge[hb.id].reportedTick, 395, 'unreturned scout observation reached command');
+  assert.equal(alternate.factions[0].knowledge[hb.id].reportedTick, 395, 'unreturned worker observation reached command');
   }
 });
 

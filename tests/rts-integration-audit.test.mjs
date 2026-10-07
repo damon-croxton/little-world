@@ -439,7 +439,7 @@ test('native scouts can physically observe changed control of their own occupied
   assert.equal(observation.reportedTick, null);
   assert.equal(a.knowledge[ha.id].ownerId, a.id, 'local scout sight bypassed physical report transit');
   stepKnowledge(state, { force: true });
-  assert.equal(a.knowledge[ha.id].ownerId, a.id, 'captured native home still acted as an independent command transmitter');
+  assert.equal(a.knowledge[ha.id].ownerId, b.id, 'actual scout LOS must report changed control live');
 });
 
 test('one exile base trains paid native citizens with explicit command and loses eligibility when a native home returns', () => {

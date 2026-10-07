@@ -118,7 +118,7 @@ function plan(s, record, index, adapter) {
       return { ...record, target: null, goal, speed: spec.speed, facing: null };
     }
   }
-  const retreat = !context.isHome && ['retreating', 'returning', 'disabled'].includes(entity.phase);
+  const retreat = !context.isHome && ['retreating', 'disabled'].includes(entity.phase);
   const chosen = select(s, record, index, adapter, retreat || body.withdrawing), was = body.targetId;
   let target = chosen.target, action = 'advance', reason = 'squad-objective', speed = spec.speed, intercept = null;
   let goal = combatFormationSlot(entity, ordinal, { units: context.units, x: context.x, z: context.z, yaw: entity.combat.yaw, physical: false });
@@ -201,7 +201,7 @@ export function stepIndividualCombat(s, contexts, dt, adapter) {
   for (const p of plans) {
     const { body, target, context, spec } = p;
     body.cooldown = Math.max(0, (body.attackReadyAt ?? 0) - now(s));
-    if (!alive(body) || body.towerId || context.entity.disabled || ['retreating', 'returning', 'disabled'].includes(context.entity.phase) || now(s) < (body.attackReadyAt ?? 0)) continue;
+    if (!alive(body) || body.towerId || context.entity.disabled || ['retreating', 'disabled'].includes(context.entity.phase) || now(s) < (body.attackReadyAt ?? 0)) continue;
     if (target && visible(s, p, target, adapter, spec.range) && (body.role !== 'infantry' || isSegmentTraversable(s, body, target.body, { factionId: context.faction.id, radius: .1 }))) {
       if (adapter.attack(p, target)) { body.attackReadyAt = now(s) + spec.cooldown; body.lastAttackTime = now(s); metrics.attacks++; }
     } else if (!body.withdrawing && !['retreating', 'returning'].includes(context.entity.phase) && context.objective?.kind === 'structure') {

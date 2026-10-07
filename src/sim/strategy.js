@@ -2,12 +2,13 @@ import { clamp, distance, emit, random } from '../shared.js';
 import { terrainAt, WORLD_RADIUS } from '../world.js';
 import { allocateMilitary, applyMilitaryCasualties, availableMilitary, countMilitary, deployMilitary, getSoldiers, returnMilitary, demobilizeMilitary, refreshExileBases } from './military.js';
 import { stepCombat, canFight } from './combat.js';
+import { syncGroupSoldiers, touchSoldiers } from './soldiers.js';
 import { observeGroup, reportObservations, knownReports, visibleToGroup } from './knowledge.js';
 import { moveAlongRoute, isSegmentTraversable, findPath } from './navigation.js';
 import { factionController, settlementController, groupController, occupySettlement, updateConquest } from './conquest.js';
 
-// Decisions read faction reports. Physical contact alone belongs to a travelling
-// group until its courier returns (or an earned relay finishes transmitting).
+// Decisions read faction reports, including live scout observations. Other
+// field parties retain local observations until they physically report them.
 const KEYS = ['food', 'water', 'energy', 'materials'];
 const MAX_GROUPS = 480;
 const factionOf = (s, id) => s.factions.find(f => f.id === id);
@@ -64,26 +65,15 @@ function observe(s, g) {
   const f = factionOf(s, groupController(s, g));
   if (!f) return;
   const observed = observeGroup(s, g);
+  if (g.kind === 'scout') reportObservations(s, f, observed, { method: 'scout-sight', group: g });
   for (const o of observed) {
     if (f.seenObjects[o.id]) continue;
     f.seenObjects[o.id] = s.tick; s.stats.discoveries++;
     if (o.kind === 'settlement' || g.observations.length <= 2) emit(s, 'discovery',
-      `${f.name}'s ${groupName(g)} spotted ${o.kind === 'settlement' ? o.name || 'a foreign settlement' : o.resourceKind ? o.resourceKind + ' deposits' : 'a terrain passage'}; its report is still travelling.`,
-      f.id, { groupId: g.id, targetId: o.id, knowledgePending: true });
+      `${f.name}'s ${groupName(g)} spotted ${o.kind === 'settlement' ? o.name || 'a foreign settlement' : o.resourceKind ? o.resourceKind + ' deposits' : 'a terrain passage'}; ${g.kind === 'scout' ? 'its current sight is shared with the faction' : 'its report is still travelling'}.`,
+      f.id, { groupId: g.id, targetId: o.id, knowledgePending: g.kind !== 'scout' });
   }
-  if (f.species === 'machine' && f.tech.unlocked.includes('relay') && g.kind === 'scout') {
-    const unsent = g.observations.filter(o => !o.transmittedTick);
-    if (unsent.length && (!g.lastTransmission || s.tick - g.lastTransmission >= 9)) {
-      const home = homeOf(s, g);
-      const delay = Math.max(3, Math.ceil((home ? distance(home, g) : 90) / 22));
-      for (const o of unsent) o.transmittedTick = s.tick;
-      s.pendingReports.push({ factionId: f.id, groupId: g.id, dueTick: s.tick + delay,
-        observations: unsent.map(o => ({ ...o })), explorationMask: g.explorationMask?.slice(), method: 'relay' });
-      g.lastTransmission = s.tick;
-      emit(s, 'report', `${f.name}'s relay sent a field packet; it will arrive in ${delay} cycles.`, f.id,
-        { groupId: g.id, pending: true, dueTick: s.tick + delay });
-    }
-  }
+
 }
 
 function deliverReport(s, factionId, observations, groupId, method = 'return', explorationMask = undefined, receiverHomeId = null) {
@@ -116,7 +106,8 @@ function returnHome(s, g, reason, retreat = false) {
     siegeTarget.siege.endedTick = s.tick;
   }
   g.phase = retreat ? 'retreating' : 'returning';
-  if (g.combat) { g.combat.active = false; g.combat.intent = retreat ? 'retreat' : 'return'; g.combat.reason = reason; }
+  g.rallyGroupId = null; g.rallyWaitUntil = null;
+  if (g.combat) { g.combat.active = false; g.combat.resumePhase = null; g.combat.intent = retreat ? 'retreat' : 'return'; g.combat.reason = reason; }
   g.targetX = p.x;
   g.targetZ = p.z;
   const depot = g.stagingHomeId && s.settlements.find(h => h.id === g.stagingHomeId);
@@ -456,6 +447,54 @@ function armyReturnReserve(s, g, f) {
   return reserve;
 }
 
+// Compatible parties combine only at physical contact and only within the same
+// native census. Other homes keep separate squads on the shared frontline.
+export function coordinateFrontlines(s, f) {
+  const armies = s.groups.filter(g => g.kind === 'army' && !g.finished && !g.disabled && groupController(s, g) === f.id);
+  const fronts = armies.filter(g => g.campaign && !g.rallyGroupId && !['returning', 'retreating'].includes(g.phase) && g.supply >= 45 && g.morale >= 55)
+    .sort((a, b) => (a.createdTick ?? 0) - (b.createdTick ?? 0) || a.id.localeCompare(b.id));
+  for (const g of armies) {
+    if (g.finished || g.phase === 'retreating' || g.morale < 65 || g.supply < 55 || getSoldiers(s, g).some(body => body.withdrawing)) continue;
+    let leader = g.rallyGroupId && armies.find(other => other.id === g.rallyGroupId && !other.finished && !['returning', 'retreating'].includes(other.phase));
+    if (!leader) leader = fronts.find(other => other !== g && !other.finished && (other.createdTick ?? 0) <= (g.createdTick ?? 0) &&
+      (g.phase === 'returning' ? distance(g, other) < 35 : g.campaign && other.targetId === g.targetId && other.id.localeCompare(g.id) < 0));
+    if (!leader) {
+      if (g.rallyGroupId && Number.isFinite(g.missionTargetX) && Number.isFinite(g.missionTargetZ)) { g.targetX = g.missionTargetX; g.targetZ = g.missionTargetZ; }
+      g.rallyGroupId = null; continue;
+    }
+    if (g.frontlineJoinedId === leader.id && g.phase !== 'returning') continue;
+    if (g.phase === 'returning' && g.supply < armyReturnReserve(s, g, f) + 20) continue;
+    g.rallyGroupId = leader.id; g.campaign = true;
+    if (g.phase !== 'engaging') {
+      g.phase = 'outbound'; g.targetId = leader.targetId; g.missionTargetX = leader.missionTargetX ?? leader.targetX; g.missionTargetZ = leader.missionTargetZ ?? leader.targetZ;
+      const home = homeOf(s, leader), gap = Math.max(1, distance(home, leader));
+      g.targetX = leader.x + (home.x - leader.x) / gap * 5; g.targetZ = leader.z + (home.z - leader.z) / gap * 5;
+      g.reason = 'Reinforcing the existing frontline before committing another small isolated force.';
+    }
+    if (distance(g, leader) < 24 && distance(g, leader) > 7 && !leader.combat?.active && (s.time ?? s.tick) - (leader.lastRallyWait ?? -100) > 25) {
+      leader.lastRallyWait = s.time ?? s.tick; leader.rallyWaitUntil = leader.lastRallyWait + 5;
+    }
+    const incoming = getSoldiers(s, g), present = getSoldiers(s, leader);
+    if (g.originId !== leader.originId && distance(g, leader) < 8 && incoming.every(body => distance(body, leader) < 12)) {
+      g.frontlineJoinedId = leader.id; g.rallyGroupId = null; g.targetX = g.missionTargetX; g.targetZ = g.missionTargetZ;
+      continue;
+    }
+    if (g.originId !== leader.originId || g.combat?.active || leader.combat?.active || !incoming.length || !present.length || distance(g, leader) > 8 || incoming.some(body => distance(body, leader) > 12)) continue;
+    const total = g.size + leader.size, factor = ((leader.provisionFactor || 1) * leader.size + (g.provisionFactor || 1) * g.size) / total;
+    leader.supply = (leader.supply * (leader.provisionFactor || 1) * leader.size + g.supply * (g.provisionFactor || 1) * g.size) / (total * factor);
+    leader.provisionFactor = factor; leader.morale = (leader.morale * leader.size + g.morale * g.size) / total;
+    leader.initialSize = (leader.initialSize ?? leader.size) + g.size; leader.cohesionSize = (leader.cohesionSize ?? leader.size) + g.size;
+    for (const body of incoming) { body.groupId = leader.id; leader.soldierIds.push(body.id); }
+    leader.carrying ||= emptyCargo();
+    for (const key of KEYS) { leader.carrying[key] = (leader.carrying[key] || 0) + (g.carrying?.[key] || 0); if (g.carrying) g.carrying[key] = 0; }
+    leader.observations ||= []; for (const observation of g.observations || []) if (!leader.observations.some(o => o.id === observation.id && o.observedTick >= observation.observedTick)) leader.observations.push(observation);
+    g.soldierIds = []; g.formationSlots = { infantry: [], ranged: [] }; g.finished = true; g.militaryReturned = true;
+    syncGroupSoldiers(s, g); syncGroupSoldiers(s, leader); touchSoldiers(s); leader.rallyWaitUntil = null;
+    delete f.campaignOrders?.[g.id]; rememberCampaignOrder(s, leader);
+    s.stats.reinforcementMerges = (s.stats.reinforcementMerges || 0) + 1;
+  }
+}
+
 function updateGroups(s, dt, cycleBoundary) {
   for (const g of s.groups) {
     if (g.kind === 'worker' || g.kind === 'colonist' || g.finished) continue;
@@ -489,12 +528,18 @@ function updateGroups(s, dt, cycleBoundary) {
       if (cycleBoundary) observe(s, g);
       continue;
     }
+    if (g.kind === 'army' && (g.rallyWaitUntil ?? 0) > (s.time ?? s.tick) && !g.combat?.active) continue;
     const arrived = move(s, g, dt);
     // A whole-cycle survey overlaps the previous sight radius even at maximum
     // movement speed; arrivals also survey before delivering a report.
     if (g.kind !== 'trader' && (cycleBoundary || arrived)) observe(s, g);
     if (arrived) {
       if (g.kind === 'scout' && g.fieldRaidTargetId && g.phase === 'outbound') continue;
+      if (g.kind === 'army' && g.rallyGroupId && g.phase === 'outbound') {
+        const leader = s.groups.find(other => other.id === g.rallyGroupId && !other.finished);
+        if (leader && !['returning', 'retreating'].includes(leader.phase)) { g.targetX = leader.targetX; g.targetZ = leader.targetZ; g.rallyGroupId = null; }
+        continue;
+      }
       if (g.kind === 'trader') arriveTrader(s, g);
       else if (g.kind === 'army') arriveArmy(s, g, cycleBoundary);
       else if (g.phase === 'outbound') returnHome(s, g, 'Exploration leg complete; taking field reports home.');
@@ -591,15 +636,15 @@ function dispatchScout(s, f, homes) {
     x: p.x, z: p.z, prevX: p.x, prevZ: p.z, targetX: target.x, targetZ: target.z, targetId: null, phase: 'outbound',
     size, initialSize: size, supply: 100, morale: 88, speed: biology.species === 'hive' ? 4.0 : 4.2,
     carrying: emptyCargo(), observations: [], createdTick: s.tick, createdTime: s.time ?? s.tick,
-    surveyTargetId: refresh?.id ?? null, reason: refresh ? 'Revisiting a reported rival position; fresh observations still have to come home.' : f.scoutCount ? 'Surveying another compass bearing; discoveries must be brought home.' : 'First survey beyond the settlement; no foreign positions are known.' };
+    surveyTargetId: refresh?.id ?? null, reason: refresh ? 'Revisiting a reported rival position and sharing live local sight.' : 'Surveying and sharing live sight within this scout’s actual vision and line of sight.' };
   s.groups.push(g);
   p.availableWorkers = Math.max(0, (p.availableWorkers || 0) - size);
   if (p.assigned) { p.assigned.scouts = (p.assigned.scouts || 0) + size; p.assigned.civilianAway = (p.assigned.civilianAway || 0) + size; }
   f.lastScout = s.tick; f.scoutCount++;
-  if (f.scoutCount <= 2 || f.scoutCount % 4 === 0) emit(s, 'scout', `${f.name} sent one scout beyond ${p.name}. This individual leaves production until its report returns.`, f.id, { groupId: g.id, originId: p.id });
+  if (f.scoutCount <= 2 || f.scoutCount % 4 === 0) emit(s, 'scout', `${f.name} sent one scout beyond ${p.name}. Its local sight is shared live; the individual remains away from production until returning.`, f.id, { groupId: g.id, originId: p.id });
 }
 
-function expeditionPlanningWorld(s, f, observer = null) {
+export function expeditionPlanningWorld(s, f, observer = null) {
   const held = s.settlements.filter(home => settlementController(s, home) === f.id);
   const sources = held.filter(home => alive(home) && (home.homePresent ?? home.population) > 0)
     .map(home => ({ ...home, factionId: f.id, commandFactionId: f.id }));
@@ -607,6 +652,7 @@ function expeditionPlanningWorld(s, f, observer = null) {
     if (building.kind === 'tower' && building.progress >= 1 && !building.destroyed && (building.hp ?? 1) > 0 && (building.crewAssigned ?? 1) > 0) sources.push({ ...building, factionId: f.id, commandFactionId: f.id });
   }
   if (observer) sources.push(observer);
+  for (const scout of s.groups) if (scout.kind === 'scout' && !scout.finished && scout.size > 0 && groupController(s, scout) === f.id) sources.push(scout);
   const walls = [], add = (wall, ownerId) => {
     if (!['wall', 'gate'].includes(wall.kind)) return;
     if (ownerId === f.id || sources.some(source => visibleToGroup(s, source, wall))) walls.push({ ...wall, factionId: ownerId });
@@ -614,8 +660,8 @@ function expeditionPlanningWorld(s, f, observer = null) {
   for (const home of s.settlements) for (const wall of home.buildings || []) add(wall, settlementController(s, home));
   for (const wall of s.walls || []) add(wall, factionController(s, wall.factionId));
   // Delivered settlement reports contain coordinates and estimates, not exact
-  // wall geometry. Only owned obstacles and current home sightings inform the
-  // capital's route/provision estimate. Unreturned scouts cannot share theirs.
+  // wall geometry. Owned obstacles and actual home/scout sightings inform the
+  // capital's route/provision estimate.
   // Real movement still collides with every wall and discovers it locally.
   return { seed: s.seed, factions: s.factions, settlements: [], walls, navigationRevision: 0 };
 }
@@ -719,7 +765,7 @@ function chooseExpedition(s, f, homes) {
   for (const p of homes) {
     if (Math.max(orders.filter(order => order.originId === p.id).length, armies.filter(g => g.originId === p.id).length) >= 2) continue;
     const defense = homeDefense(s, f, p, known), available = defense.deployable;
-    if (available < 16 || defense.observedThreat) continue;
+    if (available < 8 || defense.observedThreat) continue;
     const staple = f.species === 'machine' ? 'energy' : 'food';
     const need = p.stock[staple] < p.population * 0.25 || p.stock.materials < p.population * 0.20;
     for (const k of known) {
@@ -736,6 +782,7 @@ function chooseExpedition(s, f, homes) {
       // Every independent society competes for sovereignty. Personality changes
       // timing, preferred targets, trade, and risk rather than opting out of war.
       const committed = orders.filter(order => order.targetId === k.id);
+      if (!committed.length && available < 16) continue;
       if (!committed.length && r.lastConflict != null && s.tick - r.lastConflict < 35) continue;
       const appetite = .42 + f.traits.aggression * .35 + f.traits.industry * .12 + (need ? .12 : 0) + (deposit ? .12 : 0) + (r.status === 'hostile' ? .18 : 0) - f.traits.cooperation * .06;
       const age = s.tick - k.observedTick;
@@ -758,7 +805,7 @@ function chooseExpedition(s, f, homes) {
   const units = allocateMilitary(s, p, best.size), size = countMilitary(units);
   const estimate = Math.max(1, k.soldiersEstimate ?? k.populationEstimate * 0.22);
   p.militaryTarget = clamp(.30 + f.traits.aggression * .10, .30, .40);
-  if (size < 16) {
+  if (size < (best.reinforcement ? 8 : 16)) {
     f.intent = `Training before acting on a ${s.tick - k.observedTick}-cycle-old report; ${size} soldiers available, about ${estimate} reported defenders.`;
     return;
   }
@@ -782,7 +829,7 @@ function chooseExpedition(s, f, homes) {
     x: p.x, z: p.z, prevX: p.x, prevZ: p.z, targetX: stage?.x ?? k.x, targetZ: stage?.z ?? k.z, targetId: k.id, phase: 'outbound',
     missionTargetX: k.x, missionTargetZ: k.z, stagingHomeId: stage?.id ?? null, stagingTargetId: stage?.id ?? null, stagingPurpose: stage ? 'outbound' : null, provisionFactor,
     size, initialSize: size, units, supply: 100, morale: 80 + f.traits.aggression * 12,
-    speed, campaign: true, reinforcement: best.reinforcement, homeReserve: best.reserve, missionOrderTick: s.tick, expectedTravelCycles, routeSupplyBudget: Math.round(routeSupplyBudget),
+    speed, campaign: true, missionEnemyId: k.ownerId, reinforcement: best.reinforcement, homeReserve: best.reserve, missionOrderTick: s.tick, expectedTravelCycles, routeSupplyBudget: Math.round(routeSupplyBudget),
     carrying: emptyCargo(), observations: [], createdTick: s.tick, createdTime: s.time ?? s.tick, reason,
     intelligence: { observedTick: k.observedTick, reportedTick: k.reportedTick, confidence: k.confidence, populationEstimate: k.populationEstimate, soldiersEstimate: estimate } };
   deployMilitary(s, p, g);
@@ -805,6 +852,7 @@ export function stepStrategy(s, dt = 0.1) {
   }
   if (cycleBoundary) {
     refreshExileBases(s);
+    for (const f of s.factions) coordinateFrontlines(s, f);
     const remaining = [];
     for (const packet of s.pendingReports) {
       if (packet.dueTick <= s.tick) deliverReport(s, packet.factionId, packet.observations, packet.groupId, packet.method, packet.explorationMask);

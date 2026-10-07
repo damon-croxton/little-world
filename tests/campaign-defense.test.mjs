@@ -130,11 +130,11 @@ test('a locally reachable departing army physically returns to reinforce an outm
   assert.equal(state.stats.defenseRecalls, 1); conserved(state);
 });
 
-test('unseen threats and unreturned scout sightings cannot alter home reserves or campaign orders', () => {
+test('unseen threats and unreturned worker sightings cannot alter home reserves or campaign orders', () => {
   const { state, faction, home, target } = fixture(); report(faction, target);
   initializeMilitary(target, { infantry: 15, ranged: 0 });
   const hidden = party(state, target, 'unseen-army', 15, { x: target.x, z: target.z + 8 });
-  state.groups.push({ id: 'unreturned-scout', factionId: faction.id, originId: home.id, kind: 'scout', size: 4,
+  state.groups.push({ id: 'unreturned-worker', factionId: faction.id, originId: home.id, kind: 'worker', size: 4,
     x: hidden.x - 2, z: hidden.z, targetX: hidden.x + 10, targetZ: hidden.z, speed: 0, phase: 'outbound', supply: 100, morale: 95, observations: [], carrying: {} });
   assert.ok(!visibleToGroup(state, home, hidden)); assert.ok(visibleToGroup(state, state.groups[1], hidden));
   const altered = structuredClone(state), hiddenOther = altered.groups[0];

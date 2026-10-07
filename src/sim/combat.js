@@ -15,7 +15,7 @@ import { stepIndividualCombat } from './individual-combat.js';
 // position, target, weapon clock and health; render budgets never limit damage.
 export const COMBAT_LIMITS = Object.freeze({ effects: 512, localTargets: 6, effectSeconds: 2.8 });
 const aliveHome = p => p && p.population > 0 && p.health > 0 && !['camp', 'ruin'].includes(p.status);
-export const canFight = g => !!g && g.kind === 'army' && !g.finished && !g.disabled && g.size > 0 && !['retreating', 'returning', 'disabled'].includes(g.phase);
+export const canFight = g => !!g && g.kind === 'army' && !g.finished && !g.disabled && g.size > 0 && !['retreating', 'disabled'].includes(g.phase);
 const factionOf = (s, id) => s.factions.find(f => f.id === id);
 const ownerOf = (s, entity) => 'population' in entity ? settlementController(s, entity) : entity.kind === 'worker' ? factionController(s, localGroupController(s, entity)) : groupController(s, entity);
 const homeOf = (s, g) => s.settlements.find(p => p.id === g.originId);
@@ -29,7 +29,8 @@ const observationCaches = new WeakMap();
 
 function permittedTarget(s, source, target, targetHome = null) {
   const a = ownerOf(s, source), b = ownerOf(s, targetHome || target), relation = factionOf(s, a)?.relations?.[b]?.status;
-  return a !== b && !['allied', 'trade'].includes(relation) && (hostile(s, a, b) || source.kind === 'army' && source.targetId === (targetHome || target).id);
+  const campaignOwner = source.kind === 'army' && factionOf(s, a)?.knowledge?.[source.targetId]?.ownerId;
+  return a !== b && !['allied', 'trade'].includes(relation) && (hostile(s, a, b) || source.kind === 'army' && (source.targetId === (targetHome || target).id || source.campaign && (source.missionEnemyId || campaignOwner) === b));
 }
 function strikeStillHostile(s, strike, target) {
   const group = s.groups.find(g => g.id === strike.sourceId), home = s.settlements.find(p => p.id === (strike.sourceHomeId || strike.sourceId));
@@ -224,12 +225,14 @@ function soldierAttack(s, source, target) {
 
 function startEngagement(s, g, target, hooks) {
   const cs = status(g), first = !cs.active || cs.targetId !== target.id;
+  if (g.phase === 'returning') cs.resumePhase = 'returning';
   cs.active = true; cs.targetId = target.id; cs.targetKind = target.kind === 'army' ? 'group' : ['worker', 'scout', 'structure'].includes(target.kind) ? target.kind : 'settlement';
   cs.targetHomeId = target.homeId ?? null; cs.lastContactTime = clock(s);
   cs.yaw = Math.atan2(target.x - g.x, target.z - g.z); g.phase = 'engaging';
   if (first) {
     cs.engagedAt = clock(s); cs.decisionUntil = clock(s) + 2.4; cs.originalSize = g.size; delete cs.exchangeStartedAt;
     if (cs.targetKind === 'group') {
+      hooks.hostility?.(s, factionOf(s, groupController(s, g)), factionOf(s, groupController(s, target)));
       const other = status(target), already = other.active && other.targetId === g.id;
       if (!already) {
         s.stats.battles = (s.stats.battles || 0) + 1;
@@ -247,7 +250,8 @@ function startEngagement(s, g, target, hooks) {
 }
 function clearEngagement(g) {
   if (g.combat) { g.combat.active = false; g.combat.localTargetIds = []; }
-  if (g.phase === 'engaging') g.phase = 'outbound';
+  if (g.phase === 'engaging') g.phase = g.combat?.resumePhase || 'outbound';
+  if (g.combat) g.combat.resumePhase = null;
 }
 // Estimates describe this squad's visible neighbourhood. Reports never become
 // live enemy counts, and reinforcements outside this squad's sight do not count.
@@ -278,13 +282,13 @@ function localSituation(s, g) {
     if (other.kind === 'army' && !other.finished && other.size > 0) {
       const target = { ...other, x: observed.x, z: observed.z, units: observed.units, combat: status(other) };
       const power = strength(combatant(s, target), d, true);
-      if (foe(id)) {
+      if (permittedTarget(s, g, other)) {
         const range = observed.units.ranged ? unitStats(factionOf(s, other.factionId)?.species, 'ranged').range : 2;
         const urgent = d < Math.max(7, range + 2);
         threats.push({ target, power, urgent, score: 30 - d + (urgent ? 14 : 0) });
       } else if (id === owner || factionOf(s, owner)?.relations?.[id]?.status === 'allied') support += power * clamp(1 - d / 20, .1, .85);
     } else if (other.kind === 'worker' && other.size > 0 && foe(id) && d <= 10 && clock(s) >= (other.raidedUntil ?? 0)) workers.push(other);
-    else if (other.kind === 'scout' && other.size > 0 && other.phase === 'outbound' && foe(id) && d <= 18) scouts.push(other);
+    else if (other.kind === 'scout' && other.size > 0 && (other.size === 1 || other.phase === 'outbound') && foe(id) && d <= 18 && (status(g).ignoredScoutId !== other.id || clock(s) >= status(g).ignoreScoutUntil)) scouts.push(other);
   }
   for (const home of s.settlements) {
     const observed = physicalObservation(s, g, home, 18), visible = observed.visible;
@@ -344,7 +348,7 @@ function acquire(s, g, hooks) {
   const selected = chooseStable(urgent.length ? urgent : local.threats, cs, now);
   let target = selected?.target, intent = 'engage', reason = 'Engaging the most immediate visible local threat.';
   if (selected && priorEconomic && target.id !== cs.targetId) { intent = 'intercept'; reason = 'Visible defenders threaten the raiders; interrupting the economic or wall attack.'; }
-  if (!selected) {
+  if (!selected && g.phase !== 'returning' && cs.resumePhase !== 'returning') {
     const cargo = CARGO_KEYS.reduce((n, key) => n + (g.carrying?.[key] || 0), 0);
     const economic = local.workers.filter(worker => cargo < g.size * 1.2 - .1 && CARGO_KEYS.some(key => (worker.carrying?.[key] || 0) > 0)).map(worker => ({ target: worker, score: 23 - distance(g, worker) }));
     if (!local.objective || distance(g, local.objective) > 4 || cs.targetKind === 'structure') for (const building of local.structures) if (distance(g, building) < 10) economic.push({ target: building, score: (building.structureKind === 'housing' ? 29 : 17) - distance(g, building) });
@@ -355,8 +359,19 @@ function acquire(s, g, hooks) {
     else if (target?.kind === 'structure') { intent = 'raid'; reason = `Disabling the exposed ${target.structureKind} while local defenders are absent.`; }
     else { intent = 'advance'; reason = 'Pressing the observed settlement after checking its local defenders.'; }
   }
+  if (target?.kind === 'scout') {
+    const gap = distance(g, target);
+    if (cs.scoutPursuit?.id !== target.id) cs.scoutPursuit = { id: target.id, since: now, progressAt: now, gap, x: g.x, z: g.z };
+    const chase = cs.scoutPursuit;
+    if (gap < chase.gap - .4) { chase.gap = gap; chase.progressAt = now; }
+    const escaping = Math.hypot(target.x - (target.prevX ?? target.x), target.z - (target.prevZ ?? target.z)) > .01 && (target.speed || 0) > (g.speed || 2.8) * 1.15 && gap > 3;
+    if (escaping || now - chase.since > 2.5 || now - chase.progressAt > 1.2 || distance(g, chase) > 6) {
+      cs.ignoredScoutId = target.id; cs.ignoreScoutUntil = now + 15; cs.scoutPursuit = null;
+      target = null; intent = 'advance'; reason = 'Scout pursuit cannot close quickly; resuming the useful march.';
+    }
+  } else cs.scoutPursuit = null;
   const goal = target || (Number.isFinite(g.missionTargetX ?? g.targetX) && Number.isFinite(g.missionTargetZ ?? g.targetZ) ? { x: g.missionTargetX ?? g.targetX, z: g.missionTargetZ ?? g.targetZ } : null);
-  const route = !selected?.urgent ? routeDecision(s, g, local, goal) : null;
+  const route = !selected?.urgent && g.phase !== 'returning' && cs.resumePhase !== 'returning' ? routeDecision(s, g, local, goal) : null;
   if (route?.action === 'breach') {
     const obstacle = local.walls.find(w => w.building.id === route.wallId && permittedTarget(s, g, w.home));
     if (obstacle && g.units.infantry > 0) { target = structureTarget(s, obstacle.home, obstacle.building); intent = 'breach'; reason = route.reason; }
@@ -368,7 +383,7 @@ function acquire(s, g, hooks) {
     cs.localTargetIds = contacts.map(t => t.id);
     return { target, contacts };
   }
-  clearEngagement(g); cs.intent = route?.action === 'detour' ? 'detour' : 'advance'; cs.reason = route?.reason || 'Following reported coordinates; no hostile contact is locally visible.';
+  clearEngagement(g); cs.intent = route?.action === 'detour' ? 'detour' : 'advance'; cs.reason = route?.reason || reason;
   return null;
 }
 function setGarrison(s, town, attackers, dt) {
@@ -446,7 +461,8 @@ function raidWorker(s, source, worker) {
 }
 function interceptScout(s, source, scout, hooks) {
   const home = homeOf(s, scout);
-  if (!home || scout.finished || scout.phase !== 'outbound' || !permittedTarget(s, source.entity, scout)) return;
+  if (!home || scout.finished || !permittedTarget(s, source.entity, scout)) return;
+  if (scout.size !== 1 && scout.phase !== 'outbound') return;
   let contact = false;
   for (let i = 0; i < countMilitary(source.units) && !contact; i++) {
     const from = unitPosition(source, i);
@@ -458,7 +474,7 @@ function interceptScout(s, source, scout, hooks) {
     scout.interceptedAt = clock(s); scout.interceptedBy = source.id;
     s.stats.scoutInterceptions = (s.stats.scoutInterceptions || 0) + 1;
     effect(s, { type: 'casualty', sourceId: source.id, targetId: scout.id, factionId: ownerOf(s, scout), x: scout.x, z: scout.z, count: 1 });
-    emit(s, 'intercept', `${source.faction.name} caught a hostile scout; its undelivered observations were lost.`, source.faction.id, { groupId: source.id, otherGroupId: scout.id, count: 1 });
+    emit(s, 'intercept', `${source.faction.name} caught a hostile scout; its live sight has ended.`, source.faction.id, { groupId: source.id, otherGroupId: scout.id, count: 1 });
     return;
   }
   const reason = 'Hostile troops intercepted the scouting party; its intact crew is carrying its observations home.';

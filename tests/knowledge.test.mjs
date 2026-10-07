@@ -56,7 +56,7 @@ test('observed connected gates retain physical geometry without exposing private
   assert.ok(!factionView(s, f.id).settlements.some(home => home.id === remote.id), 'Hidden walls must not remain live render geometry');
 });
 
-test('remote sight stays with a scout until its map and observations are actually reported', () => {
+test('scout sight and surveyed terrain reach faction planning live', () => {
   const s = fixture(), [f] = s.factions, [, remote] = s.settlements;
   // Observe in another starting clearing; the home cannot share this LOS.
   s.nodes = [node('remote-ore', { x: remote.x + 3, z: remote.z })];
@@ -64,11 +64,11 @@ test('remote sight stays with a scout until its map and observations are actuall
   stepKnowledge(s, { force: true });
   assert.ok(g.observations.some(o => o.id === 'remote-ore'));
   assert.ok(factionView(s, f.id).nodes.some(n => n.id === 'remote-ore'));
-  assert.ok(!knownResourceNodes(s, f).some(n => n.id === 'remote-ore'), 'unreturned field sight became a harvest target');
-  assert.equal(isExplored(s, f, remote), false, 'unreturned map reached the commander');
+  assert.ok(knownResourceNodes(s, f).some(n => n.id === 'remote-ore'), 'live scout sight must reach planning');
+  assert.equal(isExplored(s, f, remote), true, 'only surveyed terrain reaches the commander');
   tick(s);
   const report = reportObservations(s, f, g.observations, { group: g, method: 'return' });
-  assert.ok(report.fresh > 0); assert.ok(knownResourceNodes(s, f).some(n => n.id === 'remote-ore'));
+  assert.equal(report.fresh, 0, 'returning the same live reading must not duplicate it'); assert.ok(knownResourceNodes(s, f).some(n => n.id === 'remote-ore'));
   assert.equal(isExplored(s, f, remote), true);
 });
 
@@ -93,7 +93,7 @@ test('hidden place reports freeze, hidden units disappear, and regained sight re
   assert.equal(stale.amountEstimate, 400); assert.equal(stale.amount, undefined); assert.equal(stale.knowledgeView, 'remembered');
   g.x = remote.x; g.z = remote.z; tick(s);
   assert.equal(factionView(s, f.id).nodes.find(n => n.id === 'remembered-ore').amount, 7);
-  assert.equal(f.knowledge['remembered-ore'].amountEstimate, 400, 'recontact bypassed report transit');
+  assert.equal(f.knowledge['remembered-ore'].amountEstimate, 7, 'actual recontact must refresh live scout intelligence');
   reportObservations(s, f, g.observations, { group: g });
   assert.equal(f.knowledge['remembered-ore'].amountEstimate, 7);
 });
@@ -358,7 +358,7 @@ test('visible and occupied home bodies reflect same-pulse casualties and returns
   }
 });
 
-test('native recon learns occupied-home control only through actual sight and a subsequently delivered report', async () => {
+test('native recon learns occupied-home control from actual live scout sight', async () => {
   const { observeGroup } = await import('../src/sim/knowledge.js');
   const s = fixture('native-recon-control'), [native, occupier] = s.factions, [held, far] = s.settlements;
   held.occupiedBy = occupier.id;
@@ -381,7 +381,7 @@ test('native recon learns occupied-home control only through actual sight and a 
   g.observations = []; stepKnowledge(s, { force: true });
   observation = g.observations.find(o => o.id === held.id);
   assert.ok(observation); assert.equal(observation.ownerId, occupier.id);
-  assert.deepEqual(native.knowledge[held.id], oldReport);
+  assert.equal(native.knowledge[held.id].ownerId, occupier.id);
   reportObservations(s, native, g.observations, { method: 'return' });
   assert.equal(native.knowledge[held.id].ownerId, occupier.id);
   assert.equal(native.knowledge[held.id].observedTick, 5); assert.equal(native.knowledge[held.id].reportedTick, 5);
@@ -411,7 +411,7 @@ test('foreign-command native auxiliaries provide sight and reports only to their
   assert.equal(nativeView.settlements.find(h => h.id === held.id).population, 87, 'hidden auxiliaries were rendered again as residents');
   assert.deepEqual(nativeView.settlements.find(h => h.id === held.id).military, { infantry: 0, ranged: 0 });
   assert.equal(s.settlements.find(h => h.id === held.id).population, 100, 'a view changed the biological census');
-  assert.equal(commander.knowledge['auxiliary-discovery'], undefined, 'auxiliary field discovery bypassed return transit');
+  assert.equal(commander.knowledge['auxiliary-discovery'].reportMethod, 'scout-sight', 'the actual commander receives live scout sight');
   assert.equal(native.knowledge['auxiliary-discovery'], undefined);
   reportObservations(s, commander, scout.observations, { group: scout, homeId: held.id });
   assert.equal(commander.knowledge['auxiliary-discovery'].amountEstimate, 123); assert.equal(native.knowledge['auxiliary-discovery'], undefined);

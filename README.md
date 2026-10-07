@@ -85,13 +85,15 @@ Seeded advantages are independent of species. Examples include faster gathering 
 
 ## Physical systems
 
-- Workers travel to finite or regenerating deposits, extract within reach, carry cargo and deliver it home. Journey provisions are funded before departure. Trapped or exhausted expeditions can lose real people and cargo.
+- Workers travel to finite or regenerating deposits, extract within reach, carry cargo and deliver it home. Dispatch tries affordable reachable alternatives and funds survival trips before discretionary spending. A starving town may risk a small nearby recovery crew with only its remaining rations; hunger, casualties and cargo conservation still apply.
 - Each species has distinct infantry and ranged producers. Buildings require funded construction, and finite training queues pay their costs and reserve existing civilians. A cancelled or destroyed course cannot complete later.
 - Defenses grow as connected screens facing known approaches, beginning with a usable gate and joined wings. The rear remains open, and planned construction preserves friendly routes. Staffed towers need two actual ranged operators and paid ammunition. Civilians can contest a paper resource claim until real troops or towers secure it.
 - Terrain includes deep water, rocky barriers, fords and mountain passes. Group routes and body formation offsets respect physical obstacles; friendly/occupier gates preserve access.
 - Infantry loosen into reachable contact positions; ranged soldiers seek firing distance. Local body separation and a shared squad route keep passage movement physical. Infantry strikes and ranged projectiles create real damage and casualty events; effects only read those events.
 - Squads prioritize locally observed defenders, compare their supported strength with observable enemy types, and retreat when heavily overmatched. They can seize an exposed crew's real cargo or damage economic buildings. A useful breach must beat the cost of a detour. The inspector explains decisions and target interruptions. Lost storage records excess supplies as spoilage in the ledger.
-- Field observations travel with scouts and parties; home reports and earned relays deliver command knowledge. Hidden enemy stores, queues, future routes and fresh deposit quantities are unavailable to AI planners.
+- Scouts share live observations and surveyed terrain within their actual vision and line of sight. Other field parties carry observations home; memories remain stale after sight is lost. Hidden enemy stores, queues, future routes and fresh deposit quantities are unavailable to AI planners.
+- Healthy returning armies interrupt travel for hostile contact. Genuine withdrawals remain targetable. Scout pursuit ends promptly when it cannot close. Reinforcements rally to an existing front; physically nearby parties from one native settlement can merge without replacing identities, healing or creating supplies. Different settlements retain separate rosters on that front.
+- Funded colonies can depart from viable smaller towns, retaining home workers and real journey rations. Surveyed resource clusters, reported threats and accessible routes determine sites; hidden enemy positions do not enter the placement score.
 - Technology and trade require resources and people. A resource ledger accounts for production, extraction, cargo, deliveries, consumption, construction, research, training and losses.
 
 ## Build and verify

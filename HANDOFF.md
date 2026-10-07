@@ -1,3 +1,36 @@
+# Recovery, frontlines and live scouts — 2026-10-07
+
+One cloud lead; no specialists, videos, long seed sweeps or optional polish.
+User requested fixes for inactivity, isolated army return loops, colonial
+expansion, live scout intelligence, hostile contacts and futile scout pursuits.
+
+Harvest planning now tries reachable affordable alternatives, supports smaller
+crews and reserves survival dispatch before discretionary spending. Empty stores
+can launch small nearby recovery crews with only actually paid rations; existing
+field starvation and exact cargo ledgers still apply. Distress releases research
+labor. Colonies reserve 24–48 actual civilians from viable homes, fund journey
+and construction separately, and choose surveyed resources away from reported
+threats using routes without unseen enemy wall geometry.
+
+Scouts share actual LOS observations and surveyed cells live. Old unseen records
+remain stale; other field parties retain courier delivery. This supersedes older
+instructions requiring delayed scout reports. Current control still owns sight.
+
+Healthy returning armies interrupt march for hostile contact and then resume
+return. Genuine retreat stays targetable and does not initiate another battle.
+Brief scout pursuits stop for poor catchability, no progress or a short leash.
+Reinforcements rally to a shared front; same-origin parties may merge at physical
+contact while keeping canonical soldier objects, HP, clocks and paid stores.
+Different native homes keep separate rosters. No remote demographic transfer.
+
+Focused recovery/contact/intelligence/accounting tests and one 200-cycle normal
+first-light observation precede the existing required release pipeline. That
+observation had 179 deliveries, four battles, 36 combat deaths and no starvation
+deaths or abandonments; no colony formed within that short horizon. Do not claim
+universal strategy quality or long-game balance. Evidence/timings are under
+ignored screenshots/frontline-pass/. Final release is verified by exact SHA,
+terminal build/deploy/live gates and real public browser boot.
+
 # Scarcity, housing and responsive frames — 2026-10-07
 
 User requested an economical single-lead pass: no specialists, long sweeps, videos,
