@@ -1,0 +1,142 @@
+name: LittleWorld deep QA
+on:
+  workflow_dispatch:
+    inputs:
+      suite:
+        description: Comprehensive suite to run for substantive changes
+        type: choice
+        default: all
+        options: [all, simulation, browser, performance]
+permissions:
+  contents: read
+defaults:
+  run:
+    shell: bash
+concurrency:
+  group: deep-qa-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  simulation-qa:
+    if: ${{ inputs.suite == 'all' || inputs.suite == 'simulation' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - name: Twenty seeded domination and conservation audits
+        run: DOMINATION_SUMMARY_PATH=domination-summary.json node tests/domination.mjs | tee domination-results.jsonl
+      - name: Two seeded post-victory conservation and workforce audits
+        run: BALANCE_CYCLES=3000 node tests/balance.mjs first-light domination-06 | tee balance-results.jsonl
+      - name: Preserve seeded simulation evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: littleworld-simulation-evidence
+          path: |
+            domination-summary.json
+            domination-results.jsonl
+            balance-results.jsonl
+          retention-days: 14
+  browser-qa:
+    if: ${{ inputs.suite == 'all' || inputs.suite == 'browser' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CI: 'true'
+      BASE_URL: http://127.0.0.1:4176/little-world/
+      QA_TIER: ci
+      QA_QUALITY: low
+      QA_SOFTWARE_RENDERING: '1'
+      QA_VIDEO: '1'
+      QA_OUTPUT_DIR: screenshots
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: node tools/verify-build.mjs
+      - run: npx playwright install --with-deps chromium --only-shell
+      - name: Start the application
+        run: |
+          npm run preview > server.log 2>&1 &
+          for attempt in {1..30}; do
+            if curl --fail --silent http://127.0.0.1:4176/little-world/ > /dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat server.log
+          exit 1
+      - name: Observer controls and interruption regressions
+        run: node tests/controls-v2.mjs
+      - name: Browser tactical decisions, physical movement and hidden-information regressions
+        if: ${{ !cancelled() }}
+        env:
+          QA_OUTPUT_DIR: screenshots/tactical
+        run: node tests/tactical-browser.mjs
+      - name: Faction navigation, canvas inspection and natural campaign evidence
+        if: ${{ !cancelled() }}
+        env:
+          QA_OUTPUT_DIR: screenshots/interaction-campaign
+        run: node tests/interaction-campaign-browser.mjs
+      - name: Rendered growth, motion, harvesting and cloud performance
+        if: ${{ !cancelled() }}
+        run: node tests/visual-v2.mjs
+      - name: Preserve browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: littleworld-browser-evidence
+          path: |
+            screenshots/
+            videos/
+            server.log
+          retention-days: 14
+          if-no-files-found: warn
+  performance-qa:
+    if: ${{ inputs.suite == 'all' || inputs.suite == 'performance' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      BASE_URL: http://127.0.0.1:4176/little-world/
+      QA_SOFTWARE_RENDERING: '1'
+      QA_QUALITY: low
+      QA_OUTPUT_DIR: screenshots/active-performance
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: node tools/verify-build.mjs
+      - run: npx playwright install --with-deps chromium --only-shell
+      - name: Start the built artifact
+        run: |
+          npm run preview > server.log 2>&1 &
+          for attempt in {1..30}; do
+            if curl --fail --silent http://127.0.0.1:4176/little-world/ > /dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat server.log
+          exit 1
+      - name: CPU render budget audit
+        run: node tests/render-performance.mjs | tee render-performance.jsonl
+      - name: Isolated advancing browser at cycles 1200, 3000 and 5000
+        run: node tests/desktop-active-performance.mjs
+      - name: Preserve performance evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: littleworld-performance-evidence
+          path: |
+            screenshots/
+            render-performance.jsonl
+            server.log
+          retention-days: 14

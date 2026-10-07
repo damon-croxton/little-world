@@ -5,90 +5,20 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
+defaults:
+  run:
+    shell: bash
 concurrency:
   group: pages
   cancel-in-progress: true
 jobs:
-  simulation-qa:
-    runs-on: ubuntu-latest
-    timeout-minutes: 35
-    steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '24'
-          cache: npm
-      - run: npm ci
-      - name: Twenty seeded domination and conservation audits
-        run: DOMINATION_SUMMARY_PATH=domination-summary.json node tests/domination.mjs | tee domination-results.jsonl
-      - name: Two seeded post-victory conservation and workforce audits
-        run: BALANCE_CYCLES=3000 node tests/balance.mjs first-light domination-06 | tee balance-results.jsonl
-      - name: Preserve seeded simulation evidence
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: littleworld-simulation-evidence
-          path: |
-            domination-summary.json
-            domination-results.jsonl
-            balance-results.jsonl
-          retention-days: 14
-  browser-qa:
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    env:
-      CI: 'true'
-      BASE_URL: http://127.0.0.1:4174/
-      QA_TIER: ci
-      QA_QUALITY: low
-      QA_SOFTWARE_RENDERING: '1'
-      QA_VIDEO: '1'
-      QA_OUTPUT_DIR: screenshots
-    steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '24'
-          cache: npm
-      - run: npm ci
-      - run: npx playwright install --with-deps chromium
-      - name: Start the application
-        run: |
-          npm start > server.log 2>&1 &
-          for attempt in {1..30}; do
-            if curl --fail --silent http://127.0.0.1:4174/ > /dev/null; then exit 0; fi
-            sleep 1
-          done
-          cat server.log
-          exit 1
-      - name: Observer controls and interruption regressions
-        run: node tests/controls-v2.mjs
-      - name: Browser tactical decisions, physical movement and hidden-information regressions
-        if: ${{ !cancelled() }}
-        env:
-          QA_OUTPUT_DIR: screenshots/tactical
-        run: node tests/tactical-browser.mjs
-      - name: Faction navigation, canvas inspection and natural campaign evidence
-        if: ${{ !cancelled() }}
-        env:
-          QA_OUTPUT_DIR: screenshots/interaction-campaign
-        run: node tests/interaction-campaign-browser.mjs
-      - name: Rendered growth, motion, harvesting and cloud performance
-        if: ${{ !cancelled() }}
-        run: node tests/visual-v2.mjs
-      - name: Preserve browser evidence
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: littleworld-browser-evidence
-          path: |
-            screenshots/
-            videos/
-            server.log
-          retention-days: 14
-          if-no-files-found: warn
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      BASE_URL: http://127.0.0.1:4176/little-world/
+      QA_SOFTWARE_RENDERING: '1'
+      QA_OUTPUT_DIR: screenshots/smoke
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v4
@@ -99,13 +29,34 @@ jobs:
       - run: npm test
       - run: npm run build
       - run: node tools/verify-build.mjs
+      - run: npx playwright install --with-deps chromium --only-shell
+      - name: Start the exact built artifact
+        run: |
+          npm run preview > server.log 2>&1 &
+          for attempt in {1..30}; do
+            if curl --fail --silent http://127.0.0.1:4176/little-world/ > /dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat server.log
+          exit 1
+      - name: Bounded browser acceptance using the locked Chromium version
+        run: npm run test:smoke
+      - name: Preserve smoke evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: littleworld-smoke-evidence
+          path: |
+            screenshots/smoke/
+            server.log
+          retention-days: 14
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v4
         with:
           path: dist
   deploy:
     runs-on: ubuntu-latest
-    needs: [build, browser-qa, simulation-qa]
+    needs: build
     outputs:
       page_url: ${{ steps.deployment.outputs.page_url }}
     permissions:
@@ -121,12 +72,11 @@ jobs:
   live-qa:
     runs-on: ubuntu-latest
     needs: deploy
-    timeout-minutes: 10
+    timeout-minutes: 6
     env:
       BASE_URL: ${{ needs.deploy.outputs.page_url }}
       EXPECTED_COMMIT: ${{ github.sha }}
       QA_SOFTWARE_RENDERING: '1'
-      QA_QUALITY: low
       QA_OUTPUT_DIR: screenshots/live
     steps:
       - uses: actions/checkout@v6
@@ -135,9 +85,9 @@ jobs:
           node-version: '24'
           cache: npm
       - run: npm ci
-      - run: npx playwright install --with-deps chromium
-      - name: Verify exact public build and actual browser boot
-        run: node tests/live-browser.mjs
+      - run: npx playwright install --with-deps chromium --only-shell
+      - name: Verify exact public artifact with the same browser acceptance command
+        run: npm run test:smoke
       - name: Preserve public browser evidence
         if: always()
         uses: actions/upload-artifact@v4

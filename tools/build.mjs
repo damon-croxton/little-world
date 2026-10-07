@@ -1,6 +1,7 @@
 import {cp, mkdir, readFile, writeFile, rm} from 'node:fs/promises';
 import {fileURLToPath} from 'node:url';
 import path from 'node:path';
+import {execFileSync} from 'node:child_process';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const out = path.join(root, 'dist');
@@ -14,5 +15,7 @@ await cp(path.join(root, 'node_modules/three/LICENSE'), path.join(out, 'vendor/t
 const html = (await readFile(path.join(root, 'index.html'), 'utf8')).replaceAll('./node_modules/three/', './vendor/three/');
 await writeFile(path.join(out, 'index.html'), html);
 await writeFile(path.join(out, '.nojekyll'), '');
-await writeFile(path.join(out, 'build.json'), JSON.stringify({version:'0.2.0', commit:process.env.GITHUB_SHA || 'local'}, null, 2));
+let commit = process.env.GITHUB_SHA;
+if (!commit) { try { commit = execFileSync('git', ['rev-parse', 'HEAD'], {cwd:root, encoding:'utf8'}).trim(); } catch { commit = 'local'; } }
+await writeFile(path.join(out, 'build.json'), JSON.stringify({version:'0.2.0', commit}, null, 2));
 console.log('Built self-contained static site in dist/ (relative URLs support GitHub Pages project paths).');

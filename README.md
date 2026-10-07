@@ -78,7 +78,23 @@ node tests/ai-readability-browser.mjs
 
 Browser tests default to bundled Chromium. `BASE_URL` accepts a local server or hosted project subpath; `QA_CIVS` selects the start count. `QA_TIER=full` includes the 3,000-cycle/high-quality tier. `QA_QUALITY=low` selects performance rendering, `BROWSER_CHANNEL=chrome` selects installed Chrome, and `QA_VIDEO=0` explicitly skips recording. Software-WebGL CI is labelled as such.
 
-The Pages workflow gates every push to `main` on Node tests, seeded simulation audits, controls and visual evidence. Failed predeployment verification keeps the previous deployment. After deployment, a separate live browser check verifies the exact public `build.json` commit, WebGL boot, working pause/resume controls and weighted census. Screenshots, measurements and harvesting video are retained as Actions artifacts for 14 days. See `HANDOFF.md` for current cloud ownership and `DESKTOP-VALIDATION.md` for historical Windows browser verification and its limits.
+Every push to `main` runs the Node regression suite, builds and verifies the assets, and runs a short browser smoke against that exact built artifact. The same smoke command verifies the public Pages artifact after deployment. Each smoke has a 180-second total budget and checks the commit marker, real WebGL boot, simulation progress/pause, faction selection and fog privacy, building picking, pointer/keyboard input, weighted census and runtime errors. Failed predeployment checks keep the previous deployment. This fast path does not claim long-term balance or hardware performance.
+
+Development and CI use the same built preview, URL prefix, 1280×800 viewport, software-rendering flags and locked Playwright browser:
+
+```sh
+npm ci
+npx playwright install --with-deps chromium --only-shell
+npm run build
+npm run preview # keep running in a separate terminal
+QA_SOFTWARE_RENDERING=1 npm run test:smoke
+```
+
+The preview serves only `dist/` at `http://127.0.0.1:4176/little-world/`, matching the Pages project prefix. `EXPECTED_COMMIT` defaults to the checkout SHA; `BASE_URL` selects another host. The smoke rejects a browser version that differs from Playwright's lockfile-selected browser. `BROWSER_EXECUTABLE_PATH` plus `QA_BROWSER_PARITY=diagnostic` can gather explicitly labelled diagnostic evidence when browser installation is blocked; a mismatched run is never reported as release acceptance. CPU, OS, GPU and scheduling can still differ between runners, and the report records the environment and timings.
+
+Use **Actions → LittleWorld deep QA → Run workflow** for comprehensive checks. Choose `simulation` after economy, population, combat, campaign, navigation or victory changes; `browser` after substantial rendering, input, fog or inspection changes; `performance` after expensive simulation/rendering changes; or `all` before a substantial release. The retained suites include all 20 fixed domination/conservation seeds, both 3,000-cycle extensions, full observer/mobile controls, tactical scenarios, natural battle/harvesting videos, visual accounting and isolated advancing performance through cycle 5,000. Deep runs are manual and are not cancelled by routine main pushes. Their simulation job has a 60-minute execution budget; no seeds, invariants or audit intervals are removed. Reuse deep evidence only when its application source is unchanged, and run targeted regressions for every relevant correction.
+
+Smoke and deep evidence are retained as Actions artifacts for 14 days. See `HANDOFF.md` for current cloud ownership and `DESKTOP-VALIDATION.md` for historical Windows browser verification and its limits.
 
 ## Measurement and model boundaries
 

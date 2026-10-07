@@ -1,3 +1,37 @@
+# Fast publishing and browser parity — 2026-10-07
+
+The user explicitly replaced the earlier per-push deep-check policy. Main pushes
+now run the full fast Node regression suite, build/asset verification, and the
+bounded `npm run test:smoke` command against the exact built preview. After Pages
+deployment, the same command checks the exact public commit. Full simulation,
+mobile, visual, video and isolated performance suites remain in the manual
+`LittleWorld deep QA` workflow; README documents when each suite is required.
+
+`npm run preview` serves only `dist/` under `/little-world/` on port 4176. Both CI
+and development use this server, the same acceptance command, viewport and
+software-rendering flags. Playwright is lockfile-pinned; strict smoke checks its
+browser version. The saved cloud currently has Chromium 151, while the locked
+Playwright browser is Chromium 153.0.8010.12. The normal installer, including an
+explicit command-level network request, receives `403 Domain forbidden` from the
+Playwright CDN. Do not claim exact local browser parity while that remains true.
+Explicit diagnostic mode records the mismatch and cannot report `passed` for a
+mismatched browser. Use a supported environment provisioning route to resolve it;
+no user PC, credentials or persistent permission expansion is required here.
+
+Two earlier Actions failures were harness setup errors: a fixed 500ms delay
+inspected labels before the next render, and a projected worker center was behind
+a nearer building. Real rendered-frame synchronization and exposed-target
+preparation fixed them while preserving the actual click and identity assertions.
+The corrected `64e8e641dc19a7cfb83e31d1e221d8af9d38a029` browser job passed 61 controls,
+24 unique tactical cases, five interaction/battle checks and 12 visual checks.
+Application source remains unchanged by the CI/server/smoke work below.
+Its complete run `37558202879` finished with all five jobs green, including public
+boot. All 20 seeds passed conservation; six reached victory and 14 remained
+ongoing at cycle 2,000. Both 3,000-cycle extensions passed (first-light continued
+after victory; domination-06 remained ongoing). The simulation job took 34m19s
+and browser QA 11m14s. The user asked to move these long checks off routine pushes
+after that run completed; none of those audit assertions were removed.
+
 # Interaction and combat pass — 2026-10-07
 
 Continue exclusively in this saved cloud checkout. This pass builds on released
