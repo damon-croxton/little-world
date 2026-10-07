@@ -9,6 +9,7 @@ const fixture = () => createSimulation('debug-report', { civCount: 3 });
 
 test('diagnostic snapshot is coherent, roundtrips gzip, includes native and actual command identities, and never mutates simulation', async () => {
   const s = fixture(), home = s.settlements[0]; home.occupiedBy = 'f1';
+  home.assigned = {workers:11,scouts:2,traders:3,colonists:4,military:20};home.missingResources=['water','food'];
   const body = home.soldierRoster[0]; body.hp = 37; body.commandFactionId = 'f1'; body.order = { role: 'recover', objectiveId: home.id };
   const crew = { id: 'crew', kind: 'worker', factionId: 'f0', originId: home.id, size: 11, civilianWounds: 9, x: home.x, z: home.z, targetId: 'n1', carrying: { food: 40 }, provisions: { water: 3 }, soldierIds: [] };
   s.groups.push(crew); s.factions[0].campaignOrders = { army: { groupId: 'army', originId: home.id, size: 20, issuedTick: 12, expiresTick: 90, missionKind: 'campaign' } };
@@ -18,6 +19,7 @@ test('diagnostic snapshot is coherent, roundtrips gzip, includes native and actu
   const parsed = JSON.parse(encoded.encoding === 'gzip' ? gunzipSync(bytes) : bytes.toString());
   assert.deepEqual(parsed, r); assert.equal(r.schemaVersion, 1); assert.equal(r.containsHiddenWorldInformation, true);
   assert.equal(r.snapshot.settlements[0].factionId, 'f0'); assert.equal(r.snapshot.settlements[0].controllerId, 'f1');
+  assert.deepEqual(r.snapshot.settlements[0].assigned,home.assigned);assert.deepEqual(r.snapshot.settlements[0].missingResources,['water','food']);
   assert.equal(r.snapshot.soldiers[0].hp, 37); assert.equal(r.snapshot.soldiers[0].nativeFactionId, 'f0'); assert.equal(r.snapshot.soldiers[0].controllerId, 'f1');
   assert.equal(r.snapshot.groups[0].controllerId, 'f1'); assert.equal(r.snapshot.groups[0].civilianHealth, 343);
   assert.equal(r.snapshot.factions[0].campaignOrders[0].size, 20); assert.equal(r.snapshot.factions[0].campaignOrders[0].issuedTick, 12);
