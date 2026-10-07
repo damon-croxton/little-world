@@ -1,3 +1,49 @@
+# Individual-soldier prototype — 2026-10-07
+
+The user approved starting the combat rebuild with a separate 24-vs-24 battle.
+`battle.html` is accessible from the civilisation sidebar. Persistent soldiers
+own health, cooldowns, position, target and orders. Melee and ballistic arrows
+resolve against the exact named individual; fixed arrows can miss or meet cover.
+Wounded soldiers withdraw independently and remain attackable. Bounded pursuit
+rejects impossible chases; ranged units space and share visible focus targets.
+Team views conceal unseen enemies and private enemy intent. Whole-field mode
+only changes observation, never AI knowledge.
+
+This is an isolated prototype. The civilisation economy, campaigns, training,
+garrisons, pooled group combat and aggregated civilian crews remain in place.
+Integrating the individual lifecycle into those systems is separate work.
+Do not describe this prototype as a completed replacement of world combat.
+
+Focused tests cover target identity, independent cooldowns, simultaneous melee,
+withdrawal, pursuit feasibility, projectiles, navigation and fog invariance.
+`tests/battle-audit.mjs` checks five untouched 24-vs-24 seeds for exact HP/death
+ledgers and natural behavior. All 48 soldiers fired in every seed; there were no
+friendly shots or unexplained HP changes. Crossing ended in red victory at 44.2s
+and redoubt in blue victory at 65.6s. The other three seeds remained ongoing at
+120 simulated seconds. No outcome is forced to meet the audit horizon.
+
+The ordinary built/public smoke now includes sandbox boot, real soldier picking,
+team sight, play/pause, named damage and seed/size reset. Both entries are built
+and their complete asset graphs verified. The larger browser capture records an
+actual unmodified seeded fight at nominal 1x, keeps a selected casualty's exact
+identity, and checks portrait touch controls. Software rendering can slow the
+simulation: report actual simulation and wall time separately. Cloud Chromium
+151 diagnostics do not establish parity with strict Actions Chromium 153 or
+physical-phone/hardware performance. CPU benchmarks at 48/96/192 soldiers are
+Node timings only. Do not make thousand-soldier capacity claims.
+
+Reproduce focused checks with:
+
+    node --test tests/battle-simulation.test.mjs tests/battle-micro.test.mjs
+    node tests/battle-audit.mjs --output screenshots/battle-audit.json
+    npm run build
+    node tools/verify-build.mjs
+    QA_SOFTWARE_RENDERING=1 npm run test:smoke
+
+The source commit and public `build.json`, followed by terminal build/deploy/live
+Actions results, determine publication status. Evidence and Library receipts
+live in ignored `screenshots/battle-*`; preserve earlier releases' artifacts.
+
 # Fast publishing and browser parity — 2026-10-07
 
 The user explicitly replaced the earlier per-push deep-check policy. Main pushes

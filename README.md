@@ -4,6 +4,39 @@ An observer-first domination simulation of human settlers, scavenger machines an
 
 All architecture, terrain, characters and effects are original procedural geometry. Built with vanilla JavaScript and Three.js 0.160.1; no downloaded artwork is required.
 
+## Individual-soldier battle sandbox
+
+Open **Battle sandbox · 24 vs 24** in the civilisation view, or visit
+`battle.html`. This separate prototype lets two AIs fight with infantry, ranged
+soldiers and scouts. Select a soldier to inspect its own health, target and
+decision. Start/pause, seed replay and team perspectives make the fight observable.
+The civilisation simulation and its aggregated civilian crews remain separate.
+
+Battle soldiers have persistent identities, individual health and weapon clocks.
+Their physical positions determine reach and sight, hits damage the named target,
+and that individual dies when its health reaches zero. Squad objectives guide
+unit decisions; nearby threats, wounded withdrawal, ranged spacing and feasible
+pursuit affect each soldier. Team views hide unseen enemies. Whole-field viewing
+is an observer option and does not give the AI additional knowledge.
+
+This is the combat prototype, not yet a replacement for civilisation campaigns,
+training, garrisons or economic accounting. Those systems still use the existing
+group combat model. Integrating persistent soldiers into their full lifecycle is
+separate work. Benchmark reports distinguish Node CPU timings from browser and
+GPU performance; a tested small battle does not establish thousand-unit capacity.
+
+Focused verification:
+
+```sh
+node --test tests/battle-simulation.test.mjs tests/battle-micro.test.mjs
+node tests/battle-audit.mjs --output screenshots/battle-audit.json
+```
+
+The ordinary seeded audit checks exact health/death ledgers and records AI
+decisions; its increasing-count benchmark is CPU-only. The shared built/public
+browser smoke also boots the sandbox, picks an actual soldier, checks team sight,
+uses play/pause and observes a natural targeted hit.
+
 ## Run
 
 Install Node.js 24 or later:

@@ -431,3 +431,8 @@ button.world-label.selected::after { content: ''; position: absolute; bottom: -5
 .tactical-balance > span { display: flex; flex: 1; flex-direction: column; gap: 5px; color: var(--muted); font-size: 9px; }
 .tactical-balance strong { color: var(--paper); font-size: 14px; }
 .tactical-reading > small { display: block; color: var(--muted); font-size: 9px; line-height: 1.6; }
+
+/* The individual-soldier prototype has its own isolated entry point. */
+.battle-mode-link { display:flex; justify-content:space-between; align-items:center; gap:6px; min-height:38px; margin-top:7px; padding:8px 10px; border:1px solid #92b8a84d; border-radius:4px; color:#eee0b7; background:#122b2bd9; font:10px system-ui,sans-serif; text-decoration:none; }
+.battle-mode-link:hover,.battle-mode-link:focus-visible { background:#294b46; outline:1px solid #d9c892; }
+.battle-mode-link > span { color:#bac8b3; font-size:9px; white-space:nowrap; }

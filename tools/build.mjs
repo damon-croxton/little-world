@@ -12,8 +12,10 @@ await cp(path.join(root, 'src'), path.join(out, 'src'), {recursive:true});
 await cp(path.join(root, 'node_modules/three/build'), path.join(out, 'vendor/three/build'), {recursive:true});
 await cp(path.join(root, 'node_modules/three/examples/jsm'), path.join(out, 'vendor/three/examples/jsm'), {recursive:true});
 await cp(path.join(root, 'node_modules/three/LICENSE'), path.join(out, 'vendor/three/LICENSE'));
-const html = (await readFile(path.join(root, 'index.html'), 'utf8')).replaceAll('./node_modules/three/', './vendor/three/');
-await writeFile(path.join(out, 'index.html'), html);
+for (const entry of ['index.html', 'battle.html']) {
+  const html = (await readFile(path.join(root, entry), 'utf8')).replaceAll('./node_modules/three/', './vendor/three/');
+  await writeFile(path.join(out, entry), html);
+}
 await writeFile(path.join(out, '.nojekyll'), '');
 let commit = process.env.GITHUB_SHA;
 if (!commit) { try { commit = execFileSync('git', ['rev-parse', 'HEAD'], {cwd:root, encoding:'utf8'}).trim(); } catch { commit = 'local'; } }
