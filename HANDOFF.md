@@ -6,7 +6,10 @@ and 21 public checks (75.68s), with the exact public marker and pinned Chromium
 153.0.8010.12 WebGL boot. Public artifact 11480639270 /
 file_00000000e5d88230a60aabd37348aa3b; receipt and images are preserved under
 screenshots/worker-combat/ef0bc06-public-ci/. No returning army was stuck in the
-250 or 300-cycle final observations; the originally lagging survivor returned.
+250 or 300-cycle final observations. The previously affected expedition returned
+with nine of seventeen soldiers at cycle 204; the specific formerly stranded
+soldier died in combat at time 169.4 in this fresh replay. Do not claim that this
+individual returned or rejoined another expedition.
 
 This final small presentation change moves existing owned-crew health beside
 the work assignment, above the inspector fold. 17 existing UI tests pass; actual
