@@ -13,9 +13,9 @@ import {overviewFrame} from './render/overview.js';
 import {createUI} from './ui.js';
 import {normalizeConfig} from './config.js';
 import {PointerGestures} from './input.js';
-import {findObserved,SelectionMemory,knowledgeOverlaySource} from './selection.js';
+import {findObserved,SelectionMemory,knowledgeOverlaySource,factionFocusTarget,scenePickId,observedGroupController} from './selection.js';
 import {factionView} from './sim/knowledge.js';
-import {settlementController,groupController} from './sim/control.js';
+import {settlementController} from './sim/control.js';
 import {createFog} from './render/fog.js';
 import {createCombatEffects} from './render/combat.js';
 import {SimulationClock,SIM_DT} from './clock.js';
@@ -105,6 +105,7 @@ const actions={
   overview(immediate=false){view.followId=null;view.cinematic=false;overviewLocked=true;fitOverview();controls.maxDistance=Math.max(700,overviewPosition.distanceTo(overviewTarget)*1.05);if(immediate){camera.position.copy(overviewPosition);controls.target.copy(overviewTarget);controls.update();cameraGoal=null;}else cameraGoal={target:overviewTarget.clone(),position:overviewPosition.clone()};refreshUI();},
   follow(id){if(id===null){view.followId=null;cameraGoal=null;overviewLocked=false;refreshUI();}else focus(id||view.selectedId,true);},
   setPerspective(id){view.perspective=id==='omniscient'||state.factions.some(f=>f.id===id)?id:'omniscient';syncShownState();view.followId=null;view.cinematic=false;cameraGoal=null;reconcileSelection();overlayKey='';for(const el of labels.values())el.remove();labels.clear();refreshUI();},
+  inspectFaction(id){if(!state.factions.some(f=>f.id===id))return;actions.setPerspective(id);const target=factionFocusTarget(shownState,id);if(target)focus(target.id,true);else actions.overview();},
   setOverlay(mode){view.overlay=mode;overlayKey='';refreshUI();},
   setCinematic(value){view.cinematic=Boolean(value);if(view.cinematic)focus(view.selectedId||state.settlements[0].id,true);else actions.overview();refreshUI();},
   setQuality
@@ -119,7 +120,7 @@ function updateOverlay(){
   const key=view.perspective+':'+state.tick+':'+view.overlay+':'+view.selectedId+':'+state.settlements.map(s=>s.id+'='+ (s.controllerId||settlementController(state,s))).join(',');if(key===overlayKey)return;overlayKey=key;clearOverlay();if(view.overlay==='none')return;
   const positions=[],colors=[];const c=new THREE.Color();const add=(a,b,color)=>{c.set(color);positions.push(a.x,a.y,a.z,b.x,b.y,b.z);colors.push(c.r,c.g,c.b,c.r,c.g,c.b);};
   function route(a,b,color,dashed=false){const ay=heightAt(a.x,a.z,state.seed)+.5,by=heightAt(b.x,b.z,state.seed)+.5;for(let i=0;i<12;i++){if(dashed&&i%2)continue;const f=i/12,g=(i+1)/12;add({x:THREE.MathUtils.lerp(a.x,b.x,f),y:THREE.MathUtils.lerp(ay,by,f)+Math.sin(f*Math.PI)*2,z:THREE.MathUtils.lerp(a.z,b.z,f)},{x:THREE.MathUtils.lerp(a.x,b.x,g),y:THREE.MathUtils.lerp(ay,by,g)+Math.sin(g*Math.PI)*2,z:THREE.MathUtils.lerp(a.z,b.z,g)},color);}}
-  if(view.overlay==='routes')for(const g of state.groups){const f=state.factions.find(f=>f.id===groupController(state,g));if(Number.isFinite(g.targetX)&&Number.isFinite(g.targetZ))route(g,{x:g.targetX,z:g.targetZ},f?.color||'#fff',g.kind==='scout');}
+  if(view.overlay==='routes')for(const g of state.groups){const f=state.factions.find(f=>f.id===observedGroupController(state,g));if(Number.isFinite(g.targetX)&&Number.isFinite(g.targetZ))route(g,{x:g.targetX,z:g.targetZ},f?.color||'#fff',g.kind==='scout');}
   if(view.overlay==='territory')for(const s of state.settlements){const f=state.factions.find(f=>f.id===(s.controllerId||settlementController(state,s))),r=(s.radius||10)+5;for(let i=0;i<64;i++){const a=i/64*Math.PI*2,b=(i+1)/64*Math.PI*2,x=s.x+Math.cos(a)*r,z=s.z+Math.sin(a)*r,xx=s.x+Math.cos(b)*r,zz=s.z+Math.sin(b)*r;add({x,y:heightAt(x,z,state.seed)+.3,z},{x:xx,y:heightAt(xx,zz,state.seed)+.3,z:zz},f?.color||'#fff');}}
   if(view.overlay==='knowledge'){const {home,knowledge}=knowledgeOverlaySource(state,view.selectedId);if(home)for(const k of Object.values(knowledge))if(Number.isFinite(k.x)&&Number.isFinite(k.z))route(home,k,k.kind==='settlement'?'#ffc595':'#8ae5bb',true);}
   if(positions.length){const geometry=new THREE.BufferGeometry();geometry.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));geometry.setAttribute('color',new THREE.Float32BufferAttribute(colors,3));overlayGroup.add(new THREE.LineSegments(geometry,new THREE.LineBasicMaterial({vertexColors:true,transparent:true,opacity:.65,depthTest:false})));}
@@ -147,7 +148,7 @@ renderer.domElement.addEventListener('pointerup',e=>{
   if(!gestures.up(e.pointerId,e.clientX,e.clientY).tap)return;
   const rect=renderer.domElement.getBoundingClientRect();pointer.set((e.clientX-rect.left)/rect.width*2-1,-(e.clientY-rect.top)/rect.height*2+1);ray.setFromCamera(pointer,camera);
   const hit=ray.intersectObjects([...entities.getPickables(),...crowds.getPickables()],true)[0];
-  if(hit){const resolved=crowds.resolvePick?.(hit)||entities.resolvePick?.(hit);if(resolved){select(resolved);return;}let o=hit.object;while(o&&!o.userData.settlementId&&!o.userData.groupId)o=o.parent;if(o){select(o.userData.settlementId||o.userData.groupId);return;}}
+  if(hit){const resolved=crowds.resolvePick?.(hit)||entities.resolvePick?.(hit)||scenePickId(hit);if(resolved){select(resolved);return;}}
   const nodeId=terrain.pickResource?.(ray);if(nodeId){select(typeof nodeId==='string'?nodeId:nodeId.id);return;}
   const point=ray.ray.intersectPlane(groundPlane,new THREE.Vector3());if(point){const remembered=fog.pickRemembered(point);if(remembered){select(remembered);return;}const node=shownState.nodes.map(n=>({n,d:Math.hypot(n.x-point.x,n.z-point.z)})).sort((a,b)=>a.d-b.d)[0];if(node&&node.d<(node.n.radius||3)+2)select(node.n.id);}
 });

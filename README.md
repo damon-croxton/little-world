@@ -19,7 +19,8 @@ The default world has four civilisations and starts at 2x. Settings provide a se
 
 ## Observe
 
-- Desktop: left-drag orbits, right-drag pans, scroll zooms; click a place, party or resource to inspect.
+- Desktop: left-drag orbits, right-drag pans, scroll zooms; click a person, building, party or resource to inspect. Buildings show their own condition and purpose; people resolve to their real colony or party.
+- Click a civilisation in the left menu to focus its home and switch to its fog-of-war view. The menu remains available for switching between perspectives; private enemy census and stores stay hidden.
 - Touch: one finger pans; two fingers pinch to zoom and drag to orbit. The canvas contains its gestures; inspector panels scroll vertically.
 - On smaller screens, Societies, Inspect and Views are collapsed until requested. Map returns to the overview.
 - Space pauses; 1–5 select 1x, 2x, 4x, 16x, 32x. F follows, C toggles the cinematic camera, H hides/shows the interface, Escape returns to the overview.
@@ -31,6 +32,10 @@ One neutral cycle is one simulation second at 1x. The simulation advances in fix
 ## Domination and variation
 
 A civilisation wins when no independent opposing settlements or viable field armies remain. Defeated settlements can be occupied: their native inhabitants and species remain, and captured stores stay at the physical location. Conquest does not delete civilians, transform species or teleport inventory to a capital. A surviving field army can still try to liberate its home before capitulation. If a sovereign loses all native bases but still holds a foreign town, one held producer can recruit paid native auxiliaries under its command. Their species and population identity do not change.
+
+Campaigns reserve troops for home defense and may field bounded simultaneous expeditions. Command decisions use delivered intelligence and local home sightings; a field force uses its own visible contacts. Supplied survivors can press an undefended objective and continue from a captured depot after paying for the next route's rations. Low supplies, strong defenders and home threats can still justify withdrawal. Nearby soldiers can engage different hostile formations at once, while scouts intercepted at physical contact retreat with their people and reports intact.
+
+Inspectors distinguish native identity from current control. Buildings retain their native architecture; military command colors identify their controller. Combat checks current allegiance again when a delayed strike lands, so capture or capitulation cannot turn an old attack into friendly damage.
 
 The observer pauses on a newly declared victory and can keep watching, replay the seed or generate another world. The pacing target is roughly 5–10 minutes of playback at 2x, corresponding to 600–1,200 simulation cycles. This is a calibration target, not a timer that chooses a winner; see the validation report for measured seed outcomes and limitations.
 
@@ -67,6 +72,7 @@ npx playwright install --with-deps chromium
 node tests/controls-v2.mjs
 node tests/visual-v2.mjs
 node tests/tactical-browser.mjs
+node tests/interaction-campaign-browser.mjs
 node tests/ai-readability-browser.mjs
 ```
 

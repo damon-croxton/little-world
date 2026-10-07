@@ -1,6 +1,7 @@
-import { factionController, settlementController, groupController } from './sim/control.js';
+import { factionController, settlementController } from './sim/control.js';
 import { MILITARY_BUILDINGS, MILITARY_UNITS } from './sim/military.js';
 import { normalizeConfig, MIN_CIV_COUNT, MAX_CIV_COUNT } from './config.js';
+import { observedBuilding, observedGroupController } from './selection.js';
 
 const SPECIES = {
   human: { name: 'Human settlers', short: 'Human', mark: 'I', food: 'Provisions', water: 'Water', energy: 'Power', materials: 'Materials' },
@@ -77,7 +78,7 @@ export function createUI(root, actions) {
         <div class="render-reading"><span data-slot="performance">Measuring the view…</span><button data-action="help" class="text-button">Field guide</button></div>
       </section>
 
-      <nav id="atlas-inhabitants" class="faction-index" aria-label="Factions"><button class="mobile-panel-close" data-action="close-mobile-panel" aria-label="Close inhabitants panel">Close ×</button><div class="section-heading"><span class="eyebrow">The inhabitants</span><span data-slot="faction-count" class="count-label">06</span></div><div data-slot="factions" class="faction-list"></div><p class="faction-index-note">Select a colony, a moving team, or a resource site to follow its work.</p><div class="developed-control"><button class="developed-button" data-action="develop" title="Actually simulate another 1,200 cycles of this current seed">${icon('arrow')}<span>Developed world</span></button><p>Simulate this world forward 1,200 cycles.</p></div></nav>
+      <nav id="atlas-inhabitants" class="faction-index" aria-label="Factions"><button class="mobile-panel-close" data-action="close-mobile-panel" aria-label="Close inhabitants panel">Close ×</button><div class="section-heading"><span class="eyebrow">The inhabitants</span><span data-slot="faction-count" class="count-label">06</span></div><div data-slot="factions" class="faction-list"></div><p class="faction-index-note">Choose a civilisation to focus its home and see through its fog of war. Click people or buildings to inspect them.</p><div class="developed-control"><button class="developed-button" data-action="develop" title="Actually simulate another 1,200 cycles of this current seed">${icon('arrow')}<span>Developed world</span></button><p>Simulate this world forward 1,200 cycles.</p></div></nav>
 
       <aside id="atlas-inspector" class="inspector glass" aria-label="Selection details"><button class="mobile-panel-close" data-action="close-mobile-panel" aria-label="Close selection panel">Close ×</button>
         <div data-slot="selection-header" class="selection-header"></div>
@@ -104,7 +105,7 @@ export function createUI(root, actions) {
         <button class="icon-button guide-close" data-action="help" aria-label="Close field guide">${icon('close')}</button>
         <span class="eyebrow">A small field guide</span><h2>Watch a world<br>find its way.</h2>
         <p>The societies begin small. Each population unit is an actual individual. Teams share work decisions, travel to physical sites, extract supplies and carry them home.</p>
-        <ol><li><strong>Watch it grow.</strong> Try 16x, or Developed world to actually simulate 1,200 more cycles of the current seed. A cycle is one simulation second at 1x.</li><li><strong>Follow the work.</strong> Select a colony, team or resource site. Watch building projects, extraction and cargo deliveries.</li><li><strong>See what they know.</strong> Choose a civilisation in settings to see its fog of war. Reports age, and scouts must return or transmit what they discover.</li><li><strong>Watch them prepare.</strong> Paid training buildings produce infantry and ranged units. Walls, gates and towers protect routes and resources; supplies and terrain still decide what survives.</li></ol>
+        <ol><li><strong>Watch it grow.</strong> Try 16x, or Developed world to actually simulate 1,200 more cycles of the current seed. A cycle is one simulation second at 1x.</li><li><strong>Follow the work.</strong> Select a colony, team or resource site. Watch building projects, extraction and cargo deliveries.</li><li><strong>See what they know.</strong> Click a civilisation in the left menu to focus its home and see its fog of war. Whole world is available in settings. Reports age, and scouts must return or transmit what they discover.</li><li><strong>Watch them prepare.</strong> Paid training buildings produce infantry and ranged units. Walls, gates and towers protect routes and resources; supplies and terrain still decide what survives.</li></ol>
         <div class="guide-shortcuts"><span><kbd>Space</kbd> pause</span><span>Drag to orbit</span><span>Scroll to explore</span></div>
         <button class="guide-done" data-action="help">Let the world unfold ${icon('arrow')}</button>
       </section>
@@ -161,11 +162,16 @@ export function createUI(root, actions) {
     const resource = list(state?.nodes).find(item => item.id === view.selectedId);
     const knownPlace = list(state?.knownPlaces).find(item => item.id === view.selectedId);
     const group = groups.find(item => item.id === view.selectedId);
-    const settlement = settlements.find(item => item.id === view.selectedId) || (group ? settlements.find(item => item.id === group.originId) : settlements.find(item => item.factionId === view.selectedId && !isRuin(item)) || settlements.find(item => item.factionId === view.selectedId || item.lastFactionId === view.selectedId)) || (!group ? settlements[0] : null);
-    const faction = factions.find(item => item.id === (resource ? lastFactionId : knownPlace?.ownerId || (group ? group.controllerId || groupController(state,group) : null) || settlement?.factionId || settlement?.lastFactionId || view.selectedId)) || factions[0];
+    const buildingSelection = state && observedBuilding(state, view.selectedId);
+    const building = buildingSelection?.building;
+    const settlement = buildingSelection?.settlement || settlements.find(item => item.id === view.selectedId) || (group ? settlements.find(item => item.id === group.originId) : settlements.find(item => item.factionId === view.selectedId && !isRuin(item)) || settlements.find(item => item.factionId === view.selectedId || item.lastFactionId === view.selectedId)) || (!group ? settlements[0] : null);
+    const controllerId = group ? observedGroupController(state, group) : settlement ? settlement.controllerId || settlementController(state, settlement) : null;
+    const controller = factions.find(item => item.id === controllerId);
+    const nativeFaction = factions.find(item => item.id === (group?.factionId || settlement?.factionId));
+    const faction = factions.find(item => item.id === (resource ? lastFactionId : knownPlace?.ownerId || ((group || building) ? controllerId : null) || settlement?.factionId || settlement?.lastFactionId || view.selectedId)) || factions[0];
     if (!resource && faction) lastFactionId = faction.id;
     const nativeSpecies = factions.find(item => item.id === (group?.factionId || settlement?.factionId))?.species || faction?.species;
-    return { settlement, group, resource, knownPlace, faction, species: SPECIES[nativeSpecies] || SPECIES.human };
+    return { settlement, group, building, resource, knownPlace, faction, controller, nativeFaction, species: SPECIES[nativeSpecies] || SPECIES.human };
   }
 
   function onClick(event) {
@@ -183,6 +189,7 @@ export function createUI(root, actions) {
       case 'overview': actions.overview?.(); setMobilePanel(null); break;
       case 'speed': actions.setSpeed?.(Number(value)); break;
       case 'select': actions.select?.(value); break;
+      case 'inspect-faction': actions.inspectFaction?.(value); break;
       case 'select-resource': (actions.selectResource || actions.select)?.(value); break;
       case 'develop': developWorld(); break;
       case 'diagnostics': settings.hidden = false; guide.hidden = true; setMobilePanel(null); root.querySelector('.settings-toggle').setAttribute('aria-expanded', 'true'); break;
@@ -371,17 +378,43 @@ export function createUI(root, actions) {
     return `<section class="tactical-reading"><div class="section-heading"><span class="eyebrow">Local decision</span><strong>${esc(title(combat.intent))}</strong></div><p>${esc(combat.reason)}</p>${local ? `<div class="tactical-balance"><span>Own force <strong>${num(combat.localStrength)}</strong></span><span>Nearby support <strong>${num(combat.supportStrength)}</strong></span><span>Estimated opposition <strong>${num(combat.enemyStrength)}</strong></span></div><small>Strength scores use visible troop types. Our force also accounts for morale, supplies and equipment.</small>` : ''}</section>`;
   }
 
+  function identityMarkup({controller,nativeFaction,species}) {
+    return `<dl class="ledger-list identity-reading"><div><dt>Controlled by</dt><dd>${esc(controller?.name || 'Unknown')}</dd></div><div><dt>Native identity</dt><dd>${esc(nativeFaction?.name || 'Unknown')} · ${esc(species.short)}</dd></div></dl>`;
+  }
+
+  function buildingMarkup(current, foreign) {
+    const {building,settlement,nativeFaction,species}=current;
+    const progress=clamp((building.progress ?? 1)*100),broken=building.destroyed||building.hp===0;
+    const producer=MILITARY_BUILDINGS[building.kind];
+    const description=producer ? `Trains existing citizens as ${producer.role === 'ranged' ? 'ranged troops' : 'infantry'} when a course is funded.` : ({
+      hub:'The settlement centre anchors its buildings and local roads.',housing:'Shelters the native population and adds room for settlement growth.',
+      storage:'Adds carrying capacity for supplies held at this settlement.',workshop:'Supports local industry and the infrastructure needed for technological progress.',
+      farm:'Produces food when completed and staffed by local inhabitants.',power:'Produces energy when completed and staffed by local inhabitants.',
+      lab:'Provides research capacity for the civilisation’s next discoveries.',wall:'Blocks movement and protects nearby routes and inhabitants.',
+      gate:'Provides a controlled passage through the defensive line.',tower:'Ranged operators defend nearby approaches and consume ammunition for each shot.',
+    }[building.kind] || 'Part of the settlement’s local infrastructure.');
+    const status=broken?'Destroyed':isRuin(settlement)?'Abandoned':progress<100?'Under construction':building.kind==='tower'?(building.operational?'Operational':foreign?'Inactive':building.inactiveReason||'Unstaffed'):'Complete';
+    const rows=[['Condition',status],['Construction',`${num(progress)}%`]];
+    if(Number.isFinite(building.hp))rows.push(['Integrity',`${num(building.hp)}${Number.isFinite(building.maxHp)?` / ${num(building.maxHp)}`:''}`]);
+    if(building.kind==='gate'&&progress>=100&&!broken)rows.push(['Passage',building.open||building.gateOpen?'Open':'Closed']);
+    if(building.kind==='tower'&&Number.isFinite(building.crewAssigned))rows.push(['Ranged operators',num(building.crewAssigned)]);
+    const queues=foreign?[]:list(settlement.trainingQueue).filter(job=>job.buildingId===building.id);
+    const units=MILITARY_UNITS[nativeFaction?.species] || MILITARY_UNITS.human;
+    return `<section class="building-detail"><span class="knowledge-badge">${foreign?'Visible structure':'Selected building'}</span><p>${esc(description)}</p>${identityMarkup(current)}<dl class="ledger-list">${rows.map(([label,value])=>`<div><dt>${esc(label)}</dt><dd>${esc(value)}</dd></div>`).join('')}</dl>${foreign?'<p class="muted-note">Only observable details are available. Foreign stores, orders and training queues remain unknown.</p>':`${producer?`<section class="inspector-section"><span class="eyebrow">Training here</span>${queues.length?queues.map(job=>`<p>${num(job.size)} ${esc(units[job.role]?.name || title(job.role))} · ${num(job.progress*100)}% trained · ${num(job.remaining)} cycles remaining</p>`).join(''):`<p class="muted-note">${broken?'Training has stopped at this destroyed producer.':progress<100?'Training starts only after construction finishes.':'No active course at this producer.'}</p>`}</section>`:''}${building.kind==='storage'?`<p class="muted-note">The settlement holds ${num(Object.values(settlement.stock||{}).reduce((sum,amount)=>sum+n(amount),0))} supplies in total. Capacity is ${num(settlement.capacity)} per resource across its completed storage.</p>`:''}${building.fundedCost?`<p class="muted-note">Construction paid: ${esc(Object.entries(building.fundedCost).map(([kind,amount])=>`${num(amount)} ${species[kind]||kind}`).join(', '))}.</p>`:''}`}<button class="text-button" data-action="select" data-value="${esc(settlement.id)}">Inspect ${esc(settlement.name || 'settlement')} ${icon('arrow')}</button></section>`;
+  }
+
   function groupMarkup(group, faction) {
     if (!group) return '';
     const origin = list(state.settlements).find(s => s.id === group.originId);
     const target = list(state.settlements).find(s => s.id === group.targetId) || list(state.nodes).find(s => s.id === group.targetId);
     const destination = target?.name || (target?.kind ? `${title(target.kind)} deposit` : group.phase === 'returning' || group.phase === 'retreating' ? origin?.name || 'Home' : 'Uncharted ground');
     const cargo = Object.entries(group.carrying || {}).filter(([, amount]) => n(amount) > 0).map(([kind, amount]) => `${num(amount)} ${kind}`).join(', ');
-    return `<section class="party-detail"><div class="party-phase"><span class="phase-dot"></span>${esc(title(group.phase || 'Travelling'))}<span>${num(group.size)} ${group.kind === 'army' ? 'soldiers' : 'travellers'}</span></div><p class="party-reason">${esc(group.reason || faction?.intent || 'Exploring the world beyond home.')}</p><div class="party-destination"><span class="eyebrow">Destination</span><strong>${esc(destination)}</strong></div><div class="party-gauges">${[['supply', 'Supplies'], ['morale', 'Morale']].map(([key, label]) => `<div><span>${label}<strong>${num(group[key])}%</strong></span><div class="stock-track ${n(group[key]) < 25 ? 'danger-track' : ''}"><i style="width:${clamp(group[key])}%"></i></div></div>`).join('')}</div><p class="muted-note">${group.kind === 'scout' ? `${list(group.observations).length} field observations. Knowledge reaches home only after a report arrives.` : 'Distance, terrain and provisions shape whether a party presses on or turns back.'}</p>${(group.capacity || group.cargoCapacity) ? `<p class="cargo-reading"><span class="eyebrow">Cargo</span> ${esc(cargo || 'Empty')} <small>· ${num(group.capacity || group.cargoCapacity)} capacity</small></p>` : ''}${group.commandFactionId && group.commandFactionId !== group.factionId ? `<p class="auxiliary-reading">Native ${esc(list(state.factions).find(f => f.id === group.factionId)?.species || 'local')} auxiliaries commanded by ${esc(list(state.factions).find(f => f.id === groupController(state,group))?.name || 'their controller')}. Existing people retain their native identity.</p>` : ''}${group.kind === 'army' ? `<p class="military-composition">${num(group.units?.infantry)} infantry · ${num(group.units?.ranged)} ranged${group.combat?.targetId ? ' · engaged' : ''}</p>` : ''}${tacticalMarkup(group)}${group.intelligence ? `<p class="mission-intelligence">Mobilised from a report delivered on cycle ${num(group.intelligence.reportedTick)}: ${num(clamp(n(group.intelligence.confidence) * 100))}% confidence, observed ${num(Math.max(0, n(state.tick) - n(group.intelligence.observedTick)))} cycles ago.</p>` : ''}</section>`;
+    return `<section class="party-detail"><div class="party-phase"><span class="phase-dot"></span>${esc(title(group.phase || 'Travelling'))}<span>${num(group.size)} ${group.kind === 'army' ? 'soldiers' : 'travellers'}</span></div><p class="party-reason">${esc(group.reason || faction?.intent || 'Exploring the world beyond home.')}</p><div class="party-destination"><span class="eyebrow">Destination</span><strong>${esc(destination)}</strong></div><div class="party-gauges">${[['supply', 'Supplies'], ['morale', 'Morale']].filter(([key]) => Number.isFinite(group[key])).map(([key, label]) => `<div><span>${label}<strong>${num(group[key])}%</strong></span><div class="stock-track ${n(group[key]) < 25 ? 'danger-track' : ''}"><i style="width:${clamp(group[key])}%"></i></div></div>`).join('')}</div><p class="muted-note">${group.kind === 'scout' ? `${list(group.observations).length} field observations. Knowledge reaches home only after a report arrives.` : 'Distance, terrain and provisions shape whether a party presses on or turns back.'}</p>${(group.capacity || group.cargoCapacity) ? `<p class="cargo-reading"><span class="eyebrow">Cargo</span> ${esc(cargo || 'Empty')} <small>· ${num(group.capacity || group.cargoCapacity)} capacity</small></p>` : ''}${group.commandFactionId && group.commandFactionId !== group.factionId ? `<p class="auxiliary-reading">Native ${esc(list(state.factions).find(f => f.id === group.factionId)?.species || 'local')} auxiliaries commanded by ${esc(list(state.factions).find(f => f.id === observedGroupController(state,group))?.name || 'their controller')}. Existing people retain their native identity.</p>` : ''}${group.kind === 'army' ? `<p class="military-composition">${num(group.units?.infantry)} infantry · ${num(group.units?.ranged)} ranged${group.combat?.targetId ? ' · engaged' : ''}</p>` : ''}${tacticalMarkup(group)}${group.intelligence ? `<p class="mission-intelligence">Mobilised from a report delivered on cycle ${num(group.intelligence.reportedTick)}: ${num(clamp(n(group.intelligence.confidence) * 100))}% confidence, observed ${num(Math.max(0, n(state.tick) - n(group.intelligence.observedTick)))} cycles ago.</p>` : ''}</section>`;
   }
 
   function lifeMarkup({ settlement, group, faction, species }) {
     if (!faction) return '<p class="empty-note">A world is taking shape.</p>';
+    if (group && !settlement) return `${groupMarkup(group,faction)}<p class="muted-note">This party’s native home census and private history are not available in this perspective.</p>`;
     if (isRuin(settlement) && !group) return ruinMarkup({ settlement, faction, species });
     if (settlement?.knowledgeControl === 'occupied') {
       const controller = (view.perspectiveOptions || state.factions).find(f => f.id === settlement.controllerId || f.id === settlement.occupiedBy);
@@ -442,13 +475,23 @@ export function createUI(root, actions) {
   }
 
   function renderSelection(current) {
-    const { settlement, group, resource, knownPlace, faction, species } = current;
+    const { settlement, group, building, resource, knownPlace, faction, controller, species } = current;
     const selectedActor = group || settlement;
-    const foreign = state.viewer?.mode === 'faction' && !resource && (![selectedActor?.controllerId || (group ? groupController(state,group) : settlement ? settlementController(state,settlement) : null), selectedActor?.nativeFactionId || selectedActor?.factionId].includes(state.viewer.factionId) || (group?.knowledgeView === 'visible' && !group.originId));
-    if (knownPlace || foreign || (group && !group.originId)) {
+    const foreign = state.viewer?.mode === 'faction' && !resource && (![selectedActor?.controllerId || (group ? observedGroupController(state,group) : settlement ? settlementController(state,settlement) : null), selectedActor?.nativeFactionId || selectedActor?.factionId].includes(state.viewer.factionId) || (group?.knowledgeView === 'visible' && !group.originId && group.knowledgeControl !== 'occupied'));
+    if (building) {
+      const inspector=root.querySelector('.inspector');inspector.classList.remove('inspector-ruin','inspector-camp');inspector.style.setProperty('--selection-color',color(controller?.color));
+      setHTML(slots['selection-header'],`<div class="selection-kicker"><span class="eyebrow">${foreign?'Observed building':'Building in focus'}</span><span class="species-mark">${species.mark}</span></div><h2>${esc(buildingLabel(building.kind,current.nativeFaction?.species))}</h2><div class="selection-affiliation"><i></i><span>${esc(controller?.name || 'Unknown controller')}</span><small>${esc(settlement.name || species.short)}</small></div>`);
+      for(const [tab,label] of [['life','Structure'],['intelligence','Context'],['record','Record']]){const button=root.querySelector(`#atlas-tab-${tab}`);button.textContent=label;button.setAttribute('aria-selected',String(activeTab===tab));button.tabIndex=activeTab===tab?0:-1;}
+      slots['selection-body'].setAttribute('aria-labelledby',`atlas-tab-${activeTab}`);
+      const privateFaction=state.viewer?.mode!=='faction'||faction?.id===state.viewer.factionId;
+      setHTML(slots['selection-body'],buildingMarkup(current,foreign)+(activeTab==='intelligence'&&!foreign&&privateFaction?intelligenceMarkup(current):activeTab==='record'&&!foreign&&privateFaction?recordMarkup(current):''));
+      renderSelectionAction(building.id,view.followId===building.id?'Following building':'View building',foreign?'Visible observation':settlement.name||'Local infrastructure');
+      return;
+    }
+    if (knownPlace || foreign || (group && !group.originId && group.knowledgeControl !== 'occupied')) {
       const object = knownPlace || group || settlement;
       const remembered = !!knownPlace;
-      const ownerId = object?.controllerId || (group ? groupController(state,group) : null) || object?.ownerId || object?.factionId;
+      const ownerId = object?.controllerId || (group ? observedGroupController(state,group) : null) || object?.ownerId || object?.factionId;
       const owner = state.factions.find(f => f.id === ownerId);
       const observedTick = object?.observedTick ?? state.tick;
       const age = Math.max(0, state.tick - observedTick);
@@ -459,7 +502,7 @@ export function createUI(root, actions) {
       for (const [tab, label] of [['life', 'Observation'], ['intelligence', 'Memory'], ['record', 'Limits']]) { const button = root.querySelector(`#atlas-tab-${tab}`); button.textContent = label; button.setAttribute('aria-selected', String(activeTab === tab)); button.tabIndex = activeTab === tab ? 0 : -1; }
       slots['selection-body'].setAttribute('aria-labelledby', `atlas-tab-${activeTab}`);
       const estimates = [['Population estimate', object?.populationEstimate], ['Defender estimate', object?.soldiersEstimate], ['Observed group', object?.sizeEstimate ?? group?.size], ['Resource estimate', object?.amountEstimate ?? object?.abundanceEstimate]].filter(([,value]) => Number.isFinite(value));
-      setHTML(slots['selection-body'], `<section class="known-place-reading"><span class="knowledge-badge">${remembered ? 'Last known position' : 'Local line of sight'}</span><p>${remembered ? 'This dashed marker records an earlier observation. Hidden changes are not shown.' : 'Only observable details are available. Foreign stores, orders and training queues remain unknown.'}</p><p>Observed on cycle ${num(observedTick)} · ${num(age)} cycles ago.</p>${estimates.length ? `<dl class="ledger-list">${estimates.map(([label,value]) => `<div><dt>${esc(label)}</dt><dd>~${num(value)}</dd></div>`).join('')}</dl>` : ''}<p>${activeTab === 'intelligence' ? 'A scout must return or deliver an earned signal for field discoveries to reach its civilisation’s command knowledge.' : activeTab === 'record' ? 'The whole-world perspective is an observer tool. Switching views does not reveal information to the simulated factions.' : 'Revisit this location to learn what has changed.'}</p></section>`);
+      setHTML(slots['selection-body'], `<section class="known-place-reading"><span class="knowledge-badge">${remembered ? 'Last known position' : 'Local line of sight'}</span><p>${remembered ? 'This dashed marker records an earlier observation. Hidden changes are not shown.' : 'Only observable details are available. Foreign stores, orders and training queues remain unknown.'}</p><p>Observed on cycle ${num(observedTick)} · ${num(age)} cycles ago.</p>${!remembered?identityMarkup(current):''}${group&&!remembered?`<p>${esc(title(group.phase||'In sight'))}${group.kind==='army'&&group.units?` · ${num(group.units.infantry)} infantry · ${num(group.units.ranged)} ranged`:''}</p>`:''}${estimates.length ? `<dl class="ledger-list">${estimates.map(([label,value]) => `<div><dt>${esc(label)}</dt><dd>~${num(value)}</dd></div>`).join('')}</dl>` : ''}<p>${activeTab === 'intelligence' ? 'A scout must return or deliver an earned signal for field discoveries to reach its civilisation’s command knowledge.' : activeTab === 'record' ? 'The whole-world perspective is an observer tool. Switching views does not reveal information to the simulated factions.' : 'Revisit this location to learn what has changed.'}</p></section>`);
       renderSelectionAction(object?.id, remembered ? 'View last location' : 'Follow contact', remembered ? 'Memory, not live state' : 'Visible observation');
       return;
     }
@@ -485,7 +528,7 @@ export function createUI(root, actions) {
     setHTML(slots['selection-header'], `<div class="selection-kicker"><span class="eyebrow">${group ? `${esc(title(group.kind))} party` : isRuin(settlement) ? 'Ruins in focus' : isCamp(settlement) ? 'Displaced camp in focus' : 'Settlement in focus'}</span><span class="species-mark">${species.mark}</span></div><h2>${esc(group ? `${title(group.kind)} · ${String(group.id).replace(/\D/g, '') || 'I'}` : settlement?.name || 'An unfolding world')}</h2><div class="selection-affiliation"><i></i><span>${esc(faction?.name || 'First inhabitants')}</span><small>${faction?.status === 'collapsed' ? 'Collapsed' : faction?.status === 'displaced' ? 'Displaced' : esc(species.short)}</small></div>`);
     root.querySelectorAll('[data-action="tab"]').forEach(button => { button.setAttribute('aria-selected', String(button.dataset.value === activeTab)); button.tabIndex = button.dataset.value === activeTab ? 0 : -1; });
     slots['selection-body'].setAttribute('aria-labelledby', `atlas-tab-${activeTab}`);
-    const life = activeTab === 'life' ? lifeMarkup(current) : '';
+    const life = activeTab === 'life' ? `${group || settlement?.occupiedBy ? identityMarkup(current) : ''}${lifeMarkup(current)}` : '';
     const lifeWithColony = group ? workerJobMarkup(group) + life : !isRuin(settlement) ? life.replace('<section class="inspector-section"><div class="population-summary">', `${workforceMarkup(settlement)}${militaryMarkup(settlement, faction)}<section class="inspector-section"><div class="population-summary">`) : life;
     setHTML(slots['selection-body'], activeTab === 'intelligence' ? intelligenceMarkup(current) : activeTab === 'record' ? recordMarkup(current) : lifeWithColony);
     const followed = !!selectionId && view.followId === selectionId;
@@ -528,22 +571,19 @@ export function createUI(root, actions) {
     root.querySelectorAll('[data-action="speed"]').forEach(button => button.setAttribute('aria-pressed', String(Number(button.dataset.value) === view.speed)));
     root.querySelectorAll('[data-action="overlay"]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.value === (view.overlay || 'none'))));
     root.querySelector('[data-action="cinematic"]').setAttribute('aria-pressed', String(!!view.cinematic));
-    slots['faction-count'].textContent = String(list(state.factions).length).padStart(2, '0');
-    setHTML(slots.factions, list(state.factions).map(faction => {
-      const settlements = list(state.settlements).filter(s => s.factionId === faction.id || (!s.factionId && s.lastFactionId === faction.id));
-      const inhabited = settlements.filter(s => !isRuin(s));
-      const target = inhabited.find(s => !isCamp(s)) || inhabited[0] || settlements[0];
-      if (state.viewer?.mode === 'faction' && faction.id !== state.viewer.factionId && !settlements.some(home => home.controllerId === state.viewer.factionId)) {
-        const remembered = list(state.knownPlaces).find(k => k.kind === 'settlement' && k.ownerId === faction.id);
-        const contact = target || remembered;
-        const spec = SPECIES[faction.species] || SPECIES.human;
-        return `<button class="faction-entry faction-reported ${current.faction?.id === faction.id ? 'is-selected' : ''}" data-action="select" data-value="${esc(contact?.id || '')}" ${contact ? '' : 'disabled'} aria-label="Inspect known ${esc(faction.name)} observation" aria-pressed="${current.faction?.id === faction.id}" style="--faction-color:${color(faction.color)}"><span class="faction-sigil species-${esc(faction.species)}">${spec.mark}</span><span class="faction-entry-label"><strong>${esc(faction.name)}</strong><small>${target ? 'Currently in sight' : 'Remembered contact'}</small></span><span class="faction-chevron">›</span></button>`;
-      }
-
-      const population = settlements.reduce((sum, s) => sum + n(s.population), 0);
-      const spec = SPECIES[faction.species] || SPECIES.human;
-      const fate = faction.defeatedBy ? 'defeated' : faction.status === 'collapsed' || (!inhabited.length && settlements.length) ? 'collapsed' : faction.status === 'displaced' ? 'displaced' : 'active';
-      return `<button class="faction-entry ${current.faction?.id === faction.id ? 'is-selected' : ''} ${fate === 'collapsed' ? 'faction-collapsed' : fate === 'displaced' ? 'faction-displaced' : ''}" data-action="select" data-value="${esc(target?.id || faction.id)}" aria-label="Inspect ${esc(faction.name)}, ${spec.short}, ${fate === 'active' ? `population ${num(population)}` : fate}" aria-pressed="${current.faction?.id === faction.id}" style="--faction-color:${color(faction.color)}"><span class="faction-sigil species-${esc(faction.species)}">${spec.mark}</span><span class="faction-entry-label"><strong>${esc(faction.name)}</strong><small>${fate === 'defeated' ? `Capitulated · ${num(population)} survivors` : fate === 'collapsed' ? 'Collapsed · record remains' : fate === 'displaced' ? `Displaced · ${num(population)} survivors` : `${spec.short} · ${num(population)} ${faction.species === 'machine' ? 'units' : faction.species === 'hive' ? 'individuals' : 'people'}`}</small></span><span class="faction-chevron">›</span></button>`;
+    const identities = list(view.perspectiveOptions).length ? view.perspectiveOptions : list(state.factions);
+    slots['faction-count'].textContent = String(identities.length).padStart(2, '0');
+    setHTML(slots.factions, identities.map(identity => {
+      const faction=list(state.factions).find(item=>item.id===identity.id)||identity;
+      const settlements=list(state.settlements).filter(home=>home.factionId===faction.id||(!home.factionId&&home.lastFactionId===faction.id));
+      const ownCensus=state.viewer?.mode!=='faction'||state.viewer.factionId===faction.id;
+      const population=settlements.reduce((sum,home)=>sum+n(home.population),0);
+      const spec=SPECIES[faction.species]||SPECIES.human;
+      const active=view.perspective&&view.perspective!=='omniscient'?view.perspective===faction.id:current.faction?.id===faction.id;
+      const fate=faction.defeatedBy?'defeated':faction.status==='collapsed'?'collapsed':faction.status==='displaced'?'displaced':'active';
+      const remembered=list(state.knownPlaces).some(place=>place.ownerId===faction.id||place.nativeOwnerId===faction.id);
+      const detail=ownCensus?(fate==='defeated'?`Capitulated · ${num(population)} survivors`:fate==='collapsed'?'Collapsed · record remains':fate==='displaced'?`Displaced · ${num(population)} survivors`:`${spec.short} · ${num(population)} ${faction.species==='machine'?'units':faction.species==='hive'?'individuals':'people'}`):settlements.length?`${spec.short} · currently in sight`:remembered?`${spec.short} · remembered contact`:`${spec.short} · outside this view`;
+      return `<button class="faction-entry ${active?'is-selected':''} ${ownCensus&&fate==='collapsed'?'faction-collapsed':ownCensus&&fate==='displaced'?'faction-displaced':''}" data-action="inspect-faction" data-value="${esc(faction.id)}" aria-label="View ${esc(faction.name)} perspective and focus home" title="Focus ${esc(faction.name)} and view its fog of war" aria-pressed="${active}" style="--faction-color:${color(faction.color)}"><span class="faction-sigil species-${esc(faction.species)}">${spec.mark}</span><span class="faction-entry-label"><strong>${esc(faction.name)}</strong><small>${esc(detail)}</small></span><span class="faction-chevron">›</span></button>`;
     }).join(''));
     renderSelection(current);
     renderEvents(current.faction);

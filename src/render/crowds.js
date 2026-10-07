@@ -1,5 +1,6 @@
 import { heightAt } from '../world.js';
-import { groupController } from '../sim/control.js';
+import { observedGroupController } from '../selection.js';
+import { settlementController } from '../sim/control.js';
 import { combatFormationSlot } from '../sim/combat.js';
 import { createWorkerBadges } from './worker-badges.js';
 
@@ -246,6 +247,7 @@ export function createCrowds(THREE, scene) {
   material.onBeforeCompile = shader => patchShader(shader); material.customProgramCacheKey = () => 'littleworld-v2-actual-crowds-4';
   const depthMaterial = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking }); depthMaterial.onBeforeCompile = shader => patchShader(shader, false); depthMaterial.customProgramCacheKey = () => 'littleworld-v2-crowd-depth-4';
   const pickGeometry = new THREE.SphereGeometry(1, 8, 5), pickMaterial = new THREE.MeshBasicMaterial({ visible: false });
+  const bodyPickSphere = new THREE.Sphere(), bodyPickPoint = new THREE.Vector3();
 
   function poolFor(species, lod, x, z) {
     const key = `${species}:${lod}:${Math.floor(x / 56)}:${Math.floor(z / 56)}`;
@@ -253,7 +255,7 @@ export function createCrowds(THREE, scene) {
       const base = miniature(species, lod), geometry = new THREE.BufferGeometry();
       geometry.setIndex(base.index);
       for (const [name, attr] of Object.entries(base.attributes)) geometry.setAttribute(name, attr);
-      const pool = { key, geometry, count: 0, capacity: 0, mesh: null, detailed: lod === 'detailed', usedFrame: 0 };
+      const pool = { key, geometry, count: 0, capacity: 0, mesh: null, selectionIds: [], detailed: lod === 'detailed', usedFrame: 0 };
       pools.set(key, pool); grow(pool, 64);
     }
     return pools.get(key);
@@ -266,6 +268,21 @@ export function createCrowds(THREE, scene) {
     pool.geometry.setAttribute('crowdRole', new THREE.InstancedBufferAttribute(roles, 1).setUsage(THREE.DynamicDrawUsage));
     pool.geometry.setAttribute('crowdBattle', new THREE.InstancedBufferAttribute(battle, 4).setUsage(THREE.DynamicDrawUsage));
     const mesh = new THREE.InstancedMesh(pool.geometry, material, capacity); mesh.name = `Individuals ${pool.key}`; mesh.count = 0; mesh.frustumCulled = false; mesh.castShadow = pool.detailed; mesh.receiveShadow = true; mesh.customDepthMaterial = depthMaterial; mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    mesh.userData.crowdSelectionIds = pool.selectionIds;
+    // A small body-sized target also catches animated limbs without raycasting
+    // every crowd triangle. Only this frame's visible instances are selectable.
+    mesh.raycast = function(raycaster,hits){
+      if(!this.visible)return;
+      const matrices=this.instanceMatrix.array;
+      for(let i=0;i<this.count;i++){
+        const offset=i*16,scale=matrices[offset+5];
+        bodyPickSphere.center.set(matrices[offset+12],matrices[offset+13]+.45*scale,matrices[offset+14]).applyMatrix4(this.matrixWorld);
+        bodyPickSphere.radius=.55*scale;
+        if(!raycaster.ray.intersectSphere(bodyPickSphere,bodyPickPoint))continue;
+        const distance=raycaster.ray.origin.distanceTo(bodyPickPoint);
+        if(distance>=raycaster.near&&distance<=raycaster.far)hits.push({distance,point:bodyPickPoint.clone(),object:this,instanceId:i});
+      }
+    };
     mesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(capacity * 3), 3).setUsage(THREE.DynamicDrawUsage);
     if (old) { mesh.instanceMatrix.array.set(old.instanceMatrix.array); mesh.instanceColor.array.set(old.instanceColor.array); old.removeFromParent(); old.dispose(); }
     root.add(mesh); pool.mesh = mesh; pool.capacity = capacity;
@@ -311,6 +328,7 @@ export function createCrowds(THREE, scene) {
     else {
       const pool = poolFor(faction.species || 'human', lod, x, z), index = pool.count++;
       if (index >= pool.capacity) grow(pool, index + 1);
+      pool.selectionIds[index] = record.groupId || record.settlementId;
       if (collect) { meshUuid = pool.mesh.uuid; instanceIndex = index; poolKey = pool.key; }
       // All crowd transforms are yaw + uniform scale. Write the affine matrix
       // directly instead of composing an Object3D/quaternion for every body.
@@ -338,7 +356,7 @@ export function createCrowds(THREE, scene) {
     }
   }
 
-  function renderHome(s, faction, deployed, militaryAway, time, camera, awayRoles = { infantry: 0, ranged: 0 }, alpha = 1) {
+  function renderHome(s, faction, deployed, militaryAway, time, camera, awayRoles = { infantry: 0, ranged: 0 }, alpha = 1, militaryFaction = faction) {
     const population = countOf(s.population), present = Math.max(0, population - deployed), base = hash(s.id), layout = homeLayout(s);
     diagnostics.homePresentBySettlement[s.id] = present; diagnostics.homePresentIndividuals += present;
     const researchers = Math.min(present, countOf(s.assigned?.researchers)), builders = Math.min(present - researchers, countOf(s.assigned?.construction));
@@ -407,7 +425,7 @@ export function createCrowds(THREE, scene) {
       const collect = i < 3 || i === specialistCount + garrison;
       const body = person.body;
       body.action = action; body.x = x; body.z = z; body.yaw = yaw; body.walk = walk; body.work = work; body.role = role; body.militaryRole = militaryRole; body.attackTime = attackTime; body.hitTime = hitTime; body.elevation = elevation;
-      emitIndividual(body, faction, camera, collect);
+      emitIndividual(body, militaryRole ? militaryFaction : faction, camera, collect);
     }
   }
 
@@ -473,7 +491,7 @@ export function createCrowds(THREE, scene) {
     // during a pause: replacing or mutating a node, group, faction or building
     // must not reuse stale accounting or transforms at the same pulse.
     return state.factions.map(f => `${f.id}:${f.species}:${f.color}:${f.defeatedBy}`).join('|') + ';' +
-      state.settlements.map(s => `${s.id}:${s.factionId}:${s.x}:${s.z}:${s.radius}:${s.population}:${s.soldiers}:${s.military?.infantry}:${s.military?.ranged}:${s.combat?.active}:${s.combat?.lastHitTime}:${s.assigned?.researchers}:${s.assigned?.construction}:${s.assigned?.infrastructure}:` + (s.buildings || []).map(b => `${b.id}:${b.kind}:${b.x}:${b.z}:${b.progress}`).join(',')).join('|') + ';' +
+      state.settlements.map(s => `${s.id}:${s.factionId}:${s.occupiedBy}:${s.controllerId}:${s.x}:${s.z}:${s.radius}:${s.population}:${s.soldiers}:${s.military?.infantry}:${s.military?.ranged}:${s.combat?.active}:${s.combat?.lastHitTime}:${s.assigned?.researchers}:${s.assigned?.construction}:${s.assigned?.infrastructure}:` + (s.buildings || []).map(b => `${b.id}:${b.kind}:${b.x}:${b.z}:${b.progress}`).join(',')).join('|') + ';' +
       state.groups.map(g => `${g.id}:${g.originId}:${g.factionId}:${g.commandFactionId}:${g.controllerId}:${g.kind}:${g.size}:${g.units?.infantry}:${g.units?.ranged}:${g.combat?.active}:${g.formationRevision}:${g.combat?.roleAttacks?.infantry?.time}:${g.combat?.roleAttacks?.ranged?.time}:${g.combat?.lastHitTime}:${g.finished}:${g.x}:${g.z}:${g.prevX}:${g.prevZ}:${g.targetX}:${g.targetZ}:${g.phase}:${typeof g.carrying === 'object' ? JSON.stringify(g.carrying) : g.carrying}:${g.capacity}:${g.targetId}`).join('|') + ';' +
       (state.nodes || []).map(n => `${n.id}:${n.x}:${n.z}:${n.radius}:${n.amount}`).join('|');
   }
@@ -490,15 +508,20 @@ export function createCrowds(THREE, scene) {
     lastFrame = { step: state.step ?? state.tick, time, alpha, selectedId, camera, digest, quality, badgeViewport }; priorClip.copy(clip);
     timeUniform.value = time; samples = []; pickables = []; workerBadges.begin(camera);
     if (seed !== state.seed || lastState !== state) { seed = state.seed; lastState = state; heights.clear(); homeLayouts.clear(); for (const view of groupViews.values()) view.proxy.removeFromParent(); groupViews.clear(); }
-    for (const pool of pools.values()) pool.count = 0;
+    for (const pool of pools.values()) { pool.count = 0; pool.selectionIds.length = 0; }
     Object.assign(diagnostics, { totalPopulation: 0, representedIndividuals: 0, visibleIndividuals: 0, culledIndividuals: 0, homePresentIndividuals: 0, homeVisibleIndividuals: 0, groupIndividuals: 0, groupVisibleIndividuals: 0, workerIndividuals: 0, representedWorkerIndividuals: 0, visibleWorkerIndividuals: 0, workerCrewCount: 0, visibleWorkerCrews: 0, drawnWorkerModels: 0, workerBadgeCount: 0, workerBadgeCapacity: 0, workerBadgeDrawCalls: 0, militaryIndividuals: 0, visibleMilitaryIndividuals: 0, armyIndividuals: 0, groupCount: 0, instances: 0, drawnModels: 0, detailedIndividuals: 0, simplifiedIndividuals: 0, overviewIndividuals: 0, reusedFrame: false, drawCallsEstimate: 0, triangleEstimate: 0, allocatedInstances: 0, instanceAllocationUnfulfilled: 0, homePresentBySettlement: {}, populationAccountingDelta: 0, terrainCacheSamples: 0, occlusionCulling: false });
     nodeIndex = new Map((state.nodes || []).map(n => [n.id, n]));
     const factions = new Map(state.factions.map(f => [f.id, f])), deployed = new Map(), militaryAway = new Map(), militaryAwayRoles = new Map(), liveGroups = new Set();
     for (const g of state.groups) if (countOf(g.size) && !g.finished) { deployed.set(g.originId, (deployed.get(g.originId) || 0) + countOf(g.size)); if (g.kind === 'army') { militaryAway.set(g.originId, (militaryAway.get(g.originId) || 0) + countOf(g.size)); const roles = militaryAwayRoles.get(g.originId) || { infantry: 0, ranged: 0 }; roles.infantry += countOf(g.units?.infantry ?? g.size); roles.ranged += countOf(g.units?.ranged); militaryAwayRoles.set(g.originId, roles); } liveGroups.add(g.id); }
-    for (const s of state.settlements) { diagnostics.totalPopulation += countOf(s.population); const faction = factions.get(s.factionId); if (faction && countOf(s.population)) renderHome(s, faction, deployed.get(s.id) || 0, militaryAway.get(s.id) || 0, time, camera, militaryAwayRoles.get(s.id), alpha); }
+    for (const s of state.settlements) {
+      diagnostics.totalPopulation += countOf(s.population);
+      const faction=factions.get(s.factionId),commander=factions.get(s.controllerId||settlementController(state,s));
+      const militaryFaction=faction&&commander&&faction.id!==commander.id?{...faction,color:commander.color}:faction;
+      if(faction&&countOf(s.population))renderHome(s,faction,deployed.get(s.id)||0,militaryAway.get(s.id)||0,time,camera,militaryAwayRoles.get(s.id),alpha,militaryFaction);
+    }
     if (state.viewer?.mode === 'faction') for (const g of state.groups) if (!g.originId && liveGroups.has(g.id)) diagnostics.totalPopulation += countOf(g.size);
     diagnostics.censusScope = state.viewer?.mode === 'faction' ? 'friendly-and-currently-visible' : 'whole-world';
-    for (const g of state.groups) { const native = factions.get(g.factionId), commander = factions.get(groupController(state, g)); const faction = native && commander && native.id !== commander.id ? { ...native, color: commander.color } : native; if (faction && liveGroups.has(g.id)) { diagnostics.groupCount++; renderGroup(g, faction, state, time, alpha, camera, selectedId); } }
+    for (const g of state.groups) { const native = factions.get(g.factionId), commander = factions.get(observedGroupController(state, g)); const faction = native && commander && native.id !== commander.id ? { ...native, color: commander.color } : native; if (faction && liveGroups.has(g.id)) { diagnostics.groupCount++; renderGroup(g, faction, state, time, alpha, camera, selectedId); } }
     for (const [id, view] of groupViews) if (!liveGroups.has(id)) { view.proxy.removeFromParent(); groupViews.delete(id); }
     const badges = workerBadges.finish();
     diagnostics.workerBadgeCount = badges.count; diagnostics.workerBadgeCapacity = badges.capacity; diagnostics.workerBadgeDrawCalls = badges.drawCalls;
@@ -508,6 +531,7 @@ export function createCrowds(THREE, scene) {
     for (const pool of pools.values()) {
       pool.mesh.count = pool.count; pool.mesh.visible = pool.count > 0; diagnostics.allocatedInstances += pool.capacity;
       if (!pool.count) continue;
+      pickables.push(pool.mesh);
       for (const attribute of [pool.mesh.instanceMatrix, pool.mesh.instanceColor, pool.geometry.attributes.crowdMotion, pool.geometry.attributes.crowdRole, pool.geometry.attributes.crowdBattle]) {
         attribute.clearUpdateRanges(); attribute.addUpdateRange(0, pool.count * attribute.itemSize); attribute.needsUpdate = true;
       }
@@ -529,5 +553,5 @@ export function createCrowds(THREE, scene) {
     for (const geometry of templates.values()) geometry.dispose(); material.dispose(); depthMaterial.dispose(); pickGeometry.dispose(); pickMaterial.dispose(); workerBadges.dispose(); root.removeFromParent();
     pools.clear(); templates.clear(); groupViews.clear(); homeLayouts.clear(); heights.clear(); pickables = []; samples = [];
   }
-  return { update, getPickables: () => pickables, resolvePick: hit => workerBadges.resolvePick(hit), dispose, diagnostics, getMotionSamples: () => samples.map(s => ({ ...s })) };
+  return { update, getPickables: () => pickables, resolvePick: hit => workerBadges.resolvePick(hit) || (hit?.object?.visible && Number.isInteger(hit.instanceId) && hit.instanceId >= 0 && hit.instanceId < hit.object.count ? hit.object.userData.crowdSelectionIds?.[hit.instanceId] : null), dispose, diagnostics, getMotionSamples: () => samples.map(s => ({ ...s })) };
 }

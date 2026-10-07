@@ -1,3 +1,45 @@
+# Interaction and combat pass — 2026-10-07
+
+Continue exclusively in this saved cloud checkout. This pass builds on released
+`ab1b40193ca9f08bb529ea8ea1f2505b8abf423d`; the unchanged before capture was served
+from `/workspace/little-world-baseline-interactions`. Resolve the new release
+commit from Git and the public `build.json`, not a self-referential SHA here.
+
+- Civilisation menu clicks focus a scoped home and switch fog perspective.
+  Buildings retain their own inspection identity; visible bodies resolve to a
+  real party or colony. Native identity and controller are shown separately.
+- Home troops and locally controlled workers use command colours while retaining
+  native body species. Native home civilians keep their original colours.
+- Delayed strikes recheck ownership at impact. A controlled pre-fix reproduction
+  damaged a newly captured farm from 160 to 29.44 HP; the browser regression now
+  preserves 160 HP. The user's original visual sighting remains unconfirmed.
+- Locally intercepted scouts return with their people, cargo and reports intact.
+  Troops and garrisons can engage up to six visible contacts with shared, bounded
+  role attack budgets. No per-soldier global target scan was introduced.
+- Campaigns retain home reserves, support bounded simultaneous expeditions, and
+  continue viable objectives after incidental contact. Route-based return rations
+  and paid captured-depot provisions bound sustained campaigns. Departure orders
+  persist through unseen losses until physical return or their report deadline;
+  actual available soldiers separately constrain every allocation.
+
+The final local Node run passed 255/255 tests, including targeted ownership,
+inspection, fog, campaign, defence and simultaneous-combat regressions. The new
+actual browser suite passed real menu/building/unit clicks, four controlled
+combat scenarios, and natural battle capture without errors. Local application
+source hash during that evidence was
+`1f2a33aaeeb286ea421408aee3842ce56575bead0b2e37b6072888e41206dabd`.
+These results precede the release workflow; its exact commit and terminal outcome
+remain authoritative for publishing. Existing per-push pipeline cadence is kept.
+
+New acceptance entry point:
+
+    BROWSER_EXECUTABLE_PATH=/usr/bin/chromium QA_SOFTWARE_RENDERING=1 QA_OUTPUT_DIR=screenshots/interaction-campaign node tests/interaction-campaign-browser.mjs
+
+Its controlled fixtures are labelled separately from natural-world screenshots
+and normal 1x canvas recordings. Keep software rendering, touch emulation, Node
+balance timings and physical-device performance distinct. Evidence remains in
+ignored `screenshots/interaction-*` directories and saved Library files.
+
 # Cloud ownership — 2026-10-06
 
 Development now belongs exclusively to the user-selected saved cloud environment,

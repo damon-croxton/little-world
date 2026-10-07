@@ -1,10 +1,33 @@
-import {groupController,settlementController} from './sim/control.js';
+import {settlementController} from './sim/control.js';
+import {localGroupController} from './sim/knowledge.js';
 // Observer selection is scoped to the rendered knowledge view, never hidden truth.
-export const findObserved = (state,id) => state.settlements.find(s=>s.id===id)||state.groups.find(g=>g.id===id)||state.nodes.find(n=>n.id===id)||state.knownPlaces?.find(k=>k.id===id);
+export const observedGroupController = (state,group) => group.controllerId || localGroupController(state,group);
+export function observedBuilding(state,id){
+  for(const settlement of state.settlements||[]){const building=settlement.buildings?.find(b=>b.id===id);if(building)return {settlement,building};}
+  return null;
+}
+export const findObserved = (state,id) => state.settlements.find(s=>s.id===id)||state.groups.find(g=>g.id===id)||state.nodes.find(n=>n.id===id)||observedBuilding(state,id)?.building||state.knownPlaces?.find(k=>k.id===id);
+
+// Public faction identities choose a new observer perspective. Camera targets
+// are resolved only after that perspective has produced its scoped world.
+export function factionFocusTarget(state,factionId){
+  const homes=state.settlements||[],alive=home=>home.population!==0&&home.status!=='ruin';
+  const native=homes.filter(home=>home.factionId===factionId);
+  return native.find(home=>alive(home)&&(home.controllerId||settlementController(state,home))===factionId)
+    ||homes.find(home=>alive(home)&&(home.controllerId||settlementController(state,home))===factionId)
+    ||native.find(alive)||native[0]
+    ||state.groups?.find(group=>!group.finished&&observedGroupController(state,group)===factionId)
+    ||state.knownPlaces?.find(place=>place.kind==='settlement'&&(place.ownerId===factionId||place.nativeOwnerId===factionId))||null;
+}
+
+export function scenePickId(hit){
+  for(let object=hit?.object;object;object=object.parent){const data=object.userData||{};const id=data.buildingId||data.groupId||data.settlementId;if(id)return id;}
+  return null;
+}
 export class SelectionMemory {
   constructor(){this.party=null;}
   clear(){this.party=null;}
-  record(state,id){const group=state.groups.find(g=>g.id===id);this.party=group?.originId?{id:group.id,originId:group.originId}:null;}
+  record(state,id){const group=state.groups.find(g=>g.id===id),homeId=group?.originId||observedBuilding(state,id)?.settlement.id;this.party=homeId?{id,originId:homeId}:null;}
   reconcile(state,id,perspective='omniscient'){
     if(id&&findObserved(state,id))return id;
     const origin=this.party?.id===id&&findObserved(state,this.party.originId)?this.party.originId:null;
@@ -18,8 +41,8 @@ export class SelectionMemory {
 // In omniscient mode an auxiliary selects its commander, not its native ledger.
 export function knowledgeOverlaySource(state,selectedId){
   const selected=findObserved(state,selectedId);
-  const group=state.groups.find(g=>g.id===selectedId),home=state.settlements.find(h=>h.id===selectedId);
-  const owner=state.viewer?.mode==='faction'?state.viewer.factionId:group?groupController(state,group):home?(home.controllerId||settlementController(state,home)):selected?.ownerId||selected?.factionId;
+  const group=state.groups.find(g=>g.id===selectedId),home=state.settlements.find(h=>h.id===selectedId)||observedBuilding(state,selectedId)?.settlement;
+  const owner=state.viewer?.mode==='faction'?state.viewer.factionId:group?observedGroupController(state,group):home?(home.controllerId||settlementController(state,home)):selected?.ownerId||selected?.factionId;
   const faction=state.factions.find(f=>f.id===owner)||state.factions.find(f=>f.knowledge);
   const origin=faction&&state.settlements.find(h=>(h.controllerId||settlementController(state,h))===faction.id);
   return {faction,home:origin,knowledge:faction?.knowledge||{}};

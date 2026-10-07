@@ -127,7 +127,9 @@ function deployBody(s, world, desired, center, yaw, physical) {
 function localTargets(options) {
   const descriptors = (options.localTargets || []).filter(t => t && Number.isFinite(t.x) && Number.isFinite(t.z));
   const preferred = descriptors.find(t => t.id === options.primaryTargetId);
-  const targets = preferred ? [preferred] : descriptors;
+  // The primary contact sets the squad's march; each body can still face a
+  // different locally observed attacker on its own side of the formation.
+  const targets = (preferred ? [preferred, ...descriptors.filter(t => t !== preferred)] : descriptors).slice(0, 6);
   const points = [], structures = [];
   for (const target of targets) {
     if (target.kind === 'structure') { structures.push(target); continue; }

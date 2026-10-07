@@ -96,7 +96,8 @@ test('badge pooling survives growth, shrink, crew completion and render disposal
   }
   state.groups = [{ ...original, finished: true }]; state.step++; crowds.update(state, 10, null, 1);
   assert.equal(crowds.diagnostics.workerCrewCount, 0); assert.equal(crowds.diagnostics.workerBadgeCount, 0);
-  assert.equal(crowds.diagnostics.homePresentIndividuals, 10); assert.equal(crowds.getPickables().length, 0);
+  assert.equal(crowds.diagnostics.homePresentIndividuals, 10);
+  assert.ok(crowds.getPickables().every(mesh => mesh.userData.crowdSelectionIds?.slice(0, mesh.count).every(id => id === 'home')), 'remaining inhabitants stay selectable without stale crew targets');
   let textureDisposed = false, materialDisposed = false;
   texture.addEventListener('dispose', () => { textureDisposed = true; }); material.addEventListener('dispose', () => { materialDisposed = true; });
   crowds.dispose(); assert.ok(textureDisposed && materialDisposed); assert.equal(scene.children.length, 0);

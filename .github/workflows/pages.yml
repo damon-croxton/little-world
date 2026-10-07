@@ -68,6 +68,11 @@ jobs:
         env:
           QA_OUTPUT_DIR: screenshots/tactical
         run: node tests/tactical-browser.mjs
+      - name: Faction navigation, canvas inspection and natural campaign evidence
+        if: ${{ !cancelled() }}
+        env:
+          QA_OUTPUT_DIR: screenshots/interaction-campaign
+        run: node tests/interaction-campaign-browser.mjs
       - name: Rendered growth, motion, harvesting and cloud performance
         if: ${{ !cancelled() }}
         run: node tests/visual-v2.mjs
