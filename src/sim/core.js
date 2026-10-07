@@ -1,3 +1,4 @@
+import { housingDemand, refreshHousing } from './housing.js';
 import { normalizeConfig } from '../config.js';
 import { hashSeed, random, clamp, distance, emit } from '../shared.js';
 import { generateWorld, terrainAt } from '../world.js';
@@ -42,6 +43,8 @@ function buildingRecord(state, home, kind, progress = 0, placement = null) {
   const index = home.buildings.length, angle = index * 2.399963229728653 + (hashSeed(home.id + state.seed) % 100) / 100;
   const radius = index === 0 ? 0 : 2.85 * Math.sqrt(index);
   let x = home.x + Math.cos(angle) * radius, z = home.z + Math.sin(angle) * radius;
+  const freePlot = kind === 'housing' && home.buildings.find(b => b.kind === 'housing' && (b.destroyed || b.hp <= 0) && !home.buildings.some(other => !other.destroyed && other.hp > 0 && distance(b, other) < 2));
+  if (!placement && freePlot) { x = freePlot.x; z = freePlot.z; }
   if (!placement && !isPointTraversable(state, { x, z }, { factionId: home.factionId })) {
     let found = false;
     for (let offset = 1; offset <= 48; offset++) {
@@ -55,14 +58,13 @@ function buildingRecord(state, home, kind, progress = 0, placement = null) {
   const b = { id: `b${state.nextId++}`, kind, x, z, rotation: angle + Math.PI / 2, progress, hp: 160, maxHp: 160, createdTick: state.tick, completedTick: progress >= 1 ? state.tick : null, ...(placement || {}) };
   if (DEFENSE_STATS[kind]) { b.maxHp = Math.round(DEFENSE_STATS[kind].maxHp * (factionOf(state, home)?.advantages?.fortificationHp || 1)); b.hp = b.maxHp; }
   home.radius = Math.max(home.radius, Math.hypot(b.x - home.x, b.z - home.z) + 3.2);
-  home.roads.push({ from: { x: home.x, z: home.z }, to: { x: b.x, z: b.z } });
+  if (!home.roads.some(road => road.to.x === b.x && road.to.z === b.z)) home.roads.push({ from: { x: home.x, z: home.z }, to: { x: b.x, z: b.z } });
   return b;
 }
 
 function refreshBuildings(state, home, f) {
   const completed = home.buildings.filter(b => b.progress >= 1 && !b.destroyed && (b.hp == null || b.hp > 0));
-  home.housingCapacity = Math.min(MAX_POPULATION, Math.round((40 + completed.filter(b => b.kind === 'housing').length * 40) * modifier(f, 'capacity')));
-  home.carryingCapacity = home.housingCapacity;
+  refreshHousing(home, f);
   home.capacity = Math.round((500 + completed.filter(b => b.kind === 'storage').length * 600) * modifier(f, 'capacity'));
   const spoiled = emptyResources();
   for (const kind of RESOURCES) {
@@ -391,14 +393,14 @@ function consume(state, home, f) {
 }
 
 function grow(state, home, f) {
-  if (!active(home) || home.health < 65 || home.wellbeing < .98 || (home.contestedUntil || 0) >= state.tick || home.population >= home.housingCapacity) return;
+  if (!active(home) || home.health < 65 || home.wellbeing < .98 || (home.contestedUntil || 0) >= state.tick || home.population >= MAX_POPULATION || housingDemand(home) >= home.housingCapacity) return;
   const p = profile(f), needs = needsFor(home, f, home.population), costs = { ...p.birth }; costs.materials /= modifier(f, 'materialEfficiency');
   const reserves = Object.fromEntries(RESOURCES.map(k => [k, needs[k] * 48]));
   if (!canAfford(home, costs, reserves)) { home.growth = Math.min(.99, home.growth); return; }
-  const space = clamp(1 - home.population / home.housingCapacity, 0, .75);
+  const space = clamp(1 - housingDemand(home) / home.housingCapacity, 0, .75);
   home.growth += p.growth * home.population * space * modifier(f, 'growth') * (f.species === 'machine' ? modifier(f, 'replication') : 1);
   let births = 0;
-  while (home.growth >= 1 && births < 12 && home.population < home.housingCapacity && canAfford(home, costs, reserves)) { spend(state, home, costs, 'consumed'); home.population++; home.growth--; births++; state.stats.births++; }
+  while (home.growth >= 1 && births < 12 && home.population < MAX_POPULATION && housingDemand(home) < home.housingCapacity && canAfford(home, costs, reserves)) { spend(state, home, costs, 'consumed'); home.population++; home.growth--; births++; state.stats.births++; }
   if (births && state.tick - home.lastGrowthEvent > 75) { emit(state, 'growth', `${home.name} now supports ${home.population} individuals in ${buildingCount(home, 'housing')} residential buildings; new life consumes real reserves.`, f.id, { settlementId: home.id }); home.lastGrowthEvent = state.tick; }
 }
 
@@ -418,17 +420,17 @@ function construction(state, home, f) {
     }
     return;
   }
-  if (home.buildings.length >= 110 || home.availableWorkers < 12 || home.health < (home.exileBaseFor ? 1 : 45)) return;
+  if (home.buildings.filter(b => !b.destroyed && b.hp > 0).length >= 110 || home.availableWorkers < 12 || home.health < (home.exileBaseFor ? 1 : 45)) return;
   let kind = null;
-  const militaryKind = militaryBuildingPlan(state, home, f), defensePlan = defenseBuildingPlan(state, home, f);
-  if (home.housingCapacity < MAX_POPULATION && home.population > home.housingCapacity * .80) kind = 'housing';
+  const militaryKind = militaryBuildingPlan(state, home, f); let defensePlan = null;
+  if (housingDemand(home) + 6 > home.housingCapacity * .85) kind = 'housing';
   else if (home.capacity < home.population * 5 + 300) kind = 'storage';
   else if (militaryKind && home.wellbeing >= .98) kind = militaryKind;
   else if (!home.occupiedBy && state.tick > 35 && buildingCount(home, 'lab') < Math.max(1, Math.ceil(home.population / 240))) kind = 'lab';
   else if (f.species !== 'machine' && buildingCount(home, 'farm') < Math.ceil(home.population / 100)) kind = 'farm';
   else if (buildingCount(home, 'power') < Math.ceil(home.population / (f.species === 'machine' ? 65 : 280))) kind = 'power';
   else if (buildingCount(home, 'workshop') < Math.ceil(home.population / 200)) kind = 'workshop';
-  else if (defensePlan) kind = defensePlan.kind;
+  else if ((defensePlan = defenseBuildingPlan(state, home, f))) kind = defensePlan.kind;
   if (!kind) return;
   const cost = { ...(BUILDING_COST[kind] || MILITARY_BUILDINGS[kind]?.cost || defenseCost(f.species, kind)) }, needs = needsFor(home, f); cost.materials /= modifier(f, 'materialEfficiency');
   const commandContext = MILITARY_BUILDINGS[kind] && home.exileBaseFor ? militaryContext(state, home, f) : f;

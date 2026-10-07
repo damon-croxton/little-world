@@ -1,3 +1,4 @@
+import { refreshHousing } from './housing.js';
 import { formationSize, combatFormationSlot, updateCombatFormation } from './formations.js';
 export { formationSize, combatFormationSlot, updateCombatFormation } from './formations.js';
 import { clamp, distance, emit } from '../shared.js';
@@ -22,7 +23,7 @@ const hostile = (s, a, b) => { a = factionController(s, a); b = factionControlle
 const clock = s => Number.isFinite(s.time) ? s.time : s.tick;
 const amount = x => Math.max(0, Math.floor(Number.isFinite(x) ? x : 0));
 const liveStructure = b => b && b.progress >= 1 && !b.destroyed && (b.hp ?? b.health ?? 1) > 0;
-const ECONOMIC_TARGETS = new Set(['farm', 'power', 'storage', 'workshop', 'barracks', 'range', 'fabricator', 'launcher', 'brooder', 'spitter']);
+const ECONOMIC_TARGETS = new Set(['housing', 'farm', 'power', 'storage', 'workshop', 'barracks', 'range', 'fabricator', 'launcher', 'brooder', 'spitter']);
 const CARGO_KEYS = ['food', 'water', 'energy', 'materials'];
 const observationCaches = new WeakMap();
 
@@ -152,6 +153,7 @@ function impact(s, strike, hooks) {
     s.stats.structureDamage = (s.stats.structureDamage || 0) + old - building.hp;
     if (building.hp === 0) {
       building.destroyed = true; building.destroyedTick = s.tick; building.active = false; building.operational = false;
+      refreshHousing(home, factionOf(s, home.factionId));
       invalidateNavigation(s); assignDefenses(s, home, factionOf(s, home.factionId));
       s.stats.structuresDestroyed = (s.stats.structuresDestroyed || 0) + 1;
       effect(s, { type: 'collapse', sourceId: strike.sourceId, targetId: building.id, factionId: settlementController(s, home), nativeFactionId: home.factionId, x: building.x, z: building.z, structureKind: building.kind, expiresAt: clock(s) + 2.4 });
@@ -282,7 +284,7 @@ function localSituation(s, g) {
         threats.push({ target, power, urgent, score: 30 - d + (urgent ? 14 : 0) });
       } else if (id === owner || factionOf(s, owner)?.relations?.[id]?.status === 'allied') support += power * clamp(1 - d / 20, .1, .85);
     } else if (other.kind === 'worker' && other.size > 0 && foe(id) && d <= 10 && clock(s) >= (other.raidedUntil ?? 0)) workers.push(other);
-    else if (other.kind === 'scout' && other.size > 0 && other.phase === 'outbound' && foe(id) && d <= 8) scouts.push(other);
+    else if (other.kind === 'scout' && other.size > 0 && other.phase === 'outbound' && foe(id) && d <= 18) scouts.push(other);
   }
   for (const home of s.settlements) {
     const observed = physicalObservation(s, g, home, 18), visible = observed.visible;
@@ -345,8 +347,8 @@ function acquire(s, g, hooks) {
   if (!selected) {
     const cargo = CARGO_KEYS.reduce((n, key) => n + (g.carrying?.[key] || 0), 0);
     const economic = local.workers.filter(worker => cargo < g.size * 1.2 - .1 && CARGO_KEYS.some(key => (worker.carrying?.[key] || 0) > 0)).map(worker => ({ target: worker, score: 23 - distance(g, worker) }));
-    if (!local.objective || distance(g, local.objective) > 4 || cs.targetKind === 'structure') for (const building of local.structures) if (distance(g, building) < 10) economic.push({ target: building, score: 17 - distance(g, building) });
-    for (const scout of local.scouts) economic.push({ target: scout, score: 25 - distance(g, scout) });
+    if (!local.objective || distance(g, local.objective) > 4 || cs.targetKind === 'structure') for (const building of local.structures) if (distance(g, building) < 10) economic.push({ target: building, score: (building.structureKind === 'housing' ? 29 : 17) - distance(g, building) });
+    for (const scout of local.scouts) economic.push({ target: scout, score: 48 - distance(g, scout) });
     target = chooseStable(economic, cs, now)?.target || local.objective;
     if (target?.kind === 'worker') { intent = 'raid'; reason = 'Seizing an exposed crew’s carried supplies while no visible defender threatens contact.'; }
     else if (target?.kind === 'scout') { intent = 'intercept'; reason = 'Intercepting a locally visible hostile scouting party before it can continue its survey.'; }
@@ -451,6 +453,14 @@ function interceptScout(s, source, scout, hooks) {
     contact = distance(from, scout) <= 2.2 && isSegmentTraversable(s, from, scout, { factionId: source.faction.id, radius: .1 });
   }
   if (!contact) return;
+  if (scout.size === 1 && hooks.casualties) {
+    hooks.casualties(s, scout, 1);
+    scout.interceptedAt = clock(s); scout.interceptedBy = source.id;
+    s.stats.scoutInterceptions = (s.stats.scoutInterceptions || 0) + 1;
+    effect(s, { type: 'casualty', sourceId: source.id, targetId: scout.id, factionId: ownerOf(s, scout), x: scout.x, z: scout.z, count: 1 });
+    emit(s, 'intercept', `${source.faction.name} caught a hostile scout; its undelivered observations were lost.`, source.faction.id, { groupId: source.id, otherGroupId: scout.id, count: 1 });
+    return;
+  }
   const reason = 'Hostile troops intercepted the scouting party; its intact crew is carrying its observations home.';
   if (hooks.retreat) hooks.retreat(s, scout, reason, false);
   else { scout.phase = 'returning'; scout.targetX = home.x; scout.targetZ = home.z; scout.reason = reason; }
@@ -458,6 +468,32 @@ function interceptScout(s, source, scout, hooks) {
   s.stats.scoutInterceptions = (s.stats.scoutInterceptions || 0) + 1;
   emit(s, 'intercept', `${source.faction.name} intercepted a hostile scouting party; all ${scout.size} scouts are returning with their own reports.`, source.faction.id, { groupId: source.id, otherGroupId: scout.id, count: scout.size });
   if (!source.isHome) clearEngagement(source.entity);
+}
+
+// A scout is one civilian in the field. It may ambush only a tiny, locally
+// visible work party, and abandons that opportunity as soon as defenders appear.
+function scoutOpportunities(s, hooks) {
+  if (!hooks.casualties) return;
+  for (const scout of s.groups) {
+    if (scout.kind !== 'scout' || scout.size !== 1 || scout.finished || scout.phase !== 'outbound') continue;
+    const restore = () => { if (scout.surveyDestination) { Object.assign(scout, scout.surveyDestination); delete scout.surveyDestination; } scout.fieldRaidTargetId = null; };
+    const danger = [...s.groups.filter(g => g.kind === 'army' && !g.finished), ...s.settlements].some(other => {
+      if (!permittedTarget(s, scout, other)) return false;
+      const observed = physicalObservation(s, scout, other, 18);
+      return observed.visible && countMilitary(observed.units) > 0 || (other.buildings || []).some(b => b.kind === 'tower' && liveStructure(b) && sees(s, scout, b, 18));
+    });
+    if (danger || scout.supply < 55 || scout.morale < 65 || clock(s) < (scout.nextHarassAt ?? 0)) { restore(); continue; }
+    const worker = s.groups.filter(g => g.kind === 'worker' && !g.finished && g.size > 0 && g.size <= 2 && permittedTarget(s, scout, g) && sees(s, scout, g, 8))
+      .sort((a, b) => distance(scout, a) - distance(scout, b))[0];
+    if (!worker) { restore(); continue; }
+    scout.surveyDestination ??= { targetX: scout.targetX, targetZ: scout.targetZ };
+    scout.fieldRaidTargetId = worker.id; scout.targetX = worker.x; scout.targetZ = worker.z;
+    scout.reason = 'A single scout is approaching a small exposed work party; no defender is locally visible.';
+    if (distance(scout, worker) > 1.5 || !isSegmentTraversable(s, scout, worker, { factionId: ownerOf(s, scout), radius: .1 })) continue;
+    const lost = hooks.casualties(s, worker, 1);
+    if (lost) { s.stats.scoutRaids = (s.stats.scoutRaids || 0) + 1; effect(s, { type: 'casualty', sourceId: scout.id, targetId: worker.id, factionId: ownerOf(s, worker), x: worker.x, z: worker.z, count: lost }); }
+    scout.nextHarassAt = clock(s) + 12; restore();
+  }
 }
 function fireTowers(s, field) {
   for (const home of s.settlements) {
@@ -504,6 +540,7 @@ export function stepCombat(s, dt = .1, hooks = {}) {
   const due = s.pendingCombat.filter(p => p.impactTime <= time + 1e-8);
   s.pendingCombat = s.pendingCombat.filter(p => p.impactTime > time + 1e-8);
   for (const strike of due) impact(s, strike, hooks);
+  scoutOpportunities(s, hooks);
   for (const home of s.settlements) if (home.buildings?.some(b => b.kind === 'tower')) assignDefenses(s, home, factionOf(s, home.factionId));
   for (const town of s.settlements) if (town.combat) town.combat.active = false;
   const engagements = [], objectives = new Map();

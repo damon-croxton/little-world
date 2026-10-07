@@ -278,8 +278,9 @@ export function updateCombatFormation(s, entity, units, dt = .1, options = {}) {
     for (let i = count; i < slots.length; i++) removeBody(world, slots[i]);
     if (slots.length > count) { slots.length = count; changed = true; }
     for (let ordinal = 0; ordinal < count; ordinal++, index++) {
-      const rank = combatFormationSlot(entity, index, { units, ...center, yaw, physical: false });
       let body = slots[ordinal];
+      const plan = options.individualPlans?.get(body.id);
+      const rank = body.positioned && plan ? plan.goal : combatFormationSlot(entity, index, { units, ...center, yaw, physical: false });
       if (!body.positioned) { removeBody(world, body); Object.assign(body, deployBody(s, world, rank, center, yaw, physical), { positioned: true }); addBody(world, entity, role, ordinal, body); changed = true; }
       else if (!world.records.has(body)) addBody(world, entity, role, ordinal, body);
       else Object.assign(world.records.get(body), { entity, role, ordinal });
@@ -287,7 +288,6 @@ export function updateCombatFormation(s, entity, units, dt = .1, options = {}) {
       body.prevX = body.x; body.prevZ = body.z; body.prevYaw = body.yaw ?? yaw;
       body.vx = 0; body.vz = 0;
       const traversable = cachedSegments(s, body, physical, topologyVersion);
-      const plan = options.individualPlans?.get(body.id);
       let desired = plan?.goal ?? (targets ? contactGoal(s, world, body, role, spec, targets, center, shape, physical, reservations) : null);
       const inContact = plan ? !!plan.facing : !!desired;
       desired ??= rank;

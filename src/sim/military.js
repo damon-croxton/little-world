@@ -1,3 +1,4 @@
+import { housingDemand } from './housing.js';
 import { settlementController } from './control.js';
 import { clamp, emit } from '../shared.js';
 import { RESOURCES, SURVIVAL_NEEDS, canAfford, spend } from './economy.js';
@@ -194,7 +195,7 @@ export function queueTraining(state, home, faction, role, size = 1, options = {}
   const spec = unitStats(speciesOf(faction), role, faction), count = integer(size);
   if (!spec || !count || !isActive(home) || (home.contestedUntil ?? -1) >= state.tick || home.health < (exile ? 1 : 45)) return null;
   const building = home.buildings.find(b => b.kind === spec.building && b.progress >= 1 && !b.destroyed && (b.hp == null || b.hp > 0) && !(home.trainingQueue || []).some(job => job.buildingId === b.id));
-  if (!building || count > 6 || availableCivilians(state, home) < count + (options.civilianReserve ?? 12)) return null;
+  if (!building || housingDemand(home) + count > (home.housingCapacity ?? Infinity) || count > 6 || availableCivilians(state, home) < count + (options.civilianReserve ?? 12)) return null;
   const cost = trainingCost(faction, role, count);
   if (!canAfford(home, cost, options.reserves ?? trainingReserves(home, faction))) return null;
   spend(state, home, cost, 'training');
@@ -238,7 +239,7 @@ export function advanceTraining(state, home, faction) {
     const elapsed = Math.max(0, state.tick - job.lastAdvancedTick);
     job.lastAdvancedTick = state.tick;
     // Training pauses when a siege, hunger or damage prevents safe instruction.
-    if (!elapsed || (home.contestedUntil ?? -1) >= state.tick || home.health < (exile ? 1 : 35) || home.wellbeing < .85) continue;
+    if (!elapsed || housingDemand(home) > (home.housingCapacity ?? Infinity) || (home.contestedUntil ?? -1) >= state.tick || home.health < (exile ? 1 : 35) || home.wellbeing < .85) continue;
     job.remaining = Math.max(0, job.remaining - elapsed);
     job.progress = 1 - job.remaining / job.duration;
     if (job.remaining > 0) continue;

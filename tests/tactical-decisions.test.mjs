@@ -1,6 +1,7 @@
 import { setMilitary, recruitMilitary, bindArmy } from './roster-fixtures.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { refreshHousing } from '../src/sim/housing.js';
 import { createSimulation } from '../src/sim/core.js';
 import { terrainAt } from '../src/world.js';
 import { stepCombat } from '../src/sim/combat.js';
@@ -149,7 +150,8 @@ test('worker contact transfers bounded real cargo and returns the intact workfor
 test('an exposed training building receives delayed damage and its destruction cancels the paid course', () => {
   const { s, center, ha, hb, b } = fixture();
   const building = { id: 'exposed-producer', kind: unitStats(b.species, 'infantry').building, ...point(center, 1.5), progress: 1, hp: 30, maxHp: 30 };
-  hb.buildings.push(building);
+  hb.buildings.push(building, ...Array.from({ length: 12 }, (_, i) => ({ id: `funded-housing-${i}`, kind: 'housing', x: hb.x + i * 3, z: hb.z + 20, progress: 1, hp: 160 })));
+  refreshHousing(hb, b);
   army(s, ha, 'a-raider', 18, point(center, -1));
   initializeLedger(s);
   const job = queueTraining(s, hb, b, 'infantry', 3); assert.ok(job);

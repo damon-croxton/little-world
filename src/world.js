@@ -7,7 +7,7 @@ const cache = new Map();
 export const WORLD_RADIUS = 180;
 export const LAND_SCALE = 4;
 export const RESOURCE_RADIUS = WORLD_RADIUS * .88;
-export const WORLD_RESOURCE_SITES = 520;
+export const WORLD_RESOURCE_SITES = 160;
 const clamp = (x, a = 0, b = 1) => Math.max(a, Math.min(b, x));
 const smooth = (a, b, x) => { const t = clamp((x - a) / (b - a)); return t * t * (3 - 2 * t); };
 const mix = (a, b, t) => a + (b - a) * t;
@@ -245,19 +245,19 @@ export function generateWorld(seed = 'littleworld', options = {}) {
     const affinity = (kind === 'food' && biome === 'meadow') || (kind === 'energy' && biome === 'alien') || (kind === 'materials' && biome === 'desert');
     const richness = Math.min(1, .35 + rand() * .45 + (affinity ? .18 : 0));
     subtype ||= subtypeFor(kind, biome);
-    const maxAmount = nearHome ? 900 + Math.round(richness * 1700) : 1600 + Math.round(richness * 4400);
-    const regeneration = ({ forest: .17, crop: .8, biomass: .9, spring: 3.4, solar: 1.2, ore: 0, crystal: 0, salvage: 0 }[subtype]) * (.65 + richness * .65);
+    const maxAmount = nearHome ? 500 + Math.round(richness * 900) : 900 + Math.round(richness * 2200);
+    const regeneration = ({ forest: .17, crop: .8, biomass: .9, spring: 3.4, solar: 1.2, ore: 0, crystal: 0, salvage: 0 }[subtype]) * (.65 + richness * .65) * .45;
     nodes.push({ id: `n${nodes.length}`, kind, subtype, x, z, amount: maxAmount, maxAmount, richness, biome, regeneration, radius: 2.2 + richness * 2.3 });
   };
   for (const start of starts) {
-    for (let j = 0; j < 8; j++) {
+    for (let j = 0; j < 4; j++) {
       let x, z, placed = false;
       for (let attempt = 0; attempt < 120; attempt++) {
-        const angle = j / 8 * Math.PI * 2 + rand() * .4 + attempt * .381, radius = (j < 4 ? 14 : 20) + rand() * 3.8;
+        const angle = j / 4 * Math.PI * 2 + rand() * .4 + attempt * .381, radius = (j < 4 ? 14 : 20) + rand() * 3.8;
         x = start.x + Math.cos(angle) * radius; z = start.z + Math.sin(angle) * radius;
         if (heightAt(x, z, seed) > .55 && Math.hypot(x, z) < RESOURCE_RADIUS && usableWorksite(x, z, seed) && clearSegment(start, { x, z }, seed)) { placed = true; break; }
       }
-      if (!placed) { const angle = j / 8 * Math.PI * 2; x = start.x + Math.cos(angle) * 9; z = start.z + Math.sin(angle) * 9; }
+      if (!placed) { const angle = j / 4 * Math.PI * 2; x = start.x + Math.cos(angle) * 9; z = start.z + Math.sin(angle) * 9; }
       add(kinds[j % 4], x, z, true);
     }
   }

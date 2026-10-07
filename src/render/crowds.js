@@ -3,7 +3,7 @@ import { observedGroupController } from '../selection.js';
 import { settlementController } from '../sim/control.js';
 import { createWorkerBadges } from './worker-badges.js';
 
-// Military and home citizens are individual bodies. An active resource crew
+// Military have individual bodies; home civilians are represented by housing. An active resource crew
 // has one worker body and a count badge; its full census remains represented.
 // All motion is a function of the supplied SIMULATION time and interpolation
 // alpha. Rendering neither advances simulation nor consumes its seeded RNG.
@@ -300,21 +300,6 @@ export function createCrowds(THREE, scene) {
   function groundCorner(ix, iz) { const key = (ix + 8192) * 16384 + iz + 8192; if (!heights.has(key)) heights.set(key, heightAt(ix * GRID, iz * GRID, seed)); return heights.get(key); }
   function ground(x, z) { const gx = x / GRID, gz = z / GRID, ix = Math.floor(gx), iz = Math.floor(gz); return mix(mix(groundCorner(ix, iz), groundCorner(ix + 1, iz), gx - ix), mix(groundCorner(ix, iz + 1), groundCorner(ix + 1, iz + 1), gx - ix), gz - iz); }
   function colorFor(faction) { const key = faction.color || '#b7cabd'; if (!colorCache.has(key)) { const c = new THREE.Color(key); c.lerp(new THREE.Color('#f0e5ca'), .12); colorCache.set(key, c); } return colorCache.get(key); }
-  function homeLayout(s) {
-    const buildings = (s.buildings || []).filter(b => b.progress == null || b.progress > .45);
-    const signature = `${s.x}:${s.z}:${finite(s.radius, 8)}|` + (s.buildings || []).map(b => `${b.id}:${b.kind}:${b.x}:${b.z}:${b.progress == null || b.progress > .45}:${b.progress < 1}`).join('|');
-    if (homeLayouts.get(s.id)?.signature === signature) return homeLayouts.get(s.id);
-    const entrances = buildings.map(b => {
-      const dx = s.x - b.x, dz = s.z - b.z, length = Math.hypot(dx, dz) || 1;
-      const d = b.kind === 'hub' ? 1.95 : ['farm', 'power'].includes(b.kind) ? 1.65 : 1.22;
-      return { x: b.x + dx / length * d, z: b.z + dz / length * d, kind: b.kind };
-    });
-    // Initial states without building records still have exact population.
-    if (!entrances.length) for (let i = 0; i < 9; i++) { const a = i / 9 * TAU, r = 3 + i % 3 * 1.2; entrances.push({ x: s.x + Math.sin(a) * r, z: s.z + Math.cos(a) * r, kind: i ? 'housing' : 'hub' }); }
-    const layout = { signature, people: [], entrances, labs: entrances.filter(b => b.kind === 'lab'), barracks: entrances.filter(b => ['barracks', 'range', 'fabricator', 'launcher', 'brooder', 'spitter'].includes(b.kind)), sites: entrances.filter(b => ['farm', 'power', 'workshop'].includes(b.kind)), construction: (s.buildings || []).filter(b => b.progress < 1) };
-    homeLayouts.set(s.id, layout); return layout;
-  }
-
   function emitIndividual(record, faction, camera, collect = false) {
     const { x, z, yaw, walk, work, cargo, phase, role, id } = record;
     const representedCount = record.representedCount || 1, workerCrew = record.kind === 'worker';
@@ -380,55 +365,13 @@ export function createCrowds(THREE, scene) {
   }
 
   function renderHome(s, faction, deployed, time, camera, alpha = 1, militaryFaction = faction, roster = [], selectedId) {
-    const population = countOf(s.population), present = Math.max(0, population - deployed), base = hash(s.id), layout = homeLayout(s);
+    const present = Math.max(0, countOf(s.population) - deployed);
+    const residents = Math.max(0, present - roster.length);
     diagnostics.homePresentBySettlement[s.id] = present; diagnostics.homePresentIndividuals += present;
-    const civilianCount = Math.max(0, present - roster.length);
-    const researchers = Math.min(civilianCount, countOf(s.assigned?.researchers)), builders = Math.min(civilianCount - researchers, countOf(s.assigned?.construction));
-    const infrastructure = Math.min(civilianCount - researchers - builders, countOf(s.assigned?.infrastructure));
-    const specialistCount = researchers + builders + infrastructure;
-    for (let i = 0; i < civilianCount; i++) {
-      let person = layout.people[i];
-      if (!person) {
-        const h = noise(base + i * 31), h2 = noise(base + i * 131 + 17), phase = h * TAU;
-        const a = layout.entrances[Math.floor(h * layout.entrances.length)], b = layout.entrances[Math.floor(h2 * layout.entrances.length)];
-        const roadRadius = Math.max(3.2, finite(s.radius, 8) * (.28 + h2 * .24));
-        const cx = s.x + Math.sin(phase) * roadRadius, cz = s.z + Math.cos(phase) * roadRadius;
-        const points = [[a.x, a.z], [cx, cz], [b.x, b.z], [cx, cz], [a.x, a.z]], segments = [];
-        let length = 0;
-        for (let k = 0; k < 4; k++) {
-          const p = points[k], q = points[k + 1], dx = q[0] - p[0], dz = q[1] - p[1], distance = Math.hypot(dx, dz), yaw = Math.atan2(dx, dz);
-          const size = Math.max(.25, distance), lane = (h2 - .5) * 1.15;
-          segments.push({ x: p[0] + Math.cos(yaw) * lane, z: p[1] - Math.sin(yaw) * lane, dx, dz, size, yaw, walking: distance >= .2 }); length += size;
-        }
-        person = layout.people[i] = { h, h2, phase, a, segments, length, sinPhase: Math.sin(phase), cosPhase: Math.cos(phase), body: { id: `home:${s.id}:${i}`, settlementId: s.id, groupId: null, kind: 'home', cargo: 0, phase, scale: .94 + h * .12 } };
-      }
-      const { h, h2, phase, a } = person;
-      let x, z, yaw, walk = 1, work = 0, role = 0, action = 'courtyard', militaryRole = null, attackTime = -1000, hitTime = -1000, elevation = 0;
-      const specialist = i < specialistCount;
-      if (specialist) {
-        let dest;
-        if (i < researchers) { dest = layout.labs[i % Math.max(1, layout.labs.length)] || a; action = 'researching'; role = 6; }
-        else if (i < researchers + builders) { const c = layout.construction[i % Math.max(1, layout.construction.length)]; dest = c ? { x: c.x + 1.4 * Math.cos(phase), z: c.z + 1.4 * Math.sin(phase) } : a; action = 'constructing'; role = 1; }
-        else { dest = layout.sites[i % Math.max(1, layout.sites.length)] || a; action = 'infrastructure'; role = 1; }
-        // Stationary specialists stay at their actual facility and work. Their
-        // limbs move, but they are not counted as a second walking citizen.
-        const spread = .26 + .10 * Math.floor(i / Math.max(1, layout.sites.length + layout.labs.length));
-        x = dest.x + Math.sin(phase) * Math.min(spread, 1.35); z = dest.z + Math.cos(phase) * Math.min(spread, 1.35); yaw = Math.atan2(dest.x - x, dest.z - z); walk = 0; work = .7;
-      } else {
-        // A loop follows entrance → central road junction → second entrance →
-        // junction. Fixed per-person speed gives real sub-pulse movement at1x.
-        const { segments, length } = person;
-        let d = ((time * (.53 + h2 * .27) + h * length) % length + length) % length, segment = 0;
-        while (segment < 3 && d > segments[segment].size) { d -= segments[segment].size; segment++; }
-        const leg = segments[segment], t = clamp(d / leg.size);
-        yaw = leg.yaw; x = leg.x + leg.dx * t; z = leg.z + leg.dz * t;
-        if (!leg.walking) { walk = 0; work = .3; }
-      }
-      const collect = i < 3 || i === specialistCount;
-      const body = person.body;
-      body.action = action; body.x = x; body.z = z; body.yaw = yaw; body.walk = walk; body.work = work; body.role = role; body.militaryRole = militaryRole; body.attackTime = attackTime; body.hitTime = hitTime; body.elevation = elevation;
-      emitIndividual(body, militaryRole ? militaryFaction : faction, camera, collect);
-    }
+    // Local residents/jobs remain real census and labour, represented by the
+    // settlement's housing. They have no independent movement or collision.
+    diagnostics.housedIndividuals += residents;
+    diagnostics.representedIndividuals += residents;
     for (let i = 0; i < roster.length; i++) renderSoldier(roster[i], militaryFaction, camera, alpha, selectedId, i < 3);
   }
 
@@ -518,7 +461,7 @@ export function createCrowds(THREE, scene) {
     if (seed !== state.seed || lastWorld !== world) { seed = state.seed; lastWorld = world; heights.clear(); homeLayouts.clear(); soldierViews.clear(); for (const view of groupViews.values()) view.proxy.removeFromParent(); groupViews.clear(); }
     lastState = state;
     for (const pool of pools.values()) { pool.count = 0; pool.selectionIds.length = 0; }
-    Object.assign(diagnostics, { totalPopulation: 0, representedIndividuals: 0, visibleIndividuals: 0, culledIndividuals: 0, homePresentIndividuals: 0, homeVisibleIndividuals: 0, groupIndividuals: 0, groupVisibleIndividuals: 0, workerIndividuals: 0, representedWorkerIndividuals: 0, visibleWorkerIndividuals: 0, workerCrewCount: 0, visibleWorkerCrews: 0, drawnWorkerModels: 0, workerBadgeCount: 0, workerBadgeCapacity: 0, workerBadgeDrawCalls: 0, militaryIndividuals: 0, visibleMilitaryIndividuals: 0, armyIndividuals: 0, groupCount: 0, instances: 0, drawnModels: 0, detailedIndividuals: 0, simplifiedIndividuals: 0, overviewIndividuals: 0, reusedFrame: false, drawCallsEstimate: 0, triangleEstimate: 0, allocatedInstances: 0, instanceAllocationUnfulfilled: 0, homePresentBySettlement: {}, populationAccountingDelta: 0, terrainCacheSamples: 0, occlusionCulling: false, unpositionedSoldiers: 0 });
+    Object.assign(diagnostics, { totalPopulation: 0, representedIndividuals: 0, visibleIndividuals: 0, culledIndividuals: 0, homePresentIndividuals: 0, housedIndividuals: 0, homeVisibleIndividuals: 0, groupIndividuals: 0, groupVisibleIndividuals: 0, workerIndividuals: 0, representedWorkerIndividuals: 0, visibleWorkerIndividuals: 0, workerCrewCount: 0, visibleWorkerCrews: 0, drawnWorkerModels: 0, workerBadgeCount: 0, workerBadgeCapacity: 0, workerBadgeDrawCalls: 0, militaryIndividuals: 0, visibleMilitaryIndividuals: 0, armyIndividuals: 0, groupCount: 0, instances: 0, drawnModels: 0, detailedIndividuals: 0, simplifiedIndividuals: 0, overviewIndividuals: 0, reusedFrame: false, drawCallsEstimate: 0, triangleEstimate: 0, allocatedInstances: 0, instanceAllocationUnfulfilled: 0, homePresentBySettlement: {}, populationAccountingDelta: 0, terrainCacheSamples: 0, occlusionCulling: false, unpositionedSoldiers: 0 });
     nodeIndex = new Map((state.nodes || []).map(n => [n.id, n]));
     const factions = new Map(state.factions.map(f => [f.id, f])), deployed = new Map(), liveGroups = new Set();
     factionIndex = factions;
@@ -569,7 +512,7 @@ export function createCrowds(THREE, scene) {
     }
     if (soldierSelection.visible) diagnostics.drawCallsEstimate++;
     diagnostics.drawnModels = diagnostics.instances;
-    diagnostics.culledIndividuals = diagnostics.totalPopulation - diagnostics.visibleIndividuals;
+    diagnostics.culledIndividuals = diagnostics.totalPopulation - diagnostics.visibleIndividuals - diagnostics.housedIndividuals;
     diagnostics.populationAccountingDelta = diagnostics.representedIndividuals - diagnostics.totalPopulation;
     diagnostics.terrainCacheSamples = heights.size;
   }

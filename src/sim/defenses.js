@@ -78,7 +78,7 @@ function freshKnown(faction, state) {
 
 function knownObjective(state, home, faction) {
   const reports = freshKnown(faction, state);
-  const hostile = reports.filter(report => report.kind === 'settlement' && report.ownerId && report.ownerId !== faction.id && report.status !== 'ruin' && distance(home, report) < 100)
+  const hostile = reports.filter(report => report.kind === 'settlement' && report.ownerId && report.ownerId !== faction.id && report.status !== 'ruin' && distance(home, report) < 180)
     .sort((a, b) => distance(home, a) - distance(home, b))[0];
   if (hostile && (faction.relations?.[hostile.ownerId]?.status === 'hostile' || faction.traits?.aggression > .65)) {
     return { ...hostile, priority: 'threat', reason: 'Faces a fresh reported rival approach' };
@@ -147,11 +147,15 @@ export function defenseBuildingPlan(state, home, faction) {
   const defenses = home.buildings.filter(building => DEFENSE_STATS[building.kind] && !building.destroyed && building.hp > 0);
   // Keep a small, affordable fortification. Growth and extraction retain the
   // majority of labour/materials; placement cannot become unlimited tower spam.
-  const budget = home.population >= 360 ? 9 : home.population >= 180 ? 6 : 3;
+  const budget = home.population >= 360 ? 15 : home.population >= 180 ? 11 : 7;
   if (defenses.length >= budget || state.tick - (home.lastDefenseStarted ?? -100) < 24) return null;
-  const anchor = defenses.find(b => b.kind === 'gate' && b.topologyId && b.approach) || home.buildings.find(b => b.kind === 'gate' && b.topologyId && b.approach);
+  const objective = knownObjective(state, home, faction);
+  let anchor = defenses.find(b => b.kind === 'gate' && b.topologyId && b.approach && b.targetReportId === objective?.id) || defenses.find(b => b.kind === 'gate' && b.topologyId && b.approach) || home.buildings.find(b => b.kind === 'gate' && b.topologyId && b.approach);
+  if (anchor && objective?.priority === 'threat') {
+    const dx = objective.x - home.x, dz = objective.z - home.z;
+    if ((dx * anchor.approach.x + dz * anchor.approach.z) / Math.max(1, Math.hypot(dx, dz)) < .4) anchor = null;
+  }
   if (!anchor) {
-    const objective = knownObjective(state, home, faction);
     if (!objective) return null;
     const route = findPath(state, home, objective, { factionId: faction.id, arrival: 2, maxExpansions: 1024 });
     if (!route.reachable || route.length < 8) return null;
@@ -162,7 +166,7 @@ export function defenseBuildingPlan(state, home, faction) {
         const length = distance(previous, next);
         if (length < remaining) { remaining -= length; previous = next; continue; }
         const approach = { x: (next.x - previous.x) / length, z: (next.z - previous.z) / length };
-        const base = { ...pointAlong(previous, approach, remaining), approach, topologyId: `${home.id}:defense-screen`,
+        const base = { ...pointAlong(previous, approach, remaining), approach, topologyId: `${home.id}:defense-screen:${objective.id}`,
           targetReportId: objective.id, defensiveObjective: objective.priority, placementReason: objective.reason };
         const plans = [screenSegment(base, 0), screenSegment(base, -1, 1), screenSegment(base, 1, 1)];
         if (plans.every(p => footprintClear(state, home, p)) && preservesFriendlyRoutes(state, home, faction, plans, base)) return plans[0];
@@ -178,7 +182,7 @@ export function defenseBuildingPlan(state, home, faction) {
   // The funded gate fixes a stable blueprint even when the current report
   // changes. Always join an existing segment; no disconnected outer fragments.
   const desiredTowers = Math.min(home.population >= 300 ? 2 : 1, Math.floor((home.military?.ranged || 0) / 3));
-  const slots = [[-1, 1], [1, 1], [-1, 'tower'], [-1, 2], [1, 2], [1, 'tower'], [-1, 3], [1, 3]];
+  const slots = [[-1, 1], [1, 1], [-1, 'tower'], [-1, 2], [1, 2], [1, 'tower'], [-1, 3], [1, 3], [-1, 4], [1, 4], [-1, 5], [1, 5]];
   for (const [side, rank] of slots) {
     const sideName = side < 0 ? 'left' : 'right', slot = `${sideName}-${rank}`;
     if (defenses.some(b => b.topologyId === anchor.topologyId && b.topologySlot === slot)) continue;
@@ -187,8 +191,10 @@ export function defenseBuildingPlan(state, home, faction) {
       if (defenses.filter(b => b.kind === 'tower').length >= desiredTowers) continue;
       if (!defenses.some(b => b.topologyId === anchor.topologyId && b.topologySlot === `${sideName}-1`)) continue;
       const axis = { x: -anchor.approach.z, z: anchor.approach.x }, point = pointAlong(pointAlong(anchor, axis, side * 6.5), anchor.approach, -4);
+      const crew = (state.groups || []).filter(g => g.kind === 'worker' && !g.finished && g.originId === home.id && groupController(state, g) === faction.id && distance(g, point) < 14).sort((a, b) => distance(a, point) - distance(b, point))[0];
+      if (crew && distance(crew, point) > 6) { const reach = distance(crew, point); point.x += (crew.x - point.x) / reach * Math.min(6, reach - 6); point.z += (crew.z - point.z) / reach * Math.min(6, reach - 6); }
       plan = { ...point, kind: 'tower', ...DEFENSE_STATS.tower, hp: DEFENSE_STATS.tower.maxHp, rotation: 0, topologyId: anchor.topologyId, topologySlot: slot,
-        targetReportId: anchor.targetReportId, defensiveObjective: anchor.defensiveObjective, placementReason: 'Covers the controlled gate and joined defensive screen' };
+        targetReportId: anchor.targetReportId, defensiveObjective: anchor.defensiveObjective, placementReason: crew ? 'Protects an actual harvesting party beside the connected front screen' : 'Covers the controlled gate and joined defensive screen' };
     } else {
       if (rank > 1 && !defenses.some(b => b.topologyId === anchor.topologyId && b.topologySlot === `${sideName}-${rank - 1}`)) continue;
       plan = screenSegment(anchor, side, rank);

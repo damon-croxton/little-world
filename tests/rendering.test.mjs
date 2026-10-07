@@ -48,14 +48,14 @@ test('population categories retain exact weighted census with one model per work
   const { scene } = sceneAtOverview(), state = categories(), before = structuredClone(state), crowds = createCrowds(THREE, scene);
   crowds.update(state, 10, 's0', .5);
   const d = crowds.diagnostics;
-  assert.equal(d.totalPopulation, 300); assert.equal(d.representedIndividuals, 300); assert.equal(d.visibleIndividuals, 300);
+  assert.equal(d.totalPopulation, 300); assert.equal(d.representedIndividuals, 300); assert.equal(d.visibleIndividuals, 78); assert.equal(d.housedIndividuals, 222);
   assert.equal(d.homePresentIndividuals, 240); assert.equal(d.groupIndividuals, 60); assert.equal(d.workerIndividuals, 18); assert.equal(d.armyIndividuals, 12);
   assert.equal(d.representedWorkerIndividuals, 18); assert.equal(d.visibleWorkerIndividuals, 18);
   assert.equal(d.workerCrewCount, 3); assert.equal(d.visibleWorkerCrews, 3); assert.equal(d.drawnWorkerModels, 3);
   assert.equal(d.workerBadgeCount, 0); assert.equal(d.workerBadgeLodCulled, 3);
   assert.equal(d.militaryIndividuals, 30); assert.equal(d.visibleMilitaryIndividuals, 30);
-  assert.equal(d.populationAccountingDelta, 0); assert.equal(d.overviewIndividuals, 300);
-  assert.equal(d.drawnModels, 285); assert.equal(d.instances, d.drawnModels);
+  assert.equal(d.populationAccountingDelta, 0); assert.equal(d.overviewIndividuals, 78);
+  assert.equal(d.drawnModels, 63); assert.equal(d.instances, d.drawnModels);
   assert.equal(d.drawnModels, d.visibleIndividuals - d.visibleWorkerIndividuals + d.drawnWorkerModels);
   assert.equal(visibleMeshes(scene).reduce((n, m) => n + m.count, 0), d.drawnModels);
   assert.ok(d.triangleEstimate <= d.drawnModels * 112 + d.workerBadgeCount * 2, `${d.triangleEstimate} crowd triangles`);
@@ -84,11 +84,11 @@ test('population categories retain exact weighted census with one model per work
   assert.deepEqual(state, before, 'renderer never mutates simulation'); crowds.dispose();
 });
 
-test('subpulse home and deployed motion continue; an exact paused frame reuses unchanged transforms', () => {
+test('home residents have no decorative motion; deployed motion continues and an exact paused frame reuses unchanged transforms', () => {
   const { scene } = sceneAtOverview(), state = categories(), crowds = createCrowds(THREE, scene);
   crowds.update(state, 10, 's0', .3); const before = crowds.getMotionSamples();
   crowds.update(state, 10.016, 's0', .46); const after = crowds.getMotionSamples();
-  assert.ok(after.some((p, i) => p.kind === 'home' && Math.hypot(p.x - before[i].x, p.y - before[i].y, p.z - before[i].z) > 1e-8));
+  assert.ok(after.filter(p => p.kind === 'home').every(p => p.soldierId), 'home models are real soldiers only');
   assert.ok(after.some((p, i) => p.kind !== 'home' && Math.hypot(p.x - before[i].x, p.y - before[i].y, p.z - before[i].z) > 1e-8));
   const arrays = visibleMeshes(scene).map(m => Array.from(m.instanceMatrix.array));
   crowds.update(state, 10.016, 's0', .46);
@@ -104,7 +104,7 @@ test('paused cache invalidates on camera/projection, quality, selection, state a
   const changes = [() => camera.position.x++, () => { camera.fov = 41; camera.updateProjectionMatrix(); }, () => { scene.userData.quality = 'low'; }, () => { selected = 'g0:0'; }, () => state.settlements[0].population++, () => state.settlements[0].buildings[0].x++, () => state.groups[0].carrying++, () => state.groups[0].x++, () => state.nodes[0].radius++, () => state.nodes[0].amount--, () => { state.factions[0].color = '#ffffff'; }, () => state.step++, () => { state.seed = 'another'; }];
   for (const change of changes) { change(); run(); assert.equal(crowds.diagnostics.reusedFrame, false, change.toString()); run(); assert.equal(crowds.diagnostics.reusedFrame, true); }
   camera.lookAt(camera.position.clone().multiplyScalar(2)); run();
-  assert.equal(crowds.diagnostics.visibleIndividuals, 0); assert.equal(crowds.diagnostics.representedIndividuals, 301); assert.equal(crowds.diagnostics.culledIndividuals, 301);
+  assert.equal(crowds.diagnostics.visibleIndividuals, 0); assert.equal(crowds.diagnostics.representedIndividuals, 301); assert.equal(crowds.diagnostics.culledIndividuals + crowds.diagnostics.housedIndividuals, 301);
   assert.equal(visibleMeshes(scene).length, 0); crowds.dispose();
 });
 
@@ -113,11 +113,11 @@ test('naturally evolved state preserves exact rendering census through overview,
   const { scene, camera } = sceneAtOverview(), crowds = createCrowds(THREE, scene), snapshot = structuredClone(state);
   crowds.update(state, state.time, 's0', .5);
   const total = state.settlements.reduce((n, s) => n + s.population, 0);
-  assert.equal(crowds.diagnostics.representedIndividuals, total); assert.equal(crowds.diagnostics.visibleIndividuals, total);
+  assert.equal(crowds.diagnostics.representedIndividuals, total); assert.equal(crowds.diagnostics.visibleIndividuals + crowds.diagnostics.housedIndividuals, total);
   const home = state.settlements[0]; camera.position.set(home.x + 18, 20, home.z + 25); camera.lookAt(home.x, 3, home.z);
   crowds.update(state, state.time, 's0', .5);
   assert.equal(crowds.diagnostics.representedIndividuals, total); assert.ok(crowds.diagnostics.detailedIndividuals > 0);
-  assert.equal(crowds.diagnostics.visibleIndividuals + crowds.diagnostics.culledIndividuals, total);
+  assert.equal(crowds.diagnostics.visibleIndividuals + crowds.diagnostics.culledIndividuals + crowds.diagnostics.housedIndividuals, total);
   assert.deepEqual(state, snapshot);
   const next = createSimulation('first-light'); crowds.update(next, 0, 's0', 0);
   assert.equal(crowds.diagnostics.totalPopulation, next.settlements.reduce((n, s) => n + s.population, 0)); assert.equal(crowds.diagnostics.populationAccountingDelta, 0);

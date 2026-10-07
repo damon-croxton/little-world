@@ -42,7 +42,7 @@ function weightedContract(crowds, scene) {
   assert.equal(d.drawnModels, d.visibleIndividuals - d.visibleWorkerIndividuals + d.drawnWorkerModels);
   assert.ok(d.workerBadgeCount <= d.visibleWorkerCrews); assert.equal(d.drawnWorkerModels, d.visibleWorkerCrews);
   assert.equal(d.workerBadgeCount + d.workerBadgeLodCulled + d.workerBadgeOverlapCulled, d.visibleWorkerCrews);
-  assert.equal(d.representedIndividuals, d.totalPopulation); assert.equal(d.culledIndividuals, d.totalPopulation - d.visibleIndividuals);
+  assert.equal(d.representedIndividuals, d.totalPopulation); assert.equal(d.culledIndividuals, d.totalPopulation - d.visibleIndividuals - d.housedIndividuals);
   let models = 0; scene.traverse(mesh => { if (mesh.isInstancedMesh && mesh.visible) models += mesh.count; });
   assert.equal(models, d.drawnModels); assert.equal(badgeMesh(scene).geometry.instanceCount, d.workerBadgeCount);
 }
@@ -51,7 +51,7 @@ test('real eleven-person and seven-person crews render two counted workers while
   const { state, scene, crowds } = setup(), before = structuredClone(state);
   crowds.update(state, 10, 'soldiers', .5); weightedContract(crowds, scene);
   const d = crowds.diagnostics, workers = crowds.getMotionSamples().filter(s => s.kind === 'worker');
-  assert.equal(d.totalPopulation, 40); assert.equal(d.drawnModels, 24);
+  assert.equal(d.totalPopulation, 40); assert.equal(d.drawnModels, 9); assert.equal(d.housedIndividuals, 15);
   assert.equal(d.representedWorkerIndividuals, 18); assert.equal(d.visibleWorkerIndividuals, 18); assert.equal(d.workerCrewCount, 2);
   assert.equal(d.militaryIndividuals, 5); assert.equal(d.visibleMilitaryIndividuals, 5);
   assert.deepEqual(workers.map(s => [s.groupId, s.representedCount, s.crewSize, s.badgeText]), [['outbound-crew', 11, 11, '11×'], ['mining-crew', 7, 7, '7×']]);
@@ -122,7 +122,7 @@ test('crew culling weights people and badge clicks resolve the same real group a
   assert.equal(crowds.resolvePick(hit), 'mining-crew');
   assert.ok(crowds.getPickables().some(o => o.userData.groupId === 'outbound-crew'));
   camera.lookAt(0, 80, 120); crowds.update(state, 10, null, 1); weightedContract(crowds, scene);
-  assert.equal(crowds.diagnostics.visibleIndividuals, 0); assert.equal(crowds.diagnostics.culledIndividuals, 40);
+  assert.equal(crowds.diagnostics.visibleIndividuals, 0); assert.equal(crowds.diagnostics.culledIndividuals + crowds.diagnostics.housedIndividuals, 40);
   assert.equal(crowds.diagnostics.representedWorkerIndividuals, 18); assert.equal(crowds.diagnostics.visibleWorkerIndividuals, 0);
   assert.equal(crowds.diagnostics.workerCrewCount, 2); assert.equal(crowds.diagnostics.workerBadgeCount, 0);
   crowds.dispose();

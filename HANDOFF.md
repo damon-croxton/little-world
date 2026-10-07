@@ -1,3 +1,28 @@
+# Scarcity, housing and responsive frames — 2026-10-07
+
+User requested an economical single-lead pass: no specialists, long sweeps, videos,
+or optional polishing. The screenshot libfile_6f917c70df388191a33faffe326f1dd0
+could not be downloaded through the supported Library materialization helper;
+no image-dependent claim was made. Keep work exclusively in this cloud checkout.
+
+Implemented the scoped scarcity, housing, single-scout/harassment, defensive
+placement and frame-budget changes documented in README. Resident walkers were
+render-only representations of census/local jobs; housing now represents those
+citizens. Preserve housedIndividuals separately from visible/cull/model counts.
+Do not restore decorative residents or fabricate military/civilian population.
+
+A 200-cycle CPU profile took 9.72 seconds and showed terrain/formation work as
+the largest sampled costs. Interactive catch-up is now at most four pulses and
+an 8 ms budget, with at most 0.5 requested simulation seconds queued. A pulse
+cannot be preempted; missed requested time does not advance the world.
+Defense route planning is deferred until defense construction is actually eligible,
+and formation movement reuses individual goals instead of recomputing ranks.
+
+Checks and release receipts are under ignored screenshots/scarcity-pass/.
+Required per-push CI remains unchanged; public smoke now also observes the
+per-frame pulse limit at nominal 2x and the separate housed census. Avoid
+repeating unchanged local suites or adding long balance runs to this request.
+
 # Persistent soldiers in the main civilisation world — 2026-10-07
 
 The user approved moving the validated individual combat into LittleWorld itself.

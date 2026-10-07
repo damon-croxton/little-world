@@ -92,8 +92,8 @@ test('readable landscape retains all harvestable deposits and biome silhouettes 
   const state = createSimulation('first-light'), before = structuredClone(state), scene = new THREE.Scene(), terrain = createTerrain(THREE, scene, state.seed);
   terrain.update(0, state);
   const d = terrain.diagnostics;
-  assert.equal(d.resourceSites, 520); assert.equal(d.visibleResourceSites, state.nodes.length);
-  assert.equal(d.resourcePieces, 4631, 'harvestable representations are retained from the seeded world');
+  assert.equal(d.resourceSites, 160); assert.equal(d.visibleResourceSites, state.nodes.length);
+  assert.equal(d.resourcePieces, 1495, 'every deposit in the deliberately scarce seeded world retains its representation');
   assert.equal(d.visibleResourcePieces, d.resourcePieces);
   assert.ok(d.visibleDecorativePieces < 1800 && d.visibleDecorativePieces > 650, `${d.visibleDecorativePieces} decorative pieces retain atmosphere without blanket noise`);
   assert.ok(d.visibleResourceSiteDetails < 1800, 'deposits no longer carry rings of random pebbles');

@@ -114,11 +114,19 @@ async function accept() {
   });
   await check('Mouse resume and pause advance then freeze the simulation', async () => {
     const before = await page.evaluate(() => littleworld.state.step);
-    await button('pause').click(); await page.waitForFunction(step => littleworld.state.step > step, before); await button('pause').click(); await rendered();
+    await page.locator('[data-action="speed"][data-value="2"]').click();
+    await button('pause').click(); await page.waitForFunction(step => littleworld.state.step > step, before);
+    const framePulses = await page.evaluate(() => new Promise(resolve => {
+      const counts = []; let previous = littleworld.state.step;
+      const sample = () => { const step = littleworld.state.step; counts.push(step - previous); previous = step; if (counts.length < 10) requestAnimationFrame(sample); else resolve(counts); };
+      requestAnimationFrame(sample);
+    }));
+    assert.ok(framePulses.every(count => count >= 0 && count <= 4), 'A frame exceeded the responsive catch-up pulse limit');
+    await button('pause').click(); await rendered();
     const paused = await page.evaluate(() => ({ step: littleworld.state.step, paused: littleworld.view.paused }));
     assert.ok(paused.step > before && paused.paused); await rendered();
     assert.equal(await page.evaluate(() => littleworld.state.step), paused.step);
-    return { before, ...paused };
+    return { before, ...paused, framePulses, nominalSpeed: 2 };
   });
   await check('Space input toggles the world clock from the canvas', async () => {
     await page.locator('#app canvas').focus(); const before = await page.evaluate(() => littleworld.state.step);
@@ -128,7 +136,7 @@ async function accept() {
   await check('Weighted census and real model counts agree', async () => {
     const d = await page.evaluate(() => littleworld.diagnostics), c = d.crowds;
     assert.ok(d.totalPopulation > 0); assert.equal(d.representedIndividuals, d.totalPopulation);
-    assert.equal(c.populationAccountingDelta, 0); assert.equal(c.visibleIndividuals + c.culledIndividuals, d.totalPopulation);
+    assert.equal(c.populationAccountingDelta, 0); assert.equal(c.visibleIndividuals + c.culledIndividuals + c.housedIndividuals, d.totalPopulation);
     assert.equal(c.drawnModels, c.visibleIndividuals - c.visibleWorkerIndividuals + c.drawnWorkerModels);
     assert.equal(c.drawnWorkerModels, c.visibleWorkerCrews);
     return { people: d.totalPopulation, models: c.drawnModels, workers: c.visibleWorkerIndividuals, crews: c.drawnWorkerModels };

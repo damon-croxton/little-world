@@ -140,13 +140,13 @@ Smoke and deep evidence are retained as Actions artifacts for 14 days. See `HAND
 
 ## Measurement and model boundaries
 
-This is a simulation-first tech demo, not a historical prediction or a directly controlled multiplayer RTS. Strategic decisions and logistics operate through settlements and groups. Resource crews use one articulated model with a count badge, while their complete workforce and cargo remain in the simulation. Home civilian activity is representative motion; military bodies follow physical state. Local congestion can queue soldiers; individual soldiers do not run global route planners.
+This is a simulation-first tech demo, not a historical prediction or a directly controlled multiplayer RTS. Strategic decisions and logistics operate through settlements and groups. Resource crews use one articulated model with a count badge, while their complete workforce and cargo remain in the simulation. Home residents and local jobs are represented by housing and census totals; decorative resident walkers are removed. Military bodies and single scouts follow physical state. Local congestion can queue soldiers; individual soldiers do not run global route planners.
 
 The live diagnostics distinguish actual/scoped population, people represented in the view, and actual drawn models. A visible 11-person crew contributes eleven people and one model. Count badges hide at the widest zoom and avoid overlap; selecting a visible crew keeps its badge available. In a civilisation perspective, the census includes owned and observable foreign people. Paused, active and advancing timing windows are separate.
 
 Node render benchmarks measure CPU simulation/crowd work and geometry only. They do not measure GPU, buildings, landscape, interface or screen refresh. Browser frame measurements describe their recorded runner, viewport and quality, not a guarantee for other hardware. DOM and synthetic pointer tests are not evidence of actual mobile layout or native gestures.
 
-New births and housing stop at 900 people per settlement; each independent faction can maintain up to four active settlements. Limits stop new commitments rather than deleting existing people. Supplies, housing, geography, war and reserves constrain growth earlier. No save/load or direct faction orders are included.
+New births stop at 900 people per settlement; each independent faction can maintain up to four active settlements. Limits stop new commitments rather than deleting existing people. Supplies, housing, geography, war and reserves constrain growth earlier. No save/load or direct faction orders are included.
 
 ## Source map
 
@@ -160,3 +160,30 @@ New births and housing stop at 900 people per settlement; each independent facti
 - `src/main.js`, `clock.js`, `input.js`, `ui.js`: observer integration, timing, gestures and interface.
 
 Three.js is MIT licensed. Playwright and Linkedom are development-only verification dependencies.
+
+### Scarcity and responsiveness pass
+
+World resources use 160 sites instead of 520, with one starter site per resource,
+smaller deposits, and 45% of the former regeneration rate. Housing provides 28
+places per completed house, plus 16 at a standing hub. Residents each need one
+place; serving soldiers and funded trainees need one additional quarters place.
+The AI builds housing ahead of demand. Destroyed houses lose capacity immediately,
+disappear from rendering, and their plots can be reused for funded construction.
+
+Scouts are individual citizens. They avoid locally visible defenders and can
+ambush only one- or two-person unprotected work parties. Hostile troops prioritize
+visible scouts; a lone scout caught at physical contact loses its undelivered
+observations. Small paid harassment parties use fresh delivered worker reports,
+keep a home reserve, and interrupt raids for defenders. Funded armies can continue
+to a suitable nearby reported objective with sufficient existing supplies.
+
+Front screens can extend through five joined wall spans on each side of a gate.
+Known hostile approaches can supersede an obsolete rear-facing screen, and
+towers favor nearby actual work parties while retaining physical crew requirements.
+
+Interactive frames run at most four simulation pulses, stopping after an 8 ms
+CPU budget once the current pulse finishes. Requested backlog is bounded at half
+a simulation second; excess requested time is recorded, never credited as computed
+world progress. This prioritizes input responsiveness under load and does not
+guarantee the selected nominal speed. Actual simulated cycles per second remain
+available in performance diagnostics.

@@ -168,7 +168,7 @@ function frame(now){
   requestAnimationFrame(frame);const dt=Math.max(0,(now-then)/1000);then=now;if(document.hidden)return;wallTime+=dt;
   const cpuStart=performance.now(),stepBefore=state.step,mode=view.advancing?'advancing':view.paused?'paused':'active',key=`${mode}:${view.speed}:${view.quality}`;
   if(key!==timingKey){timingKey=key;fpsTime=0;frameCount=0;view.fps=0;view.frameMs=0;view.performance=null;for(const metric in timingTotals)timingTotals[metric]=0;}
-  simClock.advance(dt,view.speed,view.paused||Boolean(view.advancing),n=>stepSimulation(state,n));
+  simClock.advance(dt,view.speed,view.paused||Boolean(view.advancing),n=>stepSimulation(state,n),{maxPulses:4,budgetMs:8,maxBacklogSeconds:.5});
   const afterSimulation=performance.now();syncShownState();
   const victoryKey=state.outcome?.status==='victory'?`${state.seed}:${state.outcome.winnerId}:${state.outcome.wonAt}`:null;
   if(victoryKey&&!view.advancing&&view.victoryObserved!==victoryKey){view.victoryObserved=victoryKey;view.outcomeDismissed=false;view.paused=true;refreshUI();}
@@ -182,7 +182,7 @@ function frame(now){
   terrain.update?.(simTime,shownState,alpha);entities.update(shownState,simTime,view.selectedId,alpha);crowds.update(shownState,simTime,view.selectedId,alpha);combatEffects.update(shownState,simTime,view.selectedId,alpha);fog.update(state,view.perspective,shownState);renderedPerspective=view.perspective;
   updateOverlay();updateLabels();const afterUpdates=performance.now();renderer.info.reset();composer.render();const afterRender=performance.now();
   timingTotals.simulationMs+=afterSimulation-cpuStart;timingTotals.sceneUpdateMs+=afterUpdates-afterSimulation;timingTotals.renderSubmitMs+=afterRender-afterUpdates;timingTotals.cpuMs+=afterRender-cpuStart;timingTotals.simulationPulses+=state.step-stepBefore;
-  uiTimer+=dt;frameCount++;fpsTime+=dt;if(fpsTime>=1){view.fps=Math.round(frameCount/fpsTime);view.frameMs=fpsTime/frameCount*1000;view.performance={mode,speed:view.speed,quality:view.quality,sampledFrames:frameCount,sampledSeconds:fpsTime,simulationPulses:timingTotals.simulationPulses,simulationCyclesPerSecond:timingTotals.simulationPulses*.1/fpsTime,simulationMs:timingTotals.simulationMs/frameCount,sceneUpdateMs:timingTotals.sceneUpdateMs/frameCount,renderSubmitMs:timingTotals.renderSubmitMs/frameCount,cpuMs:timingTotals.cpuMs/frameCount,gpuTiming:false};frameCount=0;fpsTime=0;for(const metric in timingTotals)timingTotals[metric]=0;}
+  uiTimer+=dt;frameCount++;fpsTime+=dt;if(fpsTime>=1){view.fps=Math.round(frameCount/fpsTime);view.frameMs=fpsTime/frameCount*1000;view.performance={mode,speed:view.speed,quality:view.quality,sampledFrames:frameCount,sampledSeconds:fpsTime,simulationPulses:timingTotals.simulationPulses,simulationCyclesPerSecond:timingTotals.simulationPulses*.1/fpsTime,simulationMs:timingTotals.simulationMs/frameCount,sceneUpdateMs:timingTotals.sceneUpdateMs/frameCount,renderSubmitMs:timingTotals.renderSubmitMs/frameCount,cpuMs:timingTotals.cpuMs/frameCount,gpuTiming:false,backlogSeconds:simClock.remainder,droppedRequestedSeconds:simClock.droppedRequestedSeconds};frameCount=0;fpsTime=0;for(const metric in timingTotals)timingTotals[metric]=0;}
   if(uiTimer>.25){refreshUI();uiTimer=0;}
 }
 window.littleworld={

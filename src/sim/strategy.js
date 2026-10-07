@@ -373,6 +373,24 @@ function continueCampaign(s, g, captured) {
   return true;
 }
 
+function continueFieldObjective(s, g, f) {
+  if (g.supply < 60 || g.morale < 65 || g.size < 4) return false;
+  const reports = [...(g.observations || []), ...knownReports(s, f, { maxAge: 80, minConfidence: .4, includeOwn: false })];
+  const candidates = reports.filter(k => k.id !== g.targetId && k.ownerId && k.ownerId !== f.id && relation(f, k.ownerId).status === 'hostile' &&
+    s.tick - k.observedTick <= 80 && distance(g, k) < 35 &&
+    (k.kind === 'group' && k.groupKind === 'worker' && k.sizeEstimate <= g.size || k.kind === 'settlement' && !['camp', 'ruin'].includes(k.status) && (k.soldiersEstimate ?? Infinity) < g.size * .65))
+    .sort((a, b) => distance(g, a) - distance(g, b));
+  for (const k of candidates) {
+    const route = findPath(expeditionPlanningWorld(s, f, g), g, k, { factionId: f.id, arrival: .45, maxExpansions: 800 });
+    if (!route.reachable || route.length > 45) continue;
+    Object.assign(g, { targetId: k.id, targetX: k.x, targetZ: k.z, missionTargetX: k.x, missionTargetZ: k.z,
+      missionKind: k.kind === 'group' ? 'harassment' : 'campaign', phase: 'outbound', reason: 'Continuing toward a nearby reported field opportunity with existing paid supplies.' });
+    if (g.combat) g.combat.active = false;
+    rememberCampaignOrder(s, g); return true;
+  }
+  return false;
+}
+
 function arriveArmy(s, g, cycleBoundary) {
   const f = factionOf(s, groupController(s, g));
   if (g.stagingTargetId && g.phase !== 'engaging') {
@@ -405,9 +423,17 @@ function arriveArmy(s, g, cycleBoundary) {
     if (home && ((home.occupiedBy && home.exileBaseFor !== groupController(s, g)) || f.defeatedBy || g.surrendered)) demobilizeMilitary(s, home, g.size, { soldierIds: g.soldierIds });
     return;
   }
+  if (g.missionKind === 'harassment') {
+    const worker = s.groups.find(other => other.id === g.targetId);
+    if (worker && !worker.finished && visibleToGroup(s, g, worker, 18) && worker.size > 0 && relation(f, groupController(s, worker)).status === 'hostile' && (worker.raidedUntil ?? 0) <= (s.time ?? s.tick)) {
+      g.phase = 'engaging'; return;
+    }
+    if (!continueFieldObjective(s, g, f)) returnHome(s, g, 'The reported work party is no longer exposed; returning with current observations.');
+    return;
+  }
   const target = s.settlements.find(p => p.id === g.targetId);
   if (!alive(target) || settlementController(s, target) === factionController(s, f.id) || ['allied', 'trade'].includes(relation(f, settlementController(s, target)).status)) {
-    returnHome(s, g, 'The old target is gone or now friendly; the expedition is returning.');
+    if (!continueFieldObjective(s, g, f)) returnHome(s, g, 'The old target is gone or now friendly; no suitable nearby field objective is known.');
     return;
   }
   if (!visibleToGroup(s, g, target, 18)) { returnHome(s, g, 'The reported coordinates yielded no current local contact.'); return; }
@@ -454,6 +480,12 @@ function updateGroups(s, dt, cycleBoundary) {
       if (g.finished) continue;
     }
     if (g.kind === 'army' && g.phase === 'engaging') {
+      if (cycleBoundary && g.missionKind === 'harassment') {
+        const worker = s.groups.find(other => other.id === g.targetId);
+        if (!worker || !visibleToGroup(s, g, worker, 18) || worker.finished || (worker.raidedUntil ?? 0) > (s.time ?? s.tick)) {
+          if (!continueFieldObjective(s, g, f)) returnHome(s, g, 'The exposed work-party objective has ended.');
+        }
+      }
       if (cycleBoundary) observe(s, g);
       continue;
     }
@@ -462,6 +494,7 @@ function updateGroups(s, dt, cycleBoundary) {
     // movement speed; arrivals also survey before delivering a report.
     if (g.kind !== 'trader' && (cycleBoundary || arrived)) observe(s, g);
     if (arrived) {
+      if (g.kind === 'scout' && g.fieldRaidTargetId && g.phase === 'outbound') continue;
       if (g.kind === 'trader') arriveTrader(s, g);
       else if (g.kind === 'army') arriveArmy(s, g, cycleBoundary);
       else if (g.phase === 'outbound') returnHome(s, g, 'Exploration leg complete; taking field reports home.');
@@ -541,7 +574,7 @@ function dispatchScout(s, f, homes) {
   const p = homes.slice().sort((a, b) => b.population - a.population)[0];
   if (!p || p.population - p.soldiers < 20) return;
   const civilianAway = s.groups.reduce((n, g) => n + (g.originId === p.id && g.kind !== 'army' ? g.size : 0), 0);
-  const size = Math.round(clamp(3 + p.population / 180, 3, 8));
+  const size = 1;
   const localAvailable = Math.min(p.availableWorkers ?? Infinity, p.population - p.soldiers - civilianAway);
   if (localAvailable < size + 8) return;
   const biology = { ...f, species: factionOf(s, p.factionId)?.species || f.species };
@@ -563,7 +596,7 @@ function dispatchScout(s, f, homes) {
   p.availableWorkers = Math.max(0, (p.availableWorkers || 0) - size);
   if (p.assigned) { p.assigned.scouts = (p.assigned.scouts || 0) + size; p.assigned.civilianAway = (p.assigned.civilianAway || 0) + size; }
   f.lastScout = s.tick; f.scoutCount++;
-  if (f.scoutCount <= 2 || f.scoutCount % 4 === 0) emit(s, 'scout', `${f.name} sent ${size} scouts beyond ${p.name}. They leave production until their report returns.`, f.id, { groupId: g.id, originId: p.id });
+  if (f.scoutCount <= 2 || f.scoutCount % 4 === 0) emit(s, 'scout', `${f.name} sent one scout beyond ${p.name}. This individual leaves production until its report returns.`, f.id, { groupId: g.id, originId: p.id });
 }
 
 function expeditionPlanningWorld(s, f, observer = null) {
@@ -639,6 +672,36 @@ function campaignRoute(s, f, from, target, size, speed, stage = null, observer =
   const expectedTravelCycles = Math.ceil((stage ? route.length + onward.length : route.length) * 2 / pace);
   const routeSupplyBudget = Math.ceil(Math.max(route.length, onward.length) * 2 / pace) * (.68 + size * .0014) / modifier(f, 'supplyEfficiency') + 18;
   return { expectedTravelCycles, routeSupplyBudget, provisionFactor: Math.max(1, routeSupplyBudget / 86) };
+}
+
+export function dispatchHarassment(s, f, homes) {
+  if (s.tick < 70 || s.tick - (f.lastHarassment ?? -40) < 40 || s.groups.length >= MAX_GROUPS ||
+    s.groups.filter(g => g.kind === 'army' && !g.finished && groupController(s, g) === f.id).length >= 4 ||
+    s.groups.some(g => g.missionKind === 'harassment' && !g.finished && groupController(s, g) === f.id)) return;
+  const reported = knownReports(s, f, { kind: 'group', maxAge: 18, minConfidence: .5, includeOwn: false });
+  const workers = reported.filter(k => k.groupKind === 'worker' && k.sizeEstimate > 0 && k.sizeEstimate <= 8 && relation(f, k.ownerId).status === 'hostile' &&
+    !reported.some(other => other.groupKind === 'army' && other.ownerId === k.ownerId && distance(k, other) < 20));
+  for (const home of homes) {
+    const defense = homeDefense(s, f, home, []);
+    if (defense.observedThreat || defense.deployable < 6) continue;
+    const target = workers.filter(k => distance(home, k) < 48).sort((a, b) => distance(home, a) - distance(home, b))[0];
+    if (!target) continue;
+    const units = allocateMilitary(s, home, Math.min(8, defense.deployable)), size = countMilitary(units);
+    if (size < 4) continue;
+    const biology = { ...f, species: factionOf(s, home.factionId)?.species || f.species }, speed = 2.9;
+    const route = campaignRoute(s, f, home, target, size, speed); if (!route || route.provisionFactor > 2) continue;
+    const costs = Object.fromEntries(Object.entries(provisions(biology, size, true)).map(([key, value]) => [key, value * route.provisionFactor]));
+    if (!canPay(home, costs, 12)) continue;
+    const group = { id: 'g' + s.nextId++, factionId: home.factionId, commandFactionId: f.id, originId: home.id, kind: 'army', missionKind: 'harassment',
+      x: home.x, z: home.z, prevX: home.x, prevZ: home.z, targetId: target.id, targetX: target.x, targetZ: target.z, missionTargetX: target.x, missionTargetZ: target.z,
+      phase: 'outbound', size, initialSize: size, units, supply: 100, morale: 90, speed, ...route, homeReserve: defense.reserve,
+      carrying: emptyCargo(), observations: [], createdTick: s.tick, createdTime: s.time ?? s.tick,
+      reason: 'A small funded party is checking a recent report of exposed enemy workers; visible defenders take priority.' };
+    if (!deployMilitary(s, home, group)) continue;
+    pay(s, home, costs); s.groups.push(group); f.lastHarassment = s.tick;
+    s.stats.harassmentParties = (s.stats.harassmentParties || 0) + 1;
+    rememberCampaignOrder(s, group); return;
+  }
 }
 
 function chooseExpedition(s, f, homes) {
@@ -750,7 +813,7 @@ export function stepStrategy(s, dt = 0.1) {
     s.pendingReports = remaining;
   }
   updateGroups(s, dt, cycleBoundary);
-  stepCombat(s, dt, { retreat: returnHome, hostility: recordHostility });
+  stepCombat(s, dt, { retreat: returnHome, hostility: recordHostility, casualties });
   if (cycleBoundary) {
     // Resolve pressure/loot only after current local defenders can interrupt.
     // A wall, worker, or field battle cannot remotely damage settlement stores.
@@ -769,6 +832,7 @@ export function stepStrategy(s, dt = 0.1) {
     if (!homes.length) continue;
     reserveHomeDefense(s, f, homes, knownReports(s, f, { kind: 'settlement', maxAge: 230, minConfidence: .3, includeOwn: false }));
     dispatchScout(s, f, homes);
+    dispatchHarassment(s, f, homes);
     chooseExpedition(s, f, homes);
   }
 }

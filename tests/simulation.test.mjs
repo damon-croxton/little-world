@@ -15,7 +15,7 @@ test('world seeds deterministically generate traversable starts and finite resou
   assert.deepEqual(a.bounds, { minX: -WORLD_RADIUS, maxX: WORLD_RADIUS, minZ: -WORLD_RADIUS, maxZ: WORLD_RADIUS });
   assert.equal(a.starts.length, 4);
   assert.equal(a.nodes.length, WORLD_RESOURCE_SITES);
-  assert.ok(WORLD_RESOURCE_SITES >= 300, 'resource site budget retains V2 scale or larger');
+  assert.equal(WORLD_RESOURCE_SITES, 160, 'scarce resource budget is deliberate');
   assert.equal(new Set(a.nodes.map(n => n.id)).size, a.nodes.length);
   for (const start of a.starts) {
     assert.ok(terrainAt(start.x, start.z, 'qa-world').traversable);

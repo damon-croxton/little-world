@@ -772,6 +772,7 @@ export function createEntities(THREE, scene) {
       const records=(s.buildings||[]).filter(b=>(Number.isFinite(b.x)&&Number.isFinite(b.z))||defensiveSpan(b));
       const liveBuildings=new Set(),joins=new Map();
       for(const building of records){
+        if(building.kind==='housing'&&(building.destroyed||building.hp<=0))continue;
         const kind=KINDS.includes(building.kind)?building.kind:'housing',progress=clamp(Number.isFinite(building.progress)?building.progress:1,0,1),d=DIMENSIONS[kind];
         const shape=defensiveSpan(building),x=shape?.x??building.x,z=shape?.z??building.z,rotation=shape?.rotation??building.rotation??0;
         const fromY=shape?ground(shape.from.x,shape.from.z,`defense:${s.id}:${building.id}:from`,state.seed):0,toY=shape?ground(shape.to.x,shape.to.z,`defense:${s.id}:${building.id}:to`,state.seed):0;
