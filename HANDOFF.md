@@ -1,3 +1,34 @@
+# Evidence-led vanguard correction — 2026-10-08 follow-up
+
+The first checkpoint b8998df03a67bb1f505c2e5663cebb246cfa5185 completed all
+release gates in run 37725552125: 414 tests, 26 built-browser checks, 26 exact
+public-browser checks. The parent requested useful continuation until the
+original 04:46:41 UTC deadline, reusing the saved trace and fixing at most one
+clearly evidenced issue. No further natural sweep or new feature was added.
+
+At cycle 500, saved army g1232 had 26 survivors and a visible tactical strength
+ratio of 2.37, yet settlement raid logic ordered retreat as outmatched. Its
+five-unit civic-center count omitted nearby ranged soldiers already fighting.
+The ratio used for that second retreat decision now comes from the same pulse's
+active tactical engagement. Morale penalties use the same assessment. Physical
+arrival, stores access, siege pressure and capture gates remain independent.
+Supply exhaustion, low morale, actual tactical disadvantage and civilian/military
+accounting retain their existing checks.
+
+A new regression failed on the published checkpoint and passed after the fix,
+including an added hidden garrison that cannot affect the local decision. The
+62-test tactical/campaign/ownership set passed in 31.256 seconds. A controlled
+one-pulse replay from the existing cycle-500 snapshot changes retreat to continued
+engagement at the same 2.37 ratio, with the same population, town health and stores.
+This replay is not a fresh natural run or a prediction of eventual victory.
+Evidence: screenshots/recovery-frontline/vanguard-{before,focused,replay}.*.
+
+First-stage measured check execution totals 643.450 seconds (10m43.450s), including
+all measured local test runs, the one natural observation, shared local browser,
+and CI test/built/public checks. Build/setup, waiting, and an untimed short
+screenshot correction are excluded; this is cumulative execution, not wall time.
+The final receipt adds the second stage and final exact-source release evidence.
+
 # Veteran recovery and focused frontline coordination — 2026-10-08
 
 One cloud lead; authorized discretionary window 03:46:41–04:46:41 UTC, with

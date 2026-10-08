@@ -6,7 +6,7 @@ import { createSimulation } from '../src/sim/core.js';
 import { terrainAt } from '../src/world.js';
 import { stepCombat } from '../src/sim/combat.js';
 import { stepStrategy } from '../src/sim/strategy.js';
-import { countMilitary, queueTraining, advanceTraining, unitStats } from '../src/sim/military.js';
+import { countMilitary, queueTraining, advanceTraining, unitStats, getSoldiers } from '../src/sim/military.js';
 import { lineOfSight, invalidateNavigation } from '../src/sim/navigation.js';
 import { emptyResources, initializeLedger, ledgerResidual, RESOURCES } from '../src/sim/economy.js';
 
@@ -185,6 +185,33 @@ test('new local defenders interrupt settlement pressure before the next strategi
   const health = hb.health, stock = { ...hb.stock };
   pulse(s, true);
   assert.equal(g.combat.targetKind, 'group'); assert.equal(g.engagedDays, 4); assert.equal(hb.health, health); assert.deepEqual(hb.stock, stock);
+});
+
+test('settlement pressure does not mistake supporting ranged troops for an outmatched vanguard', () => {
+  for (const hiddenDefenders of [0, 80]) {
+    const { s, center, a, b, ha, hb } = fixture();
+    Object.assign(s, { tick: 400, time: 400, step: 4000 });
+    Object.assign(hb, center); setMilitary(s, hb, { infantry: 0, ranged: 10 + hiddenDefenders });
+    for (const [index, body] of getSoldiers(s, hb).entries()) Object.assign(body, {
+      x: hb.x + (index < 10 ? 3 : 100), z: hb.z + (index % 5 - 2), positioned: true, attackReadyAt: 1e6,
+    });
+    const g = army(s, ha, 'supported-pressure', 30, point(center, -7), { units: { infantry: 1, ranged: 29 },
+      campaign: true, targetId: hb.id, targetX: hb.x, targetZ: hb.z, engagedDays: 4, phase: 'engaging', morale: 90 });
+    const roster = getSoldiers(s, g).slice();
+    for (const [index, body] of roster.entries()) Object.assign(body, {
+      x: hb.x - (body.role === 'infantry' ? 1 : 7), z: hb.z + (index % 5 - 2) * .5, positioned: true, attackReadyAt: 1e6,
+    });
+    for (const faction of s.factions) { faction.lastArmy = s.tick; faction.lastScout = s.tick; faction.strategy = { mode: 'campaign', nextReview: 404 }; }
+    const health = hb.health, stock = { ...hb.stock }, morale = g.morale;
+    initializeLedger(s); stepStrategy(s, .1);
+    assert.ok(g.combat.strengthRatio > 1, `${hiddenDefenders}: supporting ranged force was not locally superior`);
+    assert.notEqual(g.phase, 'retreating', `${hiddenDefenders}: a one-body inner vanguard overrode a winning local engagement`);
+    assert.ok(g.morale >= morale - 2, 'inner-vanguard count applied the outmatched morale penalty');
+    assert.equal(hb.health, health, 'distant ranged support granted free settlement damage');
+    assert.deepEqual(hb.stock, stock, 'distant ranged support granted free loot');
+    assert.equal(hb.occupiedBy, undefined, 'support bypassed physical capture');
+    assert.ok(roster.every(body => getSoldiers(s, g).includes(body))); conserved(s);
+  }
 });
 
 test('one garrison advances once per pulse toward the closest of simultaneous attackers', () => {

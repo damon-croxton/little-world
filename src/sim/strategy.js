@@ -265,6 +265,15 @@ function raid(s, g, town) {
   const militia = town.occupiedBy ? 0 : Math.min(30, Math.max(0, town.population - town.soldiers - awayCivilians) * 0.055);
   const protection = 1.09 + terrain.roughness * 0.28 + (town.level - 1) * 0.08;
   const defense = power(s, { ...defender, species: factionOf(s, town.factionId)?.species || defender.species }, garrison + militia, 88, 76, terrain, true) * protection;
+  // The civic-center count controls physical siege/loot access. It is not the
+  // whole fighting force: ranged troops can support the vanguard from outside
+  // that radius. Use this pulse's visible tactical assessment for morale and
+  // withdrawal, while retaining the stricter physical pressure/capture gates.
+  const combat = g.combat;
+  const localRatio = combat?.active && combat.targetId === town.id && combat.lastContactTime === (s.time ?? s.tick)
+    && Number.isFinite(combat.strengthRatio) ? combat.strengthRatio : null;
+  const outmatched = localRatio == null ? attack < defense : localRatio < 1;
+  const overwhelmed = localRatio == null ? defense > attack * 1.75 : localRatio < 1 / 1.75;
   g.engagedDays = (g.engagedDays ?? 0) + 1;
   g.initialGarrison ??= garrison; town.defenseMorale ??= 90;
   town.contestedUntil = s.tick + 2;
@@ -290,11 +299,11 @@ function raid(s, g, town) {
   // An empty garrison never stores future casualty debt.
   town.defenseCasualtyProgress = 0;
   const canReachStores = present > 0;
-  g.morale = Math.max(0, g.morale - (attack < defense ? 5.5 : g.siegeMode ? 0.9 : 1.6));
+  g.morale = Math.max(0, g.morale - (outmatched ? 5.5 : g.siegeMode ? 0.9 : 1.6));
   g.supply = Math.max(0, g.supply - 1.6);
   if (g.finished) return;
-  if (g.morale < 38 || g.supply < 21 || (defense > attack * 1.75 && g.engagedDays >= 4)) {
-    returnHome(s, g, defense > attack ? 'The defenders are stronger than the old report suggested.' : 'Morale or field supplies are too low to continue.', true);
+  if (g.morale < 38 || g.supply < 21 || (overwhelmed && g.engagedDays >= 4)) {
+    returnHome(s, g, outmatched ? 'The defenders are stronger than the old report suggested.' : 'Morale or field supplies are too low to continue.', true);
     return;
   }
   if (g.siegeMode) {
