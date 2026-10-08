@@ -26,9 +26,10 @@ const started = performance.now();
 let browser, page, timer;
 await mkdir(config.outputDir, { recursive: true });
 async function check(name, fn) {
-  const before = performance.now();
+  const before = performance.now(); report.activeCheck = name;
   try { const evidence = await fn(); report.checks.push({ name, passed: true, elapsedMs: performance.now() - before, evidence }); }
   catch (error) { report.checks.push({ name, passed: false, elapsedMs: performance.now() - before, error: error.message }); throw error; }
+  finally { const result = report.checks.at(-1); if (result?.name === name) console.log(JSON.stringify({ browserCheck: name, passed: result.passed, elapsedMs: result.elapsedMs, error: result.error })); report.activeCheck = null; }
 }
 const button = action => page.locator(`[data-action="${action}"]`).first();
 const rendered = () => waitForRenderedFrames(page, { minimumFrames: 2, maximumMs: 15000 });
@@ -223,21 +224,22 @@ async function accept() {
     assert.equal(await page.evaluate(() => littleworld.state.step), 0);
     await page.setViewportSize({ width: 1280, height: 800 }); await rendered(); return bounds;
   });
-  await debugDownloadSmoke({ page, check, config, expectedCommit });
+  await debugDownloadSmoke({ page, check, config, expectedCommit, desktopOnly: true });
   await recoverySmoke({ page, check, screenshotPath: output(config, 'recovery-home.png') });
   await workerSmoke({ page, check, screenshotBefore: output(config, 'worker-raid-before.png'), screenshotAfter: output(config, 'worker-raid-after.png') });
   await finishingSmoke({ page, check, screenshotBefore: output(config, 'finishing-before.png'), screenshotAfter: output(config, 'finishing-after.png') });
   await battleSmoke({ page, check, screenshotPath: output(config, 'battle-smoke.png') });
+  await debugDownloadSmoke({ page, check, config, expectedCommit, mobileOnly: true, restoreDesktop: false });
   await check('No runtime, module or HTTP errors', async () => assert.deepEqual(report.errors, []));
 }
 try {
   await Promise.race([accept(), new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('Smoke exceeded its 180-second total budget')), report.deadlineMs); })]);
   report.status = diagnostic ? 'diagnostic-passed' : 'passed';
 } catch (error) {
-  report.status = 'failed'; report.failure = error.stack; process.exitCode = 1;
+  report.status = 'failed'; report.failureStage = report.activeCheck; report.failure = error.stack; process.exitCode = 1;
   if (page) try { await page.screenshot({ path: output(config, 'smoke-failure.png'), timeout: 5000 }); } catch {}
 } finally {
   clearTimeout(timer); await browser?.close(); report.elapsedMs = performance.now() - started; report.completedAt = new Date().toISOString();
   await save(config, 'smoke-report.json', report);
 }
-console.log(JSON.stringify({ status: report.status, checks: report.checks.length, elapsedMs: report.elapsedMs, expectedCommit, browserLock: report.browserLock, failure: report.failure, report: output(config, 'smoke-report.json') }));
+console.log(JSON.stringify({ status: report.status, checks: report.checks.length, elapsedMs: report.elapsedMs, expectedCommit, build: report.build, browserLock: report.browserLock, failureStage: report.failureStage, failure: report.failure, report: output(config, 'smoke-report.json') }));

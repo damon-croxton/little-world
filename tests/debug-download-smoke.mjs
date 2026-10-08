@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { gunzipSync } from 'node:zlib';
 import { boot, output } from './browser-v2.mjs';
 
-export async function debugDownloadSmoke({ page, check, config, expectedCommit }) {
+export async function debugDownloadSmoke({ page, check, config, expectedCommit, desktopOnly = false, mobileOnly = false, restoreDesktop = true }) {
   async function download(current, name, touch = false) {
     const before = await current.evaluate(() => JSON.stringify(littleworld.state));
     const pending = current.waitForEvent('download');
@@ -25,7 +25,7 @@ export async function debugDownloadSmoke({ page, check, config, expectedCommit }
     return { name: file.suggestedFilename(), fileBytes: bytes.length, jsonBytes: json.length, captureMs: report.recorder.captureMs,
       schemaVersion: report.schemaVersion, commit: report.build.commit, sourceStep: report.world.step, history: report.history.length };
   }
-  await check('Desktop debug button downloads a bounded, exact-build diagnostic without altering the world or uploading data', async () => {
+  if (!mobileOnly) await check('Desktop debug button downloads a bounded, exact-build diagnostic without altering the world or uploading data', async () => {
     await page.locator('[data-action="settings"]').click();
     await page.locator('.match-settings summary').click();
     const slider = page.locator('[data-match-setting="resourceScale"]');
@@ -47,9 +47,9 @@ export async function debugDownloadSmoke({ page, check, config, expectedCommit }
     try { const result = await download(page, 'debug-desktop'); assert.deepEqual(requests, []); console.log(JSON.stringify({ debugDownload: { ...result, source: 'desktop', exportHttpRequests: 0 } })); return result; }
     finally { page.off('request', listen); await page.locator('[data-action="settings"]').click(); }
   });
-  await check('Touch mobile saves plain JSON when compression is unavailable and retains a manual save link', async () => {
-    // Only one software-rendered world at a time: the desktop assertions are
-    // complete, and the following combat checks deliberately use fresh fixtures.
+  if (!desktopOnly) await check('Touch mobile saves plain JSON when compression is unavailable and retains a manual save link', async () => {
+    // Only one software-rendered world at a time. The release smoke runs this
+    // last, after desktop/world/battle assertions, so no desktop reload is needed.
     await page.goto('about:blank');
     const context = await page.context().browser().newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1, isMobile: true, hasTouch: true, acceptDownloads: true });
     const mobile = await context.newPage();
@@ -67,6 +67,6 @@ export async function debugDownloadSmoke({ page, check, config, expectedCommit }
       assert.deepEqual(errors, []);
       console.log(JSON.stringify({ debugDownload: { ...result, source: 'mobile', touchEmulated: true, manualSaveWorks: true, errors } }));
       return { ...result, touchEmulated: true, bounds: rect, manualSaveWorks: true };
-    } finally { await context.close(); await boot(page, config); }
+    } finally { await context.close(); if (restoreDesktop) await boot(page, config); }
   });
 }
