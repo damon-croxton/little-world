@@ -1,3 +1,4 @@
+import { relationStatus } from './diplomacy.js';
 import { distance } from '../shared.js';
 import { knownReports } from './knowledge.js';
 import { settlementController, groupController } from './control.js';
@@ -7,9 +8,9 @@ import { getSoldiers } from './soldiers.js';
 // living military, never a settlement population or an invented escort count.
 export function frontierContext(state, faction) {
   const reports = knownReports(state, faction, { maxAge: 240, minConfidence: .35, includeOwn: false });
-  const threats = reports.filter(report => report.ownerId && !['allied', 'trade'].includes(faction.relations?.[report.ownerId]?.status) &&
+  const threats = reports.filter(report => report.ownerId && !['allied', 'trade'].includes(relationStatus(state, faction, report.ownerId)) &&
     (report.kind === 'settlement' && !['camp', 'ruin'].includes(report.status) || report.kind === 'group' && report.groupKind === 'army' &&
-      state.tick - report.observedTick <= 24 && faction.relations?.[report.ownerId]?.status === 'hostile'));
+      state.tick - report.observedTick <= 24 && relationStatus(state, faction, report.ownerId) === 'hostile'));
   const homes = state.settlements.filter(home => home.population > 0 && !['camp', 'ruin'].includes(home.status) && settlementController(state, home) === faction.id);
   const coverage = [];
   for (const entity of [...homes, ...state.groups.filter(group => group.kind === 'army' && !group.finished && groupController(state, group) === faction.id)]) {

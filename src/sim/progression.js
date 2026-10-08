@@ -1,3 +1,4 @@
+import { freeForAll, relationStatus, enforceHostility } from './diplomacy.js';
 import { random, clamp, distance, emit } from '../shared.js';
 import { terrainAt } from '../world.js';
 import { survivalNeeds } from './economy.js';
@@ -254,16 +255,18 @@ function establishContacts(state, faction) {
     const other = state.factions.find(f => f.id === report.ownerId);
     if (!other || (faction.relations[other.id]?.status !== undefined && faction.relations[other.id].status !== 'unknown')) continue;
     const trust = clamp(41 + faction.traits.cooperation * 22 - faction.traits.aggression * 12 + (other.species === faction.species ? 6 : 0), 20, 75);
-    faction.relations[other.id] = { trust: +trust.toFixed(1), status: 'neutral', lastTrade: -100, contactedTick: state.tick, successfulTrades: 0 };
+    faction.relations[other.id] = { trust: freeForAll(state) ? 0 : +trust.toFixed(1), status: freeForAll(state) ? 'hostile' : 'neutral', lastTrade: -100, contactedTick: state.tick, successfulTrades: 0 };
     state.stats.contacts = (state.stats.contacts || 0) + 1;
     faction.contactCount = (faction.contactCount || 0) + 1;
     emit(state, 'contact', `${faction.name} opened a contact ledger for ${other.name} after a report reached home.`, faction.id, { otherFactionId: other.id, observedTick: report.observedTick });
   }
   const known = Object.entries(faction.relations).filter(([, r]) => r.status !== 'unknown');
+  if (freeForAll(state)) { faction.diplomacy = `${known.length} reported rivals; every other civilisation is hostile.`; return; }
   if (known.length) faction.diplomacy = `${known.length} known societ${known.length === 1 ? 'y' : 'ies'}; ${known.filter(([, r]) => r.status === 'trade').length} temporary trade truces`;
 }
 
 function updateAgreements(state) {
+  if (freeForAll(state)) return;
   for (let i = 0; i < state.factions.length; i++) {
     const a = state.factions[i]; if (a.defeatedBy) continue;
     for (let j = i + 1; j < state.factions.length; j++) {
@@ -335,7 +338,7 @@ function resolveOffers(state) {
     if (!origin || !destination) decline = 'the settlement route changed';
     else if (a.defeatedBy || b.defeatedBy || settlementController(state, origin) !== a.id || settlementController(state, destination) !== b.id) decline = 'conquest ended the independent exchange agreement';
     else if (origin.status === 'camp' || origin.status === 'ruin' || origin.defeat || destination.status === 'camp' || destination.status === 'ruin' || destination.defeat) decline = 'permanent shelter must be rebuilt before sending an exchange crew';
-    else if (a.relations[b.id]?.status === 'hostile' || b.relations[a.id]?.status === 'hostile') decline = 'hostilities closed the route';
+    else if (relationStatus(state, a, b.id) === 'hostile' || relationStatus(state, b, a.id) === 'hostile') decline = 'hostilities closed the route';
     else if (!canSpend(destination, b, destinationCost)) decline = `${b.name} could not spare ${offer.importKind} and caravan rations`;
     else if (!canSpend(origin, a, originRations)) decline = 'caravan rations were needed at home';
     else if (freeCivilians(state, origin) < crewSize + 8 || freeCivilians(state, destination) < crewSize + 8 || state.groups.length > MAX_GROUPS - 2) {
@@ -365,6 +368,7 @@ function resolveOffers(state) {
 }
 
 function proposeExchange(state, faction, homes) {
+  if (freeForAll(state)) return;
   if (state.tick < 72 || state.tick - faction.lastProposal < 16 || state.tradeOffers.length >= MAX_OFFERS || state.groups.length >= MAX_GROUPS - 8 || !homes.length) return;
   const availableHomes = homes.filter(home => state.tick - (home.lastTradeProposal ?? -100) >= 96 && freeCivilians(state, home) >= 18);
   if (!availableHomes.length) return;
@@ -406,6 +410,7 @@ function proposeExchange(state, faction, homes) {
 }
 
 export function stepProgression(state) {
+  enforceHostility(state);
   state.tradeOffers ||= [];
   // Reassign last cycle's research crews before this cycle's grants and trade
   // commitments. Every paid trial and caravan reserves real local individuals.

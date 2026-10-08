@@ -8,6 +8,7 @@ import { factionView } from '../src/sim/knowledge.js';
 
 function proposalState(seed) {
   const s = createSimulation(seed); s.factions = s.factions.slice(0, 2); s.settlements = s.settlements.filter(h => s.factions.some(f => f.id === h.factionId));
+  delete s.config.diplomacy; // Retained pre-free-for-all snapshot compatibility.
   s.groups = []; s.tradeOffers = []; s.events = []; s.tick = 80; s.step = 800; s.time = 80;
   const [f, partner] = s.factions, [origin, destination] = s.settlements;
   origin.stock = { food: 2000, water: 2000, energy: 2400, materials: 1000 }; origin.capacity = 3000; origin.availableWorkers = 75;

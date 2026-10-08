@@ -196,6 +196,7 @@ test('an existing settlement contact cannot apply raid pressure or loot with zer
 
 test('scouts, researchers, and two due exchanges cannot reserve the same civilians', () => {
   const state = fixture('regression-civilian-reservations', 24);
+  delete state.config.diplomacy; // Legacy barter still conserves real civilians.
   const [a, b, c] = state.factions, [ha, hb, hc] = state.settlements;
   a.lastScout = 0;
   for (const home of state.settlements) for (const kind of RESOURCES) home.stock[kind] = 1000;

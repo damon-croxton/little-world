@@ -1,3 +1,4 @@
+import { relationStatus, freeForAll } from './diplomacy.js';
 import { WORLD_RADIUS, heightAt, terrainAt, terrainFeatures, isTerrainTraversable } from '../world.js';
 import { factionController, settlementController, groupController } from './control.js';
 
@@ -78,7 +79,7 @@ export function wallGeometry(record) {
 }
 function refreshWalls(state) {
   const value = localState(state);
-  const stamp = `${state.step ?? state.tick ?? 0}:${state.navigationRevision ?? 0}`;
+  const stamp = `${state.step ?? state.tick ?? 0}:${state.navigationRevision ?? 0}:${freeForAll(state)}`;
   if (value.wallStamp === stamp && value.settlements === state.settlements && value.looseWalls === state.walls) return value;
   value.wallStamp = stamp; value.settlements = state.settlements; value.looseWalls = state.walls;
   const walls = [];
@@ -91,7 +92,7 @@ function refreshWalls(state) {
   for (const home of state.settlements ?? []) for (const record of home.buildings ?? []) add(record, state.factions ? settlementController(state, home) : home.occupiedBy || home.factionId);
   for (const record of state.walls ?? []) add(record, state.factions ? factionController(state, record.factionId) : record.factionId);
   const permissions = (state.factions ?? []).map(f => `${f.id}>${f.defeatedBy ?? ''}:${Object.entries(f.relations ?? {}).filter(([, relation]) => relation.status === 'allied').map(([id]) => id).sort().join(',')}`).join(';');
-  const signature = `${state.navigationRevision ?? 0}:${permissions}:` + walls.map(w => `${w.id}:${w.ownerId}:${pointKey(w.from)}:${pointKey(w.to)}:${w.width}:${w.record.kind}:${w.record.gateWidth ?? 5}:${!!(w.record.open || w.record.gateOpen)}:${!!w.record.isGate}`).join('|');
+  const signature = `${state.navigationRevision ?? 0}:${freeForAll(state)}:${permissions}:` + walls.map(w => `${w.id}:${w.ownerId}:${pointKey(w.from)}:${pointKey(w.to)}:${w.width}:${w.record.kind}:${w.record.gateWidth ?? 5}:${!!(w.record.open || w.record.gateOpen)}:${!!w.record.isGate}`).join('|');
   value.walls = walls;
   if (signature !== value.wallSignature) {
     value.wallSignature = signature; value.version++; value.paths.clear();
@@ -122,7 +123,7 @@ function friendlyGate(state, wall, factionId) {
   factionId = state.factions ? factionController(state, factionId) : factionId;
   if (wall.ownerId === factionId) return true;
   const f = state.factions?.find(f => f.id === factionId);
-  return f?.relations?.[wall.ownerId]?.status === 'allied';
+  return relationStatus(state, f, wall.ownerId) === 'allied';
 }
 function wallParts(state, wall, factionId) {
   if (!friendlyGate(state, wall, factionId)) return [[wall.from, wall.to]];
@@ -327,14 +328,14 @@ export function assessBreachRoute(state, from, goal, candidates = [], options = 
     return { source: candidate, record, ownerId, geometry };
   }).filter(w => w.record.id && ['wall', 'gate'].includes(w.record.kind) && w.geometry && (w.record.progress ?? 1) >= 1 && !w.record.destroyed && (w.record.hp ?? w.record.health ?? 1) > 0)
     .sort((a, b) => String(a.record.id).localeCompare(String(b.record.id)));
-  const knownState = { seed: (state.terrainSeed || state.seed), factions: state.factions, settlements: [], walls: known.map(w => ({ ...w.record, factionId: w.ownerId })), navigationRevision: 0 };
+  const knownState = { seed: (state.terrainSeed || state.seed), config: state.config, factions: state.factions, settlements: [], walls: known.map(w => ({ ...w.record, factionId: w.ownerId })), navigationRevision: 0 };
   const routeOptions = { factionId, radius: options.radius ?? .16, arrival: options.arrival ?? .5, maxExpansions };
   const route = findPath(knownState, from, goal, routeOptions);
   const result = { action: route.reachable ? (route.reason === 'direct' ? 'advance' : 'detour') : 'unreachable', wallId: null, wall: null, route,
     detourLength: route.length, breachLength: Infinity, savedSeconds: 0, reason: route.reachable ? 'A usable route avoids unnecessary damage' : 'No known route found within the bounded search', assessedCandidates: 0, expansions: route.expansions ?? 0 };
   if (!finitePoint(from) || !finitePoint(goal) || route.reason === 'direct' || route.reason === 'search-budget' || !(options.breachDps > 0)) return result;
   const speed = Math.max(.1, options.speed ?? 2.8), minSaved = Math.max(0, options.minSavedSeconds ?? 3), maxDetourRatio = Math.max(1, options.maxDetourRatio ?? 1.22);
-  const relevant = known.filter(w => w.ownerId !== factionId && faction?.relations?.[w.ownerId]?.status !== 'allied' && !friendlyGate(knownState, { record: w.record, ownerId: w.ownerId }, factionId))
+  const relevant = known.filter(w => w.ownerId !== factionId && relationStatus(knownState, faction, w.ownerId) !== 'allied' && !friendlyGate(knownState, { record: w.record, ownerId: w.ownerId }, factionId))
     .sort((a, b) => segmentsDistance(from, goal, a.geometry.from, a.geometry.to) - segmentsDistance(from, goal, b.geometry.from, b.geometry.to) || pointSegmentDistance(from, a.geometry.from, a.geometry.to) - pointSegmentDistance(from, b.geometry.from, b.geometry.to) || String(a.record.id).localeCompare(String(b.record.id)))
     .slice(0, maxCandidates);
   for (const wall of relevant) {

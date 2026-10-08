@@ -1,3 +1,4 @@
+import { relationStatus } from './diplomacy.js';
 import { distance } from '../shared.js';
 import { terrainAt } from '../world.js';
 import { getSoldiers, isServingSoldier, touchSoldiers } from './soldiers.js';
@@ -80,7 +81,7 @@ function knownObjective(state, home, faction) {
   const reports = freshKnown(faction, state);
   const hostile = reports.filter(report => report.kind === 'settlement' && report.ownerId && report.ownerId !== faction.id && report.status !== 'ruin' && distance(home, report) < 180)
     .sort((a, b) => distance(home, a) - distance(home, b))[0];
-  if (hostile && (faction.relations?.[hostile.ownerId]?.status === 'hostile' || faction.traits?.aggression > .65)) {
+  if (hostile && (relationStatus(state, faction, hostile.ownerId) === 'hostile' || faction.traits?.aggression > .65)) {
     return { ...hostile, priority: 'threat', reason: 'Faces a fresh reported rival approach' };
   }
   const pass = reports.filter(report => report.kind === 'terrain' && report.terrainKind === 'pass' && distance(home, report) <= 45)
@@ -166,7 +167,7 @@ function perimeterBlueprint(state, home, faction, objective, civicRadius) {
 }
 
 export function defenseBuildingPlan(state, home, faction) {
-  if (home.occupiedBy || faction.defeatedBy || state.tick < 70 || home.population < 90 || home.health < 72 || home.shortageDays > 0 || home.wellbeing < .98) return null;
+  if (home.occupiedBy || faction.defeatedBy || state.tick < 70 || home.population < (home.foundedTick > 0 ? 24 : 90) || home.health < 72 || home.shortageDays > 0 || home.wellbeing < .98) return null;
   if (state.tick - (home.lastDefenseStarted ?? -100) < 24 || state.tick < (home.perimeterRetryAt ?? 0)) return null;
   const objective = knownObjective(state, home, faction);
   const civicRadius = Math.max(4, ...home.buildings.filter(b => !b.destroyed && !DEFENSE_STATS[b.kind]).map(b => distance(home, b)));

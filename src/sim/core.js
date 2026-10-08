@@ -1,3 +1,4 @@
+import { relationStatus, enforceHostility } from './diplomacy.js';
 import { housingDemand, refreshHousing } from './housing.js';
 import { expansionRequirements } from './match-rules.js';
 import { normalizeConfig, matchValue } from '../config.js';
@@ -187,11 +188,11 @@ function returnWorker(state, g, home) {
 }
 
 function visibleResourceThreat(state, group, controllerId) {
-  const hostile = otherId => otherId && otherId !== controllerId && !['allied', 'trade'].includes(state.factions.find(f => f.id === controllerId)?.relations?.[otherId]?.status);
+  const hostile = otherId => otherId && otherId !== controllerId && !['allied', 'trade'].includes(relationStatus(state, state.factions.find(f => f.id === controllerId), otherId));
   for (const army of state.groups) {
     if (army.kind !== 'army' || army.finished || army.surrendered || army.size < 1) continue;
     const owner = groupController(state, army);
-    if (!hostile(owner) || army.size < 4 && state.factions.find(f => f.id === controllerId)?.relations?.[owner]?.status !== 'hostile') continue;
+    if (!hostile(owner) || army.size < 4 && relationStatus(state, state.factions.find(f => f.id === controllerId), owner) !== 'hostile') continue;
     const witness = getSoldiers(state, army).find(body => visibleToGroup(state, group, body));
     if (witness) return { controllerId: owner, groupId: army.id, settlementId: army.originId, x: witness.x, z: witness.z };
   }
@@ -335,13 +336,21 @@ export function estimateJourneyCycles(state, from, route, speed, workCycles = 12
 }
 
 export function launchWorkers(state, home, f, dispatch) {
-  if (!alive(home) || state.groups.length >= MAX_GROUPS - 12) return;
+  const labor = home.laborPlan = { tick: state.tick, reason: 'Evaluating useful reported work', blocked: {}, dispatched: 0 };
+  const stop = reason => { labor.reason = reason; };
+  const reject = reason => { labor.blocked[reason] = (labor.blocked[reason] || 0) + 1; };
+  if (!alive(home)) return stop('Settlement inactive');
+  if (state.groups.length >= MAX_GROUPS - 12) return stop('Field party capacity reached');
   const needs = needsFor(home, f, home.population), committed = emptyResources();
   const emergency = RESOURCES.some(k => needs[k] > 0 && home.stock[k] < needs[k] * 3);
-  const minTeam = emergency ? 1 : Math.min(8, Math.max(2, Math.floor(home.workers * .1)));
-  const reserve = emergency ? 1 : 5, desired = Math.max(minTeam, Math.floor(home.workers * (emergency ? .8 : .66)));
-  if (home.assigned.workers >= desired || home.availableWorkers < minTeam + reserve) return;
-  if (!emergency && home.expansionPlan?.until >= state.tick && home.availableWorkers < home.expansionPlan.size + 12 && home.assigned.workers > home.workers * .3) return;
+  // Existing production, research, training and funded builders have already
+  // been assigned. Keep a small home pool for the next building/repair job,
+  // then employ the remaining real available civilians rather than a 66% cap.
+  const reserve = emergency ? 1 : 12; labor.reserve = reserve;
+  const free = Math.max(0, home.availableWorkers - reserve);
+  const minTeam = emergency ? 1 : Math.min(8, Math.max(2, Math.floor(home.workers * .1)), Math.max(2, free));
+  if (free < minTeam) return stop('Home construction, repair and next-job reserve');
+  if (!emergency && home.expansionPlan?.until >= state.tick && home.availableWorkers < home.expansionPlan.size + 12 && home.assigned.workers > home.workers * .3) return stop('Reserved for the funded expansion plan');
   for (const g of state.groups) if (g.kind === 'worker' && g.originId === home.id && !g.refugees) {
     const expected = g.phase === 'returning' ? g.carrying[g.resourceKind] || 0 : Math.max(g.capacity * .7, g.carrying[g.resourceKind] || 0);
     if (g.resourceKind in committed) committed[g.resourceKind] += expected;
@@ -349,16 +358,17 @@ export function launchWorkers(state, home, f, dispatch) {
   const candidates = [];
   const commander = state.factions.find(candidate => candidate.id === settlementController(state, home)) || f;
   dispatch.knownThreats ||= new Map();
-  if (!dispatch.knownThreats.has(commander.id)) dispatch.knownThreats.set(commander.id, knownReports(state, commander, { kind: 'group', maxAge: 12, minConfidence: .5 }).filter(k => k.groupKind === 'army' && k.ownerId !== commander.id && !['allied', 'trade'].includes(commander.relations[k.ownerId]?.status)));
+  if (!dispatch.knownThreats.has(commander.id)) dispatch.knownThreats.set(commander.id, knownReports(state, commander, { kind: 'group', maxAge: 12, minConfidence: .5 }).filter(k => k.groupKind === 'army' && k.ownerId !== commander.id && !['allied', 'trade'].includes(relationStatus(state, commander, k.ownerId))));
   for (const node of dispatch.knownNodes.get(commander.id) || []) {
     const known = commander.knowledge[node.id]; if (!known || known.reportedTick == null || known.reportedTick > state.tick || distance(home, known) > 65) continue;
-    if ((home.unreachableResources?.[node.id] ?? -1) > state.tick) continue;
-    if (dispatch.knownThreats.get(commander.id).some(threat => distance(threat, node) < 18)) continue;
+    if ((home.unreachableResources?.[node.id] ?? -1) > state.tick) { reject('unreachable'); continue; }
+    if (dispatch.knownThreats.get(commander.id).some(threat => distance(threat, node) < 18)) { reject('danger'); continue; }
     if (f.species === 'machine' && node.kind === 'food') continue;
     const estimate = known.amountEstimate ?? known.abundanceEstimate ?? 100;
-    if (estimate < 5 && (node.regeneration <= 0 || state.tick - known.observedTick < 80)) continue;
+    if (estimate < 5 && (node.regeneration <= 0 || state.tick - known.observedTick < 80)) { reject('depleted'); continue; }
     const traffic = dispatch.traffic.get(`${f.id}:${node.id}`) || 0;
-    if (traffic >= 3 || home.stock[node.kind] + committed[node.kind] >= home.capacity * .91) continue;
+    if (traffic >= 3) { reject('traffic'); continue; }
+    if (home.stock[node.kind] + committed[node.kind] >= home.capacity * .91) { reject('storageFull'); continue; }
     const investment = node.kind === 'materials' ? Math.max(1.8, home.population * .007) : node.kind === 'energy' ? home.population * .006 : node.kind === profile(f).staple ? home.population * .009 : 0;
     const buffer = Math.max(80, (needs[node.kind] + investment) * 75);
     const sample = f.species === 'machine' && node.kind === 'materials' && (f.experience.salvage || 0) < 30 ? 1.5 : 1;
@@ -367,12 +377,15 @@ export function launchWorkers(state, home, f, dispatch) {
     candidates.push({ node, score });
   }
   candidates.sort((a, b) => b.score - a.score);
-  const maximum = Math.min(24, Math.max(minTeam, Math.floor(home.population * .11)), home.availableWorkers - reserve, desired - home.assigned.workers);
+  const maximum = Math.min(24, Math.max(minTeam, Math.floor(home.population * .11)), free);
   const speed = f.species === 'machine' ? 2.8 : 2.65;
   let plan = null, fallback = null;
   for (const candidate of candidates.slice(0, 6)) {
     const node = candidate.node, route = findPath(state, home, node, { factionId: settlementController(state, home), arrival: Math.max(1, node.radius * .55) });
-    if (!route.reachable) { (home.unreachableResources ||= {})[node.id] = state.tick + 30; continue; }
+    if (!route.reachable) { (home.unreachableResources ||= {})[node.id] = state.tick + 30; reject('unreachable'); continue; }
+    dispatch.frontiers ||= new Map();
+    if (!dispatch.frontiers.has(commander.id)) dispatch.frontiers.set(commander.id, frontierContext(state, commander));
+    if (assessFrontierRoute(dispatch.frontiers.get(commander.id), home, route).blocked) { reject('danger'); continue; }
     const perPersonCapacity = 6 * modifier(f, 'carryCapacity') * (f.advantages?.hauling || 1);
     const perPersonRate = (.52 + node.richness * .18) * (.8 + f.traits.industry * .5) * (1 + (f.tech.level || 0) * .06) * (f.advantages?.gathering || 1);
     const journeyCycles = estimateJourneyCycles(state, home, route, speed, perPersonCapacity / perPersonRate);
@@ -382,6 +395,7 @@ export function launchWorkers(state, home, f, dispatch) {
     const size = Math.max(minTeam, affordable), costs = Object.fromEntries(RESOURCES.map(k => [k, unitCost[k] * size]));
     const next = { node, route, size, costs, journeyCycles, capacity: size * perPersonCapacity, expectedRate: size * perPersonRate };
     if (affordable >= minTeam) { plan = next; break; }
+    reject('rations');
     // A starving town may risk a small under-provisioned recovery trip. It pays
     // every ration it has; normal field starvation still applies when these end.
     if (!fallback && emergency && needs[node.kind] > 0 && home.stock[node.kind] + committed[node.kind] < needs[node.kind] * 8 && route.length <= 45) {
@@ -391,7 +405,12 @@ export function launchWorkers(state, home, f, dispatch) {
       next.emergencyForage = true; fallback = next;
     }
   }
-  plan ||= fallback; if (!plan) return;
+  plan ||= fallback;
+  if (!plan) {
+    const reasons = { danger: 'Known hostile troops or settlements block useful work routes', rations: 'Insufficient journey rations', unreachable: 'Known work routes are blocked', storageFull: 'Storage and returning cargo already cover demand', traffic: 'Known deposits already have their useful crew capacity', depleted: 'Reported deposits are depleted' };
+    return stop(Object.keys(reasons).filter(key => labor.blocked[key]).map(key => reasons[key]).join('; ') || 'No useful surveyed resource job is known');
+  }
+  labor.dispatched = plan.size; labor.targetId = plan.node.id; labor.reason = 'Available civilians assigned to a supplied resource journey';
   const { node, route, size, costs, journeyCycles, capacity, expectedRate, emergencyForage, fundedCycles } = plan;
   spend(state, home, costs, 'consumed');
   state.groups.push({ id: `g${state.nextId++}`, factionId: f.id, originId: home.id, kind: 'worker', size, x: home.x, z: home.z, prevX: home.x, prevZ: home.z,
@@ -503,7 +522,7 @@ export function planFounding(state, home, f) {
   if (home.workers - size < 40) return;
   const reports = knownReports(state, f, { kind: 'resource', maxAge: 360, minConfidence: .25 }).filter(k => (k.amountEstimate ?? k.abundanceEstimate ?? 0) >= 80);
   const knownHomes = knownReports(state, f, { kind: 'settlement', maxAge: 500, minConfidence: .2 });
-  const frontier = frontierContext(state, f);
+  const frontier = frontierContext(state, f), homeClearance = assessFrontier(frontier, home).clearance;
   const candidates = [];
   for (const report of reports) {
     const k = report.foundingSite ? { ...report, x: report.foundingSite.x, z: report.foundingSite.z } : report;
@@ -517,7 +536,8 @@ export function planFounding(state, home, f) {
     if (!types.has('water') || !types.has('materials') || !types.has(profile(f).staple)) continue;
     const reported = Object.fromEntries(RESOURCES.map(kind => [kind, resources.filter(n => n.resourceKind === kind).reduce((sum, n) => sum + (n.amountEstimate ?? n.abundanceEstimate ?? 0), 0)]));
     if (reported.materials < 180 || reported.water < 300 || reported[profile(f).staple] < 300) continue;
-    const score = resources.length + terrain.fertility * 4 + safety.clearance * .08 - safety.uncovered * .4 - safety.reinforcementCycles * .075 - d * .025;
+    const retreatingFrontier = safety.clearance - homeClearance;
+    const score = resources.length + terrain.fertility * 4 + retreatingFrontier * .18 + safety.clearance * .08 - safety.uncovered * .4 - safety.reinforcementCycles * .075 - d * .025;
     candidates.push({ ...k, score });
   }
   candidates.sort((a, b) => b.score - a.score);
@@ -613,6 +633,7 @@ function updateSummaries(state) {
     const f = factionOf(state, home); if (!f) continue;
     home.worksites = [...new Set(state.groups.filter(g => g.kind === 'worker' && g.originId === home.id && !g.refugees).map(g => g.targetId))];
     home.economyReasons = [ `${home.homePresent} individuals at home; ${home.assigned.workers || 0} harvesting, ${home.assigned.military || 0} soldiers deployed, ${home.assigned.colonists || 0} settlers travelling.`,
+      `${home.availableWorkers} unassigned civilians at home: ${home.laborPlan?.reason || 'Awaiting the next economic planning cycle'}.`,
       `${home.assigned.infrastructure || 0} infrastructure workers; ${home.assigned.construction || 0} builders; ${home.assigned.researchers || 0} researchers; ${home.assigned.training || 0} trainees in paid courses.`,
       home.status === 'camp' ? 'Displaced survivors depend on actual field harvests, returned cargo and relief to rebuild.' : `${home.buildings.filter(b => b.progress >= 1 && !b.destroyed && (b.hp == null || b.hp > 0)).length} completed buildings; housing for ${home.housingCapacity}; footprint radius ${Math.round(home.radius)}.`,
       home.missingResources?.length ? `Insufficient ${home.missingResources.join(', ')}: growth is suspended and prolonged shortages cause deaths.` : 'Deposits are finite. Cargo enters stores only when teams reach home; farms and power infrastructure report separate production.' ];
@@ -640,6 +661,7 @@ function finalizeCycle(state) {
 export function stepSimulation(state, steps = 1) {
   const count = Math.max(0, Math.floor(Number.isFinite(steps) ? steps : 0));
   const indexes = { homes: new Map(state.settlements.map(s => [s.id, s])), nodes: new Map(state.nodes.map(n => [n.id, n])), factions: new Map(state.factions.map(f => [f.id, f])) };
+  if (count) enforceHostility(state);
   for (let i = 0; i < count; i++) {
     state.step++; state.time = state.step / PULSES; state.tick = Math.floor(state.step / PULSES);
     for (const g of state.groups) { g.prevX = g.x; g.prevZ = g.z; }

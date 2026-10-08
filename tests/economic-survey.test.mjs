@@ -35,7 +35,7 @@ test('fresh, expired, unreported and allied worker sightings do not trigger econ
     if (change === 'fresh') f.knowledge.crew.observedTick = 145;
     if (change === 'expired') f.knowledge.crew.observedTick = 40;
     if (change === 'unreported') f.knowledge.crew.reportedTick = null;
-    if (change === 'allied') f.relations[rival.id].status = 'allied';
+    if (change === 'allied') { delete s.config.diplomacy; f.relations[rival.id].status = 'allied'; } // Legacy snapshot.
     assert.equal(economicSurveyTarget(s, f, home), null, change);
   }
 });

@@ -15,7 +15,7 @@ export const MATCH_SETTINGS = Object.freeze({
   economyFocus: { label: 'Economic focus', min: .75, max: 1.5, step: .05, default: 1.15,
     help: 'Higher values retain more civilian workers and consider outposts earlier. Founding still needs supplies, surveyed resources and a safe route.' },
 });
-export const DEFAULT_CONFIG = Object.freeze({ civCount: 4, biome: 'random', matchVersion: MATCH_SETTINGS_VERSION,
+export const DEFAULT_CONFIG = Object.freeze({ civCount: 4, biome: 'random', diplomacy: 'free-for-all', matchVersion: MATCH_SETTINGS_VERSION,
   ...Object.fromEntries(Object.entries(MATCH_SETTINGS).map(([key, setting]) => [key, setting.default])) });
 
 export function matchValue(owner, key) {
@@ -30,5 +30,5 @@ export function normalizeConfig(options = {}) {
     const raw = options?.[key], value = raw == null || raw === '' || typeof raw === 'boolean' ? NaN : Number(raw);
     return [key, Number.isFinite(value) ? +Math.max(spec.min, Math.min(spec.max, Math.round(value / spec.step) * spec.step)).toFixed(2) : spec.default];
   }));
-  return { civCount, biome, matchVersion: MATCH_SETTINGS_VERSION, ...settings };
+  return { civCount, biome, diplomacy: 'free-for-all', matchVersion: MATCH_SETTINGS_VERSION, ...settings };
 }

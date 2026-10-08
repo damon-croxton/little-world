@@ -1,3 +1,4 @@
+import { relationStatus } from './diplomacy.js';
 import { distance } from '../shared.js';
 import { settlementController, groupController } from './control.js';
 import { knownReports } from './knowledge.js';
@@ -6,7 +7,7 @@ import { findPath, isSegmentTraversable } from './navigation.js';
 
 const ready = body => !body.withdrawing && body.hp > body.maxHp * .4;
 const live = g => !g.finished && !g.disabled && g.size > 0;
-const hostile = (f, id) => id && id !== f.id && !['allied', 'trade'].includes(f.relations?.[id]?.status);
+const hostile = (s, f, id) => id && id !== f.id && !['allied', 'trade'].includes(relationStatus(s, f, id));
 const now = s => s.time ?? s.tick;
 
 function defensiveRoles(s, f, homes, groups) {
@@ -35,7 +36,8 @@ function recoverProgress(s, f, g, hooks) {
   if (!previous || previous.objective !== objective) g.objectiveProgress = { objective, bestGap: gap, at: now(s), retries: 0 };
   const progress = g.objectiveProgress;
   const shooting = g.combat?.active && getSoldiers(s, g).some(b => now(s) - (b.lastAttackTime ?? -100) < 4);
-  if (gap < progress.bestGap - 1 || shooting || g.strategicHold && gap < 8) { progress.bestGap = gap; progress.at = now(s); }
+  const damagingObjective = g.objectiveDamage && g.objectiveDamage.targetId === g.targetId && now(s) - g.objectiveDamage.at < 4 && g.objectiveDamage.amount > 0;
+  if (gap < progress.bestGap - 1 || shooting || damagingObjective || g.strategicHold && gap < 8) { progress.bestGap = gap; progress.at = now(s); }
   if (['returning', 'retreating'].includes(g.phase) || now(s) - progress.at < 16 && (g.stuckTime || 0) < 6) return;
   if (!progress.retries) {
     g.navigation = null; g.stuckTime = 0; progress.retries = 1; progress.at = now(s);
@@ -56,7 +58,7 @@ export function planStrategy(s, f, homes, hooks) {
   const armies = groups.filter(g => g.kind === 'army');
   const reports = knownReports(s, f, { maxAge: 180, minConfidence: .35 });
   const held = new Set(s.settlements.filter(h => settlementController(s, h) === f.id).map(h => h.id));
-  const candidates = reports.filter(k => !held.has(k.id) && k.kind === 'settlement' && hostile(f, k.ownerId) && !['camp', 'ruin'].includes(k.status) && s.tick - (f.unreachableTargets?.[k.id] ?? -100) >= 45);
+  const candidates = reports.filter(k => !held.has(k.id) && k.kind === 'settlement' && hostile(s, f, k.ownerId) && !['camp', 'ruin'].includes(k.status) && s.tick - (f.unreachableTargets?.[k.id] ?? -100) >= 45);
   const distanceHome = k => Math.min(...homes.map(h => distance(h, k)));
   candidates.sort((a, b) => (distanceHome(a) + (a.soldiersEstimate ?? 30) * .7 + (s.tick - a.observedTick) * .12) - (distanceHome(b) + (b.soldiersEstimate ?? 30) * .7 + (s.tick - b.observedTick) * .12));
   const retained = candidates.find(k => k.id === old?.targetId);

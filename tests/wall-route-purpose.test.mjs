@@ -162,3 +162,19 @@ test('gate width changes invalidate cached paths and wide parties cannot squeeze
   gate.open = true; gate.gateWidth = 5; state.step++;
   assert.equal(findPath(state, from, goal, { factionId: 'enemy', radius: .7 }).reason, 'direct');
 });
+
+
+test('a healthy funded-size expansion can begin the same connected path-safe perimeter', () => {
+  const { state, home, owner, goal } = fixture();
+  home.population = 28; home.foundedTick = 80;
+  const gate = defenseBuildingPlan(state, home, owner);
+  assert.ok(gate); assert.equal(gate.kind, 'gate'); assert.equal(home.buildings.length, 0);
+  const planned = home.perimeterPlan;
+  assert.ok(planned.plans.every((p, i) => p.joins.to === planned.plans[(i + 1) % planned.plans.length].joins.from));
+  home.buildings.push({ ...gate, id: 'outpost-gate', progress: 1 }); invalidateNavigation(state);
+  const next = defenseBuildingPlan(state, home, owner);
+  assert.ok(next); assert.equal(next.topologyId, gate.topologyId);
+  assert.ok(Object.values(gate.joins).some(id => Object.values(next.joins).includes(id)));
+  assert.equal(findPath(state, home, goal, { factionId: owner.id }).reachable, true);
+  home.shortageDays = 1; assert.equal(defenseBuildingPlan(state, home, owner), null);
+});

@@ -1,3 +1,4 @@
+import { relationStatus, enforceHostility } from './diplomacy.js';
 import { matchValue } from '../config.js';
 import { offensiveCooldown } from './match-rules.js';
 import { clamp, distance, emit, random } from '../shared.js';
@@ -20,7 +21,7 @@ const factionOf = (s, id) => s.factions.find(f => f.id === id);
 const homeOf = (s, g) => s.settlements.find(p => p.id === g.originId);
 const alive = p => p && p.population > 0 && p.health > 0 && !['camp', 'ruin'].includes(p.status);
 const modifier = (f, key) => f.modifiers?.[key] ?? f.tech?.modifiers?.[key] ?? 1;
-const relation = (f, id) => f.relations[id] ?? { status: 'unknown', trust: 40 };
+const relation = (s, f, id) => ({ ...(f.relations[id] || { trust: 40 }), status: relationStatus(s, f, id) });
 const emptyCargo = () => ({ food: 0, water: 0, energy: 0, materials: 0 });
 const nativeProfile = (s, g, commander) => ({ ...commander, species: factionOf(s, g.factionId)?.species || commander.species });
 const groupName = g => g.kind === 'army' ? 'expedition' : g.kind === 'trader' ? 'caravan' : 'scout';
@@ -29,6 +30,7 @@ const account = (s, key, field, amount) => {
 };
 
 function initialize(s, ageReports = true) {
+  enforceHostility(s);
   s.pendingReports ??= [];
   for (const f of s.factions) {
     f.knowledge ??= {};
@@ -211,7 +213,7 @@ function deposit(s, g, town, retainOverflow = false) {
 function arriveTrader(s, g) {
   const f = factionOf(s, groupController(s, g));
   const town = g.phase === 'outbound' ? s.settlements.find(p => p.id === g.targetId) : homeOf(s, g);
-  if (g.phase === 'outbound' && (!alive(town) || town.factionId !== g.trade?.partnerId || relation(f, town.factionId).status === 'hostile')) {
+  if (g.phase === 'outbound' && (!alive(town) || town.factionId !== g.trade?.partnerId || relation(s, f, town.factionId).status === 'hostile')) {
     returnHome(s, g, 'The exchange is unsafe; carrying the cargo home.');
     emit(s, 'trade', `${f.name}'s caravan turned back after the destination became unsafe.`, f.id, { groupId: g.id });
     return;
@@ -341,6 +343,7 @@ function raid(s, g, town) {
     if (pressure) town.defenseMorale = Math.max(0, town.defenseMorale - pressure * .20);
     const integrityBefore = town.health; town.health = Math.max(0, town.health - pressure);
     s.stats.settlementDamage = (s.stats.settlementDamage || 0) + integrityBefore - town.health;
+    if (town.health < integrityBefore) g.objectiveDamage = { targetId: town.id, at: s.time ?? s.tick, amount: integrityBefore - town.health };
     const remainingDefenders = countMilitary(availableMilitary(s, town));
     g.reason = `Siege cycle ${g.siegeDays}: ${remainingDefenders} defenders remain; settlement integrity ${Math.round(town.health)}%; field supply ${Math.round(g.supply)}%.`;
     if (town.health <= 0 && canReachStores) {
@@ -376,7 +379,7 @@ function raid(s, g, town) {
 }
 
 function reportedWorkerProtection(s, f, worker, reports, size) {
-  return reports.some(report => report.ownerId && relation(f, report.ownerId).status === 'hostile' && s.tick >= report.observedTick &&
+  return reports.some(report => report.ownerId && relation(s, f, report.ownerId).status === 'hostile' && s.tick >= report.observedTick &&
     (report.kind === 'group' && report.groupKind === 'army' && report.sizeEstimate > 0 && s.tick - report.observedTick <= 24 && distance(worker, report) < 20 ||
       report.kind === 'settlement' && !['camp', 'ruin'].includes(report.status) && report.soldiersEstimate >= Math.max(4, size * .65) && s.tick - report.observedTick <= 80 && distance(worker, report) < 24));
 }
@@ -386,16 +389,17 @@ function continueFieldObjective(s, g, f) {
   if (g.supply < reserve + 8 || g.morale < 45 || g.size < 4 || getSoldiers(s, g).filter(body => !body.withdrawing && body.hp / body.maxHp > .4).length < 4) return false;
   const reports = [...(g.observations || []), ...knownReports(s, f, { maxAge: 80, minConfidence: .4, includeOwn: false })];
   if (g.campaign) for (const home of s.settlements) for (const building of home.buildings || []) {
-    if (relation(f, settlementController(s, home)).status !== 'hostile' || !visibleToGroup(s, g, building, 18) || building.destroyed || building.hp <= 0 || building.progress < 1 || !['hub', 'housing', 'farm', 'power', 'workshop', 'storage', 'barracks', 'range', 'fabricator', 'launcher', 'brooder', 'spitter'].includes(building.kind)) continue;
+    if (relation(s, f, settlementController(s, home)).status !== 'hostile' || !visibleToGroup(s, g, building, 18) || building.destroyed || building.hp <= 0 || building.progress < 1 || !['hub', 'housing', 'farm', 'power', 'workshop', 'storage', 'barracks', 'range', 'fabricator', 'launcher', 'brooder', 'spitter'].includes(building.kind)) continue;
     reports.push({ id: building.id, kind: 'structure', homeId: home.id, ownerId: settlementController(s, home), x: building.x, z: building.z, observedTick: s.tick, reportedTick: s.tick, confidence: 1, healthEstimate: building.hp, structureKind: building.kind });
   }
-  const candidates = reports.filter(k => k.id !== g.targetId && k.ownerId && k.ownerId !== f.id && relation(f, k.ownerId).status === 'hostile' &&
+  const candidates = reports.filter(k => k.id !== g.targetId && k.ownerId && k.ownerId !== f.id && relation(s, f, k.ownerId).status === 'hostile' &&
     s.tick >= k.observedTick && s.tick - k.observedTick <= 80 && distance(g, k) < 35 &&
     // Civilian headcount is an economic target's value, not defending military
     // strength. Require fresh activity and evaluate reported protection instead.
     (k.kind === 'group' && k.groupKind === 'worker' && k.sizeEstimate > 0 && k.sizeEstimate <= 24 && s.tick - k.observedTick <= 18 && !reportedWorkerProtection(s, f, k, reports, g.size) ||
       k.kind === 'settlement' && !['camp', 'ruin'].includes(k.status) && (k.soldiersEstimate ?? Infinity) < g.size * .65 || k.kind === 'structure'))
-    .sort((a, b) => opportunity(b) - opportunity(a) || a.id.localeCompare(b.id));
+    .sort((a, b) => (g.campaign ? objectivePriority(b) - objectivePriority(a) : 0) || opportunity(b) - opportunity(a) || a.id.localeCompare(b.id));
+  function objectivePriority(k) { return k.kind === 'settlement' ? 3 : k.kind === 'structure' ? (k.structureKind === 'hub' ? 2 : 1) : 0; }
   function opportunity(k) { return (k.kind === 'group' ? 34 + Math.min(24, k.sizeEstimate) : k.kind === 'structure' ? (k.structureKind === 'housing' ? 42 : 36) : 32) / (4 + distance(g, k)); }
   const damageRate = getSoldiers(s, g).filter(b => !b.withdrawing && b.hp / b.maxHp > .4).reduce((sum, b) => sum + (b.stats?.damage || 0) / Math.max(.5, b.stats?.cooldown || 2), 0) * .4;
   for (const k of candidates) {
@@ -448,20 +452,20 @@ function arriveArmy(s, g, cycleBoundary) {
   }
   if (g.missionKind === 'pressure') {
     const home = s.settlements.find(h => h.id === g.targetHomeId), building = home?.buildings?.find(b => b.id === g.targetId);
-    if (building && visibleToGroup(s, g, building, 18) && !building.destroyed && building.hp > 0 && relation(f, settlementController(s, home)).status === 'hostile') { g.phase = 'engaging'; return; }
+    if (building && visibleToGroup(s, g, building, 18) && !building.destroyed && building.hp > 0 && relation(s, f, settlementController(s, home)).status === 'hostile') { g.phase = 'engaging'; return; }
     if (!continueFieldObjective(s, g, f)) returnHome(s, g, 'The production objective ended and no supplied follow-up is known.');
     return;
   }
   if (g.missionKind === 'harassment') {
     const worker = s.groups.find(other => other.id === g.targetId);
-    if (worker && !worker.finished && visibleToGroup(s, g, worker, 18) && worker.size > 0 && relation(f, groupController(s, worker)).status === 'hostile') {
+    if (worker && !worker.finished && visibleToGroup(s, g, worker, 18) && worker.size > 0 && relation(s, f, groupController(s, worker)).status === 'hostile') {
       g.phase = 'engaging'; return;
     }
     if (!continueFieldObjective(s, g, f)) returnHome(s, g, 'The reported work party is no longer exposed; returning with current observations.');
     return;
   }
   const target = s.settlements.find(p => p.id === g.targetId);
-  if (!alive(target) || settlementController(s, target) === factionController(s, f.id) || ['allied', 'trade'].includes(relation(f, settlementController(s, target)).status)) {
+  if (!alive(target) || settlementController(s, target) === factionController(s, f.id) || ['allied', 'trade'].includes(relation(s, f, settlementController(s, target)).status)) {
     if (!continueFieldObjective(s, g, f)) returnHome(s, g, 'The old target is gone or now friendly; no suitable nearby field objective is known.');
     return;
   }
@@ -627,7 +631,7 @@ function fieldEncounters(s) {
     const af = factionOf(s, groupController(s, a));
     for (const caravan of s.groups) {
       if (caravan.kind !== 'trader' || caravan.finished || caravan.phase !== 'outbound' || groupController(s, caravan) === groupController(s, a) || distance(a, caravan) > 6 || !visibleToGroup(s, a, caravan, 6)) continue;
-      if (relation(af, groupController(s, caravan)).status !== 'hostile') continue;
+      if (relation(s, af, groupController(s, caravan)).status !== 'hostile') continue;
       let loot = 0;
       const existingCargo = KEYS.reduce((sum, key) => sum + (a.carrying[key] || 0), 0);
       for (const key of KEYS) {
@@ -672,7 +676,7 @@ function exploratoryTarget(s, f, p) {
 
 export function economicSurveyTarget(s, f, home, active = []) {
   const reports = knownReports(s, f, { maxAge: 140, minConfidence: .5, includeOwn: false });
-  const workers = reports.filter(k => k.kind === 'group' && k.groupKind === 'worker' && k.sizeEstimate > 0 && s.tick - k.observedTick >= 18 && s.tick - k.observedTick <= 100 && relation(f, k.ownerId).status === 'hostile');
+  const workers = reports.filter(k => k.kind === 'group' && k.groupKind === 'worker' && k.sizeEstimate > 0 && s.tick - k.observedTick >= 18 && s.tick - k.observedTick <= 100 && relation(s, f, k.ownerId).status === 'hostile');
   const resources = knownReports(s, f, { kind: 'resource', maxAge: 180, minConfidence: .5 });
   const candidates = [];
   for (const report of workers) {
@@ -682,7 +686,7 @@ export function economicSurveyTarget(s, f, home, active = []) {
     if (!site || active.some(g => g.surveyTargetId === site.id) || s.tick - (f.economicSurveys?.[site.id] ?? -200) < 100) continue;
     const d = distance(home, site); if (d < 30 || d > 150) continue;
     const point = { x: site.x + (home.x - site.x) / d * 12, z: site.z + (home.z - site.z) / d * 12 };
-    const danger = reports.some(k => k.ownerId !== f.id && !['allied', 'trade'].includes(relation(f, k.ownerId).status) &&
+    const danger = reports.some(k => k.ownerId !== f.id && !['allied', 'trade'].includes(relation(s, f, k.ownerId).status) &&
       (k.kind === 'group' && k.groupKind === 'army' && s.tick - k.observedTick <= 24 && distance(k, point) < 22 || k.kind === 'settlement' && (k.soldiersEstimate ?? 0) >= 4 && !['camp', 'ruin'].includes(k.status) && distance(k, point) < 24));
     if (!danger) candidates.push({ ...point, id: site.id, observedTick: report.observedTick, score: Math.min(16, report.sizeEstimate) - d * .08 - (s.tick - report.observedTick) * .05 });
   }
@@ -749,7 +753,7 @@ export function expeditionPlanningWorld(s, f, observer = null) {
   // wall geometry. Owned obstacles and actual home/scout sightings inform the
   // capital's route/provision estimate.
   // Real movement still collides with every wall and discovers it locally.
-  return { seed: s.seed, terrainSeed: s.terrainSeed, factions: s.factions, settlements: [], walls, navigationRevision: 0 };
+  return { seed: s.seed, terrainSeed: s.terrainSeed, config: s.config, factions: s.factions, settlements: [], walls, navigationRevision: 0 };
 }
 
 function homeDefense(s, f, home, reports) {
@@ -762,14 +766,14 @@ function homeDefense(s, f, home, reports) {
   // A distant scout's unreturned discovery is not a home-defense alarm. Count
   // hostile bodies only after a home or its staffed tower actually sees them.
   const threats = s.groups.filter(g => g.kind === 'army' && !g.finished && g.size > 0 &&
-    sources.some(source => visibleToGroup(s, source, g)) && relation(f, groupController(s, g)).status === 'hostile');
+    sources.some(source => visibleToGroup(s, source, g)) && relation(s, f, groupController(s, g)).status === 'hostile');
   const observedThreat = threats.reduce((sum, g) => sum + g.size, 0);
-  const reportedThreat = knownReports(s, f, { kind: 'group', maxAge: 20, minConfidence: .5, includeOwn: false }).reduce((largest, k) => k.groupKind === 'army' && relation(f, k.ownerId).status === 'hostile' && distance(home, k) < 40
+  const reportedThreat = knownReports(s, f, { kind: 'group', maxAge: 20, minConfidence: .5, includeOwn: false }).reduce((largest, k) => k.groupKind === 'army' && relation(s, f, k.ownerId).status === 'hostile' && distance(home, k) < 40
     ? Math.max(largest, k.sizeEstimate || 0) : largest, 0);
   // The demographic ledger loses remote casualties immediately; command has
   // only departure commitments until those soldiers/report couriers return.
   const reserve = Math.max(Math.ceil(reportedThreat), Math.ceil(observedThreat * 1.1));
-  const knownEnemies = new Set(reports.filter(k => k.ownerId !== f.id && !['camp', 'ruin'].includes(k.status) && !['allied', 'trade'].includes(relation(f, k.ownerId).status)).map(k => k.ownerId));
+  const knownEnemies = new Set(reports.filter(k => k.ownerId !== f.id && !['camp', 'ruin'].includes(k.status) && !['allied', 'trade'].includes(relation(s, f, k.ownerId).status)).map(k => k.ownerId));
   const allIn = reserve === 0 && knownEnemies.size > 0;
   // Tower crews are members of the total home reserve, not additional people.
   // Quote the ready roster before choosing a destination: wounded returnees
@@ -877,7 +881,7 @@ export function dispatchHarassment(s, f, homes) {
     s.groups.filter(g => g.kind === 'army' && !g.finished && groupController(s, g) === f.id).length >= 4 ||
     s.groups.some(g => g.missionKind === 'harassment' && !g.finished && groupController(s, g) === f.id)) return;
   const reported = knownReports(s, f, { maxAge: 80, minConfidence: .5, includeOwn: false });
-  const workers = reported.filter(k => k.kind === 'group' && k.groupKind === 'worker' && s.tick - k.observedTick <= 18 && k.sizeEstimate > 0 && k.sizeEstimate <= 24 && relation(f, k.ownerId).status === 'hostile');
+  const workers = reported.filter(k => k.kind === 'group' && k.groupKind === 'worker' && s.tick - k.observedTick <= 18 && k.sizeEstimate > 0 && k.sizeEstimate <= 24 && relation(s, f, k.ownerId).status === 'hostile');
   for (const home of homes) {
     const defense = homeDefense(s, f, home, []);
     if (defense.observedThreat || defense.deployable < 6) continue;
@@ -923,7 +927,7 @@ function chooseExpedition(s, f, homes) {
     const need = p.stock[staple] < p.population * 0.25 || p.stock.materials < p.population * 0.20;
     for (const k of known) {
       if (f.strategy?.mode === 'campaign' && k.id !== f.strategy.targetId) continue;
-      const r = relation(f, k.ownerId);
+      const r = relation(s, f, k.ownerId);
       if (['allied', 'trade'].includes(r.status)) continue;
       const distanceTo = distance(p, k);
       if (distanceTo > WORLD_RADIUS * 2.1 || s.tick - (f.unreachableTargets?.[k.id] ?? -100) < 45) continue;
@@ -987,7 +991,7 @@ function chooseExpedition(s, f, homes) {
   }
   const { expectedTravelCycles, routeSupplyBudget, provisionFactor } = route;
   pay(s, p, costs);
-  const reason = `${relation(f, k.ownerId).status === 'hostile' ? 'An unresolved frontier conflict' : frontierClaim ? 'A territorial claim on a reported ' + deposit.resourceKind + ' deposit shared with the rival frontier' : deposit ? 'A campaign to secure reported ' + deposit.resourceKind + ' resources by destroying rival infrastructure' : 'A campaign against an independently reported rival settlement'}; a returned report observed about ${estimate} defenders ${s.tick - k.observedTick} cycles ago.`;
+  const reason = `${relation(s, f, k.ownerId).status === 'hostile' ? 'An unresolved frontier conflict' : frontierClaim ? 'A territorial claim on a reported ' + deposit.resourceKind + ' deposit shared with the rival frontier' : deposit ? 'A campaign to secure reported ' + deposit.resourceKind + ' resources by destroying rival infrastructure' : 'A campaign against an independently reported rival settlement'}; a returned report observed about ${estimate} defenders ${s.tick - k.observedTick} cycles ago.`;
   const g = { id: 'g' + s.nextId++, factionId: p.factionId, commandFactionId: f.id, originId: p.id, kind: 'army',
     x: p.x, z: p.z, prevX: p.x, prevZ: p.z, targetX: stage?.x ?? k.x, targetZ: stage?.z ?? k.z, targetId: k.id, phase: 'outbound',
     missionTargetX: k.x, missionTargetZ: k.z, stagingHomeId: stage?.id ?? null, stagingTargetId: stage?.id ?? null, stagingPurpose: stage ? 'outbound' : null, provisionFactor,
@@ -1036,7 +1040,7 @@ export function stepStrategy(s, dt = 0.1) {
     for (const g of s.groups) if (dt > 0 && canFight(g) && g.phase === 'engaging' && g.combat?.targetKind === 'settlement' && g.combat.targetId === g.targetId) {
       const town = s.settlements.find(p => p.id === g.targetId);
       const owner = town && settlementController(s, town), commander = groupController(s, g);
-      if (alive(town) && owner !== commander && !['allied', 'trade'].includes(relation(factionOf(s, commander), owner).status) && visibleToGroup(s, g, town, 18)) raid(s, g, town);
+      if (alive(town) && owner !== commander && !['allied', 'trade'].includes(relation(s, factionOf(s, commander), owner).status) && visibleToGroup(s, g, town, 18)) raid(s, g, town);
     }
     fieldEncounters(s); updateConquest(s);
   }

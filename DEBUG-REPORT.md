@@ -69,4 +69,4 @@ and parses gzip and plain JSON, including a touch-emulated mobile save link,
 checks the exact build and unchanged simulation, and rejects export HTTP
 requests. These are cloud checks, not physical-device certification.
 
-Match settings use `world.config` (including `matchVersion`) and `matchSettingsSchema`, which records labels, defaults and bounds. Group snapshots include `finishPlan` and `returnSupplyPlan`; these describe the evaluated remaining-work and return budget, not a guarantee of capture.
+Match settings use `world.config` (including `matchVersion`) and `matchSettingsSchema`, which records labels, defaults and bounds. Group snapshots include `finishPlan` and `returnSupplyPlan`; these describe the evaluated remaining-work and return budget, not a guarantee of destruction. `world.config.diplomacy` identifies new free-for-all matches. Settlement `labor` records the latest bounded assignment decision, home reserve and blocked-job counts; `availableWorkers` excludes already assigned production, construction, research, training and field crews. Group `objectiveDamage` records recent real civic damage for the progress watchdog.

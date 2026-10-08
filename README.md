@@ -1,6 +1,6 @@
 # LittleWorld
 
-[Play LittleWorld](https://damon-croxton.github.io/little-world/) — an observer-first civilisation simulation built with JavaScript and Three.js. Humans, aliens and robots gather resources, found settlements, research, trade, train armies and compete for control. All terrain, buildings and characters use original procedural geometry; no artwork download is required.
+[Play LittleWorld](https://damon-croxton.github.io/little-world/) — an observer-first civilisation simulation built with JavaScript and Three.js. Humans, aliens and robots gather resources, found settlements, research, train armies and fight for domination. Each civilisation is hostile to every other, including its own species. All terrain, buildings and characters use original procedural geometry; no artwork download is required.
 
 ## Watch and inspect
 
@@ -36,6 +36,10 @@ Campaigns use delivered reports and current local sight. Armies concentrate at r
 Connected walls grow from funded gates around useful civic space, preserving friendly access where terrain permits. Towers need real crews and ammunition. Attackers compare a useful breach with a reachable detour. Fog separates current sight from stale reports; hidden stock, queues and enemy routes are unavailable to planners.
 
 Combat destroys enemy infrastructure instead of capturing territory. When settlement integrity reaches zero, its remaining buildings collapse and production/training stop. Civilians retain their native census and become displaced under the existing camp lifecycle; field soldiers and cargo are not converted or duplicated. Camp abandonment records real stock losses. Survivors can walk to a friendly refuge or later fund rebuilding where the plot is clear. Destroyed plots no longer block funded founding, and destroyed building plots can be reused. Domination requires defeating independent active settlements and viable armies; there is no victory timer. The observer pauses on a new victory and can continue watching or replay.
+
+New matches are strict free-for-all: no alliances, truces, shared intelligence or cross-civilisation coordination. Armies prioritize reachable enemy towns and civic hubs after checking visible defenders. Nearby hostile third parties remain valid threats.
+
+Available civilian labor takes useful funded work after home production and construction reserves. Inspect a settlement for its unassigned labor reason: full stores, depleted reports, unsafe routes or insufficient rations can justify waiting. Expansion sites favor distance from known threats; healthy outposts can fund the same connected gate-and-wall plans as mature homes.
 
 This is a grouped economic simulation with individual military combat, not independent AI for every civilian. Home inhabitants are represented by housing and census totals. Worker badges deliberately represent several people. Long games can slow down; selected playback speed is a requested simulation rate, not guaranteed wall-clock throughput. Natural match length and late-game balance remain variable. Short fixtures and Node timings do not establish GPU, iPhone or large-world performance.
 
@@ -84,7 +88,7 @@ An ordinary push to `main` runs `.github/workflows/pages.yml`: install, full Nod
 | Path | Responsibility |
 | --- | --- |
 | `src/config.js`, `src/world.js` | Normalized match settings, seeded world and terrain |
-| `src/sim/core.js`, `economy.js`, `progression.js` | Fixed-step lifecycle, resource accounting, expansion, research and trade |
+| `src/sim/core.js`, `economy.js`, `progression.js` | Fixed-step lifecycle, resource accounting, expansion, research and legacy trade |
 | `src/sim/strategy.js`, `planner.js`, `match-rules.js` | Reports, campaigns, rallies, reserves and bounded policy modifiers |
 | `src/sim/soldiers.js`, `military.js`, `combat.js` | Canonical military bodies, paid training, tactical damage and recovery |
 | `src/sim/knowledge.js`, `navigation.js`, `conquest.js` | Fog/intelligence, physical routes and ownership |
@@ -94,6 +98,6 @@ An ordinary push to `main` runs `.github/workflows/pages.yml`: install, full Nod
 
 ## Debug a world
 
-Open **Settings → Download debug report**. This saves a bounded JSON or compressed JSON file locally; nothing is uploaded automatically. It includes the build, seed, all active match settings and their versioned definitions, recent decisions, economic ledgers, real soldier state, observations and return/finish budgets. Pending settings are not the active match. The report contains hidden full-world information: share it deliberately. See [DEBUG-REPORT.md](DEBUG-REPORT.md) for fields and limits.
+Open **Settings → Download debug report**. This saves a bounded JSON or compressed JSON file locally; nothing is uploaded automatically. It includes the build, seed, all active match settings and their versioned definitions, recent decisions, economic ledgers, real soldier state, observations and return/finish budgets and labor planning reasons. Pending settings are not the active match. The report contains hidden full-world information: share it deliberately. See [DEBUG-REPORT.md](DEBUG-REPORT.md) for fields and limits.
 
 [HANDOFF.md](HANDOFF.md) describes current maintenance practice. Historical reports in `evidence/` and [DESKTOP-VALIDATION.md](DESKTOP-VALIDATION.md) are retained as dated evidence, not current release certification.

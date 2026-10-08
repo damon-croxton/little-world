@@ -113,3 +113,15 @@ test('comparison bars share an honest scale while foreign census and scale remai
   delete state.viewer; state.factions[1].economy = { population: 0, soldiers: 0 };
   assert.equal(strengthRows(state)[1].total, 0); assert.equal(strengthRows(state)[1].workerPercent, 0);
 });
+
+
+test('actual settlement damage counts as useful progress but stale or unrelated damage does not', () => {
+  for (const kind of ['current', 'stale', 'unrelated']) {
+    const { s, target, plan, advance, army } = fixture(), g = army('siege', 10);
+    g.campaign = false; plan(); advance(20);
+    g.objectiveDamage = { targetId: kind === 'unrelated' ? 'other' : target.id, at: kind === 'stale' ? s.time - 10 : s.time, amount: 2 };
+    plan();
+    assert.equal(g.objectiveProgress.retries, kind === 'current' ? 0 : 1);
+    if (kind === 'current') assert.equal(g.objectiveProgress.at, s.time);
+  }
+});

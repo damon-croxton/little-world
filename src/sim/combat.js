@@ -1,3 +1,4 @@
+import { relationStatus } from './diplomacy.js';
 import { refreshHousing } from './housing.js';
 import { formationSize, combatFormationSlot, updateCombatFormation } from './formations.js';
 export { formationSize, combatFormationSlot, updateCombatFormation } from './formations.js';
@@ -20,7 +21,7 @@ export const canFight = g => !!g && g.kind === 'army' && !g.finished && !g.disab
 const factionOf = (s, id) => s.factions.find(f => f.id === id);
 const ownerOf = (s, entity) => 'population' in entity ? settlementController(s, entity) : entity.kind === 'worker' ? factionController(s, localGroupController(s, entity)) : groupController(s, entity);
 const homeOf = (s, g) => s.settlements.find(p => p.id === g.originId);
-const hostile = (s, a, b) => { a = factionController(s, a); b = factionController(s, b); return a !== b && factionOf(s, a)?.relations?.[b]?.status === 'hostile'; };
+const hostile = (s, a, b) => { a = factionController(s, a); b = factionController(s, b); return a !== b && relationStatus(s, factionOf(s, a), b) === 'hostile'; };
 const clock = s => Number.isFinite(s.time) ? s.time : s.tick;
 const amount = x => Math.max(0, Math.floor(Number.isFinite(x) ? x : 0));
 const liveStructure = b => b && b.progress >= 1 && !b.destroyed && (b.hp ?? b.health ?? 1) > 0;
@@ -29,14 +30,14 @@ const CARGO_KEYS = ['food', 'water', 'energy', 'materials'];
 const observationCaches = new WeakMap();
 
 function permittedTarget(s, source, target, targetHome = null) {
-  const a = ownerOf(s, source), b = ownerOf(s, targetHome || target), relation = factionOf(s, a)?.relations?.[b]?.status;
+  const a = ownerOf(s, source), b = ownerOf(s, targetHome || target), relation = relationStatus(s, factionOf(s, a), b);
   const campaignOwner = source.kind === 'army' && factionOf(s, a)?.knowledge?.[source.targetId]?.ownerId;
   return a !== b && !['allied', 'trade'].includes(relation) && (hostile(s, a, b) || source.kind === 'army' && (source.targetId === (targetHome || target).id || source.campaign && (source.missionEnemyId || campaignOwner) === b));
 }
 function strikeStillHostile(s, strike, target) {
   const group = s.groups.find(g => g.id === strike.sourceId), home = s.settlements.find(p => p.id === (strike.sourceHomeId || strike.sourceId));
   const sourceOwner = group ? ownerOf(s, group) : home ? settlementController(s, home) : factionController(s, strike.factionId);
-  const targetOwner = ownerOf(s, target), relation = factionOf(s, sourceOwner)?.relations?.[targetOwner]?.status;
+  const targetOwner = ownerOf(s, target), relation = relationStatus(s, factionOf(s, sourceOwner), targetOwner);
   // A launched order never authorizes damage to a newly friendly/capitulated
   // body or building. Native appearance is unrelated to current command.
   return sourceOwner !== targetOwner && !['allied', 'trade'].includes(relation) && (hostile(s, sourceOwner, targetOwner) ||
@@ -304,13 +305,13 @@ function localSituation(s, g) {
         const protecting = g.strategicHold?.kind === 'protect';
         const urgent = d < Math.max(7, range + 2) || protecting && distance(target, g.strategicHold) < 18;
         threats.push({ target, power, urgent, score: 30 - d + (urgent ? 14 : 0) });
-      } else if (id === owner || factionOf(s, owner)?.relations?.[id]?.status === 'allied') support += power * clamp(1 - d / 20, .1, .85);
+      } else if (id === owner || relationStatus(s, factionOf(s, owner), id) === 'allied') support += power * clamp(1 - d / 20, .1, .85);
     } else if (other.kind === 'worker' && other.size > 0 && permittedTarget(s, g, other) && d <= 16 && (status(g).ignoredWorkerId !== other.id || clock(s) >= status(g).ignoreWorkerUntil)) workers.push(other);
     else if (other.kind === 'scout' && other.size > 0 && (other.size === 1 || other.phase === 'outbound') && foe(id) && d <= 18 && (status(g).ignoredScoutId !== other.id || clock(s) >= status(g).ignoreScoutUntil)) scouts.push(other);
   }
   for (const home of s.settlements) {
     const observed = physicalObservation(s, g, home, 18), visible = observed.visible;
-    const ownerId = settlementController(s, home), relation = factionOf(s, owner)?.relations?.[ownerId]?.status;
+    const ownerId = settlementController(s, home), relation = relationStatus(s, factionOf(s, owner), ownerId);
     // Only the commanded destination can initiate a new conflict.
     const enemy = permittedTarget(s, g, home);
     if (visible && aliveHome(home)) {
@@ -369,7 +370,7 @@ function acquire(s, g, hooks) {
   if (selected && priorEconomic && target.id !== cs.targetId) { intent = 'intercept'; reason = 'Visible defenders threaten the raiders; interrupting the economic or wall attack.'; }
   if (!selected && !g.strategicHold && g.phase !== 'returning' && cs.resumePhase !== 'returning') {
     const economic = local.workers.map(worker => ({ target: worker, score: 27 + Math.min(12, worker.size) * .7 + Math.min(8, CARGO_KEYS.reduce((n, key) => n + (worker.carrying?.[key] || 0), 0) * .12) - distance(g, worker) }));
-    if (!local.objective || distance(g, local.objective) > 4 || cs.targetKind === 'structure') for (const building of local.structures) if (distance(g, building) < 10) economic.push({ target: building, score: (building.structureKind === 'housing' ? 29 : 17) - distance(g, building) });
+    if (!local.objective || distance(g, local.objective) > 4 || cs.targetKind === 'structure') for (const building of local.structures) if (distance(g, building) < 10) economic.push({ target: building, score: (building.structureKind === 'hub' ? 52 : building.structureKind === 'housing' ? 29 : 17) - distance(g, building) });
     for (const scout of local.scouts) economic.push({ target: scout, score: 48 - distance(g, scout) });
     // Once fit bodies reach their commanded, undefended civic centre, finish
     // the objective instead of abandoning it for an incidental crew or scout.

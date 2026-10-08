@@ -35,6 +35,7 @@ function groupDecision(state, g) {
 }
 function homeDecision(state, h) {
   return { id: h.id, controllerId: settlementController(state, h), defense: defense(h.defensePlan), rally: rally(h.productionRally),
+    labor: { ...pick(h.laborPlan, 'tick reserve dispatched targetId reason'), blocked: pick(h.laborPlan?.blocked, 'danger rations unreachable storageFull traffic depleted') },
     recovery: pick(h.militaryRecovery, 'tick patients treated readyAgain healedHp reason'),
     mobilization: pick(h.lastMobilization, 'tick ready reserved requested dispatched reason'),
     economyReasons: (h.economyReasons || []).slice(0, 8).map(scalar) };
@@ -127,6 +128,7 @@ export function createDebugRecorder({ now = () => performance.now() } = {}) {
       provisions: resources(g.provisions), carrying: resources(g.carrying), units: pick(g.units, 'infantry ranged scout'),
       navigation: { ...pick(g.navigation, 'index length reachable reason retryAt replanAfter'), goal: point(g.navigation?.goal),
         waypointCount: g.navigation?.waypoints?.length || 0, nextWaypoint: point(g.navigation?.waypoints?.[g.navigation?.index || 0]) },
+      objectiveDamage: pick(g.objectiveDamage, 'targetId at amount'),
       objectiveProgress: pick(g.objectiveProgress, 'objective bestGap at retries'), soldierIds: (g.soldierIds || []).slice(0, 1000).map(scalar),
       soldierIdsOmitted: Math.max(0, (g.soldierIds?.length || 0) - 1000), observations: rows(`observations:${g.id}`, [...(g.observations || [])].sort((a,b) => (b.observedTime ?? b.observedTick ?? 0) - (a.observedTime ?? a.observedTick ?? 0)), 16, k => pick(k, reportFields)) }));
     const nodes = rows('nodes', state.nodes || [], limits.nodes, n => pick(n, 'id kind subtype x z amount maxAmount regeneration richness claimedBy claimSettlementId'));

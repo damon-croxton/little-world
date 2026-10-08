@@ -152,3 +152,24 @@ test('colonist escort follows its own party and becomes protection for the physi
   assert.equal(guard.originId,home.id);assert.equal(guard.targetX,outpost.x);assert.equal(guard.strategicHold.kind,'protect');
   assert.equal(getSoldiers(s,outpost).length,0,'escort was silently transferred into the new native census');
 });
+
+
+test('comparable funded expansion sites favor moving away from delivered threats and ignore hidden movement', () => {
+  const a = createSimulation('joined-screen', { civCount: 3 });
+  Object.assign(a, { tick: 200, step: 2000, time: 200, groups: [] });
+  const home = a.settlements[0], f = a.factions[0];
+  Object.assign(home, { x: -70, z: -120, population: 150, workers: 130, availableWorkers: 100, lastExpansion: 0, health: 100, shortageDays: 0 });
+  for (const key of Object.keys(home.stock)) home.stock[key] = 2000;
+  f.knowledge = {};
+  for (const [side, x] of [['away', -115], ['toward', -25]]) for (const resourceKind of ['food', 'water', 'materials']) {
+    const id = `${side}-${resourceKind}`;
+    f.knowledge[id] = { id, kind: 'resource', resourceKind, x, z: -120, foundingSite: { x, z: -120 }, amountEstimate: 1000, richnessEstimate: 1, observedTick: 200, reportedTick: 200, confidence: 1 };
+  }
+  f.knowledge.enemy = { id: 'enemy', kind: 'settlement', ownerId: a.factions[1].id, x: 35, z: -120, status: 'active', soldiersEstimate: 20, observedTick: 200, reportedTick: 200, confidence: 1 };
+  const b = structuredClone(a); Object.assign(b.settlements[1], { x: -114, z: -120, population: 900 });
+  for (const s of [a, b]) { initializeLedger(s); planFounding(s, s.settlements[0], s.factions[0]); }
+  const first = a.groups.find(g => g.kind === 'colonist'), second = b.groups.find(g => g.kind === 'colonist');
+  assert.ok(first); assert.ok(first.targetX < home.x, 'colony marched toward the reported rival');
+  assert.deepEqual(second, first, 'unseen enemy movement changed founding orders');
+  for (const s of [a, b]) for (const residual of Object.values(ledgerResidual(s))) assert.ok(Math.abs(residual) < 1e-7);
+});

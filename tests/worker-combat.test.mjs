@@ -95,7 +95,7 @@ test('a newly allied or occupied worker crew cancels its in-flight hostile proje
   for (const change of ['alliance', 'occupation']) {
     const { s, crew, army, a, b, hb } = fixture(), worker = crew(), raider = army(1, 'ranged');
     pulse(s); assert.ok(s.pendingCombat.some(hit => hit.targetId === worker.id));
-    if (change === 'alliance') { a.relations[b.id].status = 'allied'; b.relations[a.id].status = 'allied'; }
+    if (change === 'alliance') { delete s.config.diplomacy; a.relations[b.id].status = 'allied'; b.relations[a.id].status = 'allied'; }
     else { Object.assign(hb, { x: worker.x, z: worker.z, occupiedBy: a.id }); }
     pulse(s, 5); assert.equal(civilianHealth(worker), 384); assert.ok(!s.pendingCombat.some(hit => hit.sourceId === raider.id));
   }

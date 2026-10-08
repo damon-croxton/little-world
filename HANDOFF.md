@@ -7,10 +7,12 @@ The saved cloud environment owns development, tests and ordinary authorized main
 
 ## Current implementation
 
-- Complete 3–6 faction simulation with physical resource/civilian/military accounting, individual soldiers, fog, production, research, trade and domination.
+- Complete 3–6 faction simulation with physical resource/civilian/military accounting, individual soldiers, fog, production, research and domination. New matches are strict free-for-all; old snapshot/fixture trade mechanics remain isolated behind a missing diplomacy mode.
 - Version 1 match settings: reserves 125%, upkeep 85%, aggression 100%, economic focus 115%. Bounded controls apply only on Start match and are exported with their schema. Seeded personalities remain.
 - Civilian crews use small grey count badges. Army parties use larger red counts only for at least three living, visible, unique roster members. Faction ownership uses a distinct deterministic palette and species-number display names.
-- Exposed settlement finishing is bounded by real remaining pressure, fit bodies, time, return supplies and fresh threats. Existing emergency retreats remain. Runtime combat destroys settlements and buildings; it never calls the retained legacy occupation helper. Native survivors enter the existing camp/refugee lifecycle, and razed plots permit funded rebuilding.
+- Armies keep both count labels during overlap, stacking cheaply with faction color markers.
+- Available civilians take useful paid jobs after assigned home labor and a construction/repair reserve; debug and inspection give explicit idle reasons. Small healthy founded outposts can fund connected perimeters. Founding favors distance from delivered threats and checks supply routes.
+- Exposed settlement finishing is bounded by real remaining pressure, fit bodies, time, return supplies and fresh threats. Contacted undefended towns and visible hubs outrank incidental workers. Real civic damage counts as objective progress; existing emergency retreats remain. Runtime combat destroys settlements and buildings; it never calls the retained legacy occupation helper. Native survivors enter the existing camp/refugee lifecycle, and razed plots permit funded rebuilding.
 - Local debug export includes active configuration, identities, economy, knowledge, decisions and finish/return budgets.
 
 ## Release procedure

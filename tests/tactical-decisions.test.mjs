@@ -245,3 +245,16 @@ test('an empty provisional engagement resumes its reported march instead of gett
   assert.equal(g.phase, 'outbound'); assert.equal(g.combat.active, false); assert.equal(g.combat.intent, 'advance');
   assert.equal(g.targetX, hb.x); assert.equal(g.targetZ, hb.z);
 });
+
+
+test('an exposed civic hub takes priority over incidental labor while fresh defenders still interrupt', () => {
+  const { s, center, ha, hb } = fixture();
+  const raider = army(s, ha, 'hub-raider', 30, point(center, -3));
+  const hub = { id: 'exposed-hub', kind: 'hub', ...point(center, 4), progress: 1, hp: 160 };
+  hb.buildings.push(hub);
+  s.groups.push({ id: 'incidental-labor', kind: 'worker', factionId: hb.factionId, originId: hb.id, size: 12, phase: 'working', ...point(center, 2), carrying: emptyResources() });
+  pulse(s); assert.equal(raider.combat.targetId, hub.id);
+  const defender = army(s, hb, 'hub-defender', 25, point(center, 1, -2));
+  pulse(s); assert.equal(raider.combat.targetId, defender.id); assert.equal(raider.combat.intent, 'intercept');
+  conserved(s);
+});

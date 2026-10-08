@@ -21,7 +21,7 @@ function enclosed(seed = 'navigation-room') {
 }
 
 test('configuration defaults to four and supports explicit three through six plus factionCount alias', () => {
-  assert.deepEqual(DEFAULT_CONFIG, { civCount: 4, biome: 'random', matchVersion: 1, resourceScale: 1.25, upkeepScale: .85, aggressionScale: 1, economyFocus: 1.15 });
+  assert.deepEqual(DEFAULT_CONFIG, { civCount: 4, biome: 'random', diplomacy: 'free-for-all', matchVersion: 1, resourceScale: 1.25, upkeepScale: .85, aggressionScale: 1, economyFocus: 1.15 });
   for (const value of [undefined, {}, null, { civCount: NaN }, { civCount: Infinity }, { civCount: 'bad' }]) assert.equal(normalizeConfig(value).civCount, 4);
   assert.equal(normalizeConfig({ civCount: 2 }).civCount, 3);
   assert.equal(normalizeConfig({ civCount: 99 }).civCount, 6);

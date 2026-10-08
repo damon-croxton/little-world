@@ -111,7 +111,7 @@ test('pending troop damage is cancelled when a target capitulates or the faction
     const count = target.size;
     if (change === 'capitulation') b.defeatedBy = a.id;
     else if (change === 'command') source.commandFactionId = b.id;
-    else { a.relations[b.id].status = 'allied'; b.relations[a.id].status = 'allied'; }
+    else { delete s.config.diplomacy; a.relations[b.id].status = 'allied'; b.relations[a.id].status = 'allied'; } // Legacy snapshot.
     for (let i = 0; i < 10; i++) pulse(s);
     assert.equal(target.size, count, change);
     assert.ok(!s.combatEvents.some(e => e.type === 'impact' && e.targetId === target.id), change);
