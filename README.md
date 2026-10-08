@@ -75,7 +75,7 @@ npm run preview
 QA_SOFTWARE_RENDERING=1 npm run test:smoke
 ```
 
-Preview serves `http://127.0.0.1:4176/little-world/`. `BASE_URL` chooses another host; `EXPECTED_COMMIT` defaults to the checkout SHA. The smoke verifies the exact `build.json`, actual WebGL boot, input, fog, accounting, mobile controls, debug downloads and controlled combat renders, with a 180-second budget. A browser version mismatch fails acceptance. An executable override plus `QA_BROWSER_PARITY=diagnostic` is explicitly diagnostic evidence only.
+Preview serves `http://127.0.0.1:4176/little-world/`. `BASE_URL` chooses another host; `EXPECTED_COMMIT` defaults to the checkout SHA. The smoke verifies the exact `build.json`, actual WebGL boot, input, fog, accounting, mobile controls, debug downloads and controlled combat renders, with a 180-second budget. GitHub Actions software rendering has a fixed 240-second allowance after measured runner time reached 180.1 seconds for all 28 assertions; individual waits and assertions are identical. The report records the allowance used. A browser version mismatch fails acceptance. An executable override plus `QA_BROWSER_PARITY=diagnostic` is explicitly diagnostic evidence only.
 
 Long seed sweeps, videos and performance suites remain opt-in through **Actions → LittleWorld deep QA**. Select simulation, browser, performance or all when that evidence is needed. Do not treat old evidence as validation of changed source or weaken invariants to obtain a pass. Routine development does not require every expensive suite after every edit.
 
