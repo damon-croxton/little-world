@@ -8,7 +8,7 @@ import { dispatchProtection, stepStrategy, coordinateFrontlines } from '../src/s
 import { stepCombat } from '../src/sim/combat.js';
 import { observationFor, factionView } from '../src/sim/knowledge.js';
 import { getSoldiers } from '../src/sim/soldiers.js';
-import { initializeLedger, ledgerResidual, SURVIVAL_NEEDS } from '../src/sim/economy.js';
+import { initializeLedger, ledgerResidual, survivalNeeds } from '../src/sim/economy.js';
 import { setMilitary, bindArmy } from './roster-fixtures.mjs';
 
 for (const biome of ['meadow', 'desert', 'alien']) test(`${biome}: every terrain sample and deposit uses the selected whole-world biome`, () => {
@@ -73,7 +73,7 @@ test('remote guard moves actual paid soldiers, preserves home reserve, populatio
   assert.ok(guard.size >= 6 && getSoldiers(s, home).length >= guard.homeReserve);
   assert.equal(getSoldiers(s, home).length + getSoldiers(s, guard).length, ids.size);
   assert.ok(getSoldiers(s, guard).every(body => ids.has(body.id))); assert.equal(home.population, population);
-  for (const [key, need] of Object.entries(SURVIVAL_NEEDS[f.species])) assert.ok(guard.provisions[key] >= need * guard.size * (guard.expectedTravelCycles + 40), `${key} did not fund the round trip and guard rotation`);
+  for (const [key, need] of Object.entries(survivalNeeds(f))) assert.ok(guard.provisions[key] >= need * guard.size * (guard.expectedTravelCycles + 40), `${key} did not fund the round trip and guard rotation`);
   assert.ok(home.stock.food < food || f.species === 'machine' && home.stock.energy < 1500);
   for (const residual of Object.values(ledgerResidual(s))) assert.ok(Math.abs(residual) < 1e-7);
 });

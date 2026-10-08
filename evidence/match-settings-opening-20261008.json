@@ -1,0 +1,257 @@
+{
+  "date": "2026-10-08",
+  "scope": "One bounded natural Node opening; no exact reproduction of the user observation or browser/long-term balance claim.",
+  "baseCommit": "185d68c671482c3f171327b65364909d551b1c8d",
+  "observationStage": "Match settings and destroy-only siege implementation; before the final incidental rally-building contact extension. Not final-source long-run certification.",
+  "seed": "first-light",
+  "config": {
+    "civCount": 4,
+    "biome": "random",
+    "matchVersion": 1,
+    "resourceScale": 1.25,
+    "upkeepScale": 0.85,
+    "aggressionScale": 1,
+    "economyFocus": 1.15
+  },
+  "cycles": 500,
+  "elapsedMs": 70516.803688,
+  "stats": {
+    "births": 219,
+    "deaths": 178,
+    "discoveries": 714,
+    "reports": 21,
+    "raids": 2,
+    "battles": 29,
+    "retreats": 22,
+    "trades": 4,
+    "breakthroughs": 2,
+    "expeditions": 749,
+    "deliveries": 473,
+    "expansions": 1,
+    "abandonments": 0,
+    "refugeeTransfers": 0,
+    "rebuilt": 0,
+    "collapses": 0,
+    "buildings": 67,
+    "harvested": 26290.842945980803,
+    "resourceClaims": 33,
+    "trainingStarted": 171,
+    "contacts": 9,
+    "protectionParties": 8,
+    "trained": 169,
+    "infantryTrained": 115,
+    "rangedTrained": 54,
+    "mobilisations": 19,
+    "attacks": 2557,
+    "projectiles": 1381,
+    "militaryDeaths": 110,
+    "combatDeaths": 150,
+    "coordinatedAssaults": 5,
+    "workerRaids": 1,
+    "workerCombatDeaths": 40,
+    "structureDamage": 1379.8540312119385,
+    "structuresDestroyed": 8,
+    "resourceDisputes": 12,
+    "militaryRecoveryHp": 1254.9932113789537,
+    "recoveredSoldiers": 11,
+    "sieges": 2,
+    "settlementDamage": 16.68276992143376,
+    "strategicFieldDeaths": 10,
+    "scoutInterceptions": 8,
+    "homeScarcityDeaths": 11,
+    "objectiveRecoveries": 1,
+    "fieldDeaths": 7,
+    "reportStops": 1,
+    "defenseRecalls": 8,
+    "harassmentParties": 1
+  },
+  "finalHomes": [
+    {
+      "id": "s0",
+      "population": 141,
+      "status": "active",
+      "health": 100,
+      "shortageDays": 0
+    },
+    {
+      "id": "s1",
+      "population": 112,
+      "status": "active",
+      "health": 99.44053667996836,
+      "shortageDays": 0
+    },
+    {
+      "id": "s2",
+      "population": 41,
+      "status": "active",
+      "health": 86.15886741608338,
+      "shortageDays": 0
+    },
+    {
+      "id": "s3",
+      "population": 120,
+      "status": "active",
+      "health": 100,
+      "shortageDays": 0
+    },
+    {
+      "id": "s4",
+      "population": 40,
+      "status": "active",
+      "health": 100,
+      "shortageDays": 0
+    }
+  ],
+  "firstRetreats": [
+    {
+      "cycle": 141,
+      "factionId": "f0",
+      "groupId": "g299",
+      "size": 14,
+      "fit": 13,
+      "supply": 82.52197568394185,
+      "reason": "Visible defenders outweigh this force and nearby support (0.42× local strength).",
+      "combat": {
+        "intent": "retreat",
+        "reason": "Visible defenders outweigh this force and nearby support (0.42× local strength).",
+        "target": "g285",
+        "enemy": 18.6,
+        "own": 7.9,
+        "support": 0,
+        "ratio": 0.42
+      },
+      "returnSupply": {
+        "destinationId": "s0",
+        "tick": 134,
+        "x": -22.15580019895654,
+        "z": -69.33421967619844,
+        "reserve": 27
+      }
+    },
+    {
+      "cycle": 205,
+      "factionId": "f3",
+      "groupId": "g296",
+      "size": 24,
+      "fit": 24,
+      "supply": 48.562773219898325,
+      "reason": "The supply reserve must cover the journey home.",
+      "combat": {
+        "intent": "retreat",
+        "reason": "The supply reserve must cover the journey home.",
+        "target": "g512",
+        "enemy": 0,
+        "own": 12.9,
+        "support": 3.1,
+        "ratio": null
+      },
+      "returnSupply": {
+        "destinationId": "s3",
+        "tick": 197,
+        "x": 67.1765886269013,
+        "z": 73.8668230252393,
+        "reserve": 49
+      }
+    },
+    {
+      "cycle": 220,
+      "factionId": "f3",
+      "groupId": "g416",
+      "size": 11,
+      "fit": 11,
+      "supply": 68.90437038559585,
+      "reason": "Visible defenders outweigh this force and nearby support (0.38× local strength).",
+      "combat": {
+        "intent": "retreat",
+        "reason": "Visible defenders outweigh this force and nearby support (0.38× local strength).",
+        "target": "g287",
+        "enemy": 19.4,
+        "own": 7.4,
+        "support": 0,
+        "ratio": 0.38
+      },
+      "returnSupply": {
+        "destinationId": "s3",
+        "tick": 217,
+        "x": 74.79969316944138,
+        "z": 61.900355547716806,
+        "reserve": 54
+      }
+    },
+    {
+      "cycle": 233,
+      "factionId": "f0",
+      "groupId": "g373",
+      "size": 5,
+      "fit": 1,
+      "supply": 53.508438714371884,
+      "reason": "The rally cannot field a supported assault; preserving the force for another plan.",
+      "combat": {
+        "intent": "retreat",
+        "reason": "The rally cannot field a supported assault; preserving the force for another plan.",
+        "target": "s1",
+        "enemy": 14.4,
+        "own": 2.4,
+        "support": 18.6,
+        "ratio": 1.46
+      },
+      "returnSupply": {
+        "destinationId": "s0",
+        "tick": 233,
+        "x": 46.25661739052127,
+        "z": -74.55248445202658,
+        "reserve": 51
+      }
+    },
+    {
+      "cycle": 233,
+      "factionId": "f0",
+      "groupId": "g508",
+      "size": 11,
+      "fit": 11,
+      "supply": 71.27056636369453,
+      "reason": "The rally cannot field a supported assault; preserving the force for another plan.",
+      "combat": {
+        "intent": "retreat",
+        "reason": "The rally cannot field a supported assault; preserving the force for another plan.",
+        "target": "g285",
+        "enemy": 14.4,
+        "own": 7.5,
+        "support": 1.1,
+        "ratio": 0.6
+      },
+      "returnSupply": {
+        "destinationId": "s0",
+        "tick": 227,
+        "x": 25.515102693716745,
+        "z": -70.29737573754777,
+        "reserve": 45
+      }
+    },
+    {
+      "cycle": 301,
+      "factionId": "f0",
+      "groupId": "g737",
+      "size": 33,
+      "fit": 33,
+      "supply": 85.83290969258269,
+      "reason": "No useful progress after a route retry; preserving the force and reassessing another objective.",
+      "combat": {
+        "intent": "retreat",
+        "reason": "No useful progress after a route retry; preserving the force and reassessing another objective.",
+        "enemy": 0,
+        "own": 24.1,
+        "support": 0.2,
+        "ratio": null
+      },
+      "returnSupply": {
+        "destinationId": "s0",
+        "tick": 301,
+        "x": -59.49933042996149,
+        "z": -31.18093897887067,
+        "reserve": 21
+      }
+    }
+  ],
+  "limits": "Single bounded Node observation. No physical device, GPU, browser pacing or exact user-save reproduction claim. Combat and hunger losses remain possible."
+}

@@ -1,3 +1,4 @@
+import { normalizeConfig, MATCH_SETTINGS, MATCH_SETTINGS_VERSION } from './config.js';
 // Read-only observer diagnostics. Never imported by the simulation.
 import { factionController, settlementController, groupController } from './sim/control.js';
 import { localGroupController } from './sim/knowledge.js';
@@ -18,7 +19,7 @@ function pick(value, fields) {
 const resources = value => pick(value, 'food water energy materials');
 const point = value => pick(value, 'x z');
 const order = value => pick(value, 'id role kind missionKind objectiveId targetId enemyId originId groupId phase size committedSize issuedTick createdTick departedTick expiresTick reportDeadline reason x z');
-const combat = value => ({ ...pick(value, 'active intent reason targetId targetKind decisionUntil retreatUntil engagedAt ownStrength enemyStrength supportStrength localStrength strengthRatio'),
+const combat = value => ({ ...pick(value, 'assessedAt active intent reason targetId targetKind decisionUntil retreatUntil engagedAt ownStrength enemyStrength supportStrength localStrength strengthRatio'),
   routeDecision: pick(value?.routeDecision, 'action wallId reason savedSeconds') });
 const rally = value => pick(value, 'id kind phase targetId frontGroupId x z destinationX destinationZ reachable minimumBatch required assembled assembleDeadline committedTick reason');
 const defense = value => pick(value, 'available ready recovering committed reserve observedThreat reportedThreat allIn deployable tick reason');
@@ -56,7 +57,7 @@ export function createDebugRecorder({ now = () => performance.now() } = {}) {
   function reset(state, view) {
     history = []; bytes = dropped = eventGaps = sampleCount = totalMs = maximumMs = 0; generation++;
     start = now(); lastSample = lastMovement = -Infinity; lastStep = lastEventId = null; settingsKey = ''; previous = new Map();
-    append('reset', state, { seed: scalar(state.seed), config: pick(state.config, 'civCount biome'), generation }); recordSettings(state, view);
+    append('reset', state, { seed: scalar(state.seed), config: normalizeConfig(state.config), generation }); recordSettings(state, view);
   }
   function sample(state, view) {
     const time = now();
@@ -109,18 +110,20 @@ export function createDebugRecorder({ now = () => performance.now() } = {}) {
       return result;
     };
     const homes = (state.settlements || []).slice(0, limits.homes);
-    const factions = rows('factions', state.factions || [], limits.factions, f => ({ ...pick(f, 'id name species status defeatedBy intent'),
+    const factions = rows('factions', state.factions || [], limits.factions, f => ({ ...pick(f, 'id name species color status defeatedBy intent'),
       controllerId: factionController(state, f), economy: pick(f.economy, 'population soldiers workers settlements sovereignSettlements controlledSettlements controlledPopulation training fieldWorkers camps'), strategy: { ...pick(f.strategy, 'mode targetId chosenAt observedTick intelAge nextReview reason'), operation: rally(f.strategy?.operation) },
       campaignOrders: rows(`orders:${f.id}`, Object.values(f.campaignOrders || {}), 32, order),
       relations: Object.entries(f.relations || {}).slice(0, limits.factions).map(([id, v]) => ({ id, ...pick(v, 'status trust') })) }));
     const settlements = rows('settlements', state.settlements || [], limits.homes, h => ({ ...homeDecision(state, h),
-      ...pick(h, 'factionId nativeSpecies name x z status population homePresent soldiers workers availableWorkers health capacity housingCapacity shortageDays starvation wellbeing'),
+      ...pick(h, 'factionId nativeSpecies name x z status razed destroyedTick ruinReason population homePresent soldiers workers availableWorkers health capacity housingCapacity shortageDays starvation wellbeing'),
       stock: resources(h.stock), net: resources(h.net), production: resources(h.lastProduction), consumption: resources(h.lastConsumption), missingResources: (h.missingResources || []).slice(0, 4).map(scalar),
       assigned: pick(h.assigned, 'workers scouts traders colonists military civilianAway researchers construction infrastructure training towerCrew'),
       training: rows(`training:${h.id}`, h.trainingQueue || [], 32, j => pick(j, 'id role size buildingId progress remaining')) }));
     const groups = rows('groups', state.groups || [], limits.groups, g => ({ ...groupDecision(state, g),
       ...pick(g, 'x z targetX targetZ missionTargetX missionTargetZ size initialSize civilianWounds health maxHealth supply morale speed capacity cargoCapacity travelled stuck stuckTime provisionCycles createdTick workProgress workRemaining extractedTotal'),
       ...(g.kind === 'worker' ? { civilianHealth: civilianHealth(g), civilianMaxHealth: Math.max(0, g.size * 32) } : {}),
+      finishPlan: pick(g.finishPlan, 'targetId evaluatedTick estimatedCycles returnReserve supplyNeeded deadline accepted reason'),
+      returnSupplyPlan: pick(g.returnSupplyPlan, 'destinationId tick reserve'),
       provisions: resources(g.provisions), carrying: resources(g.carrying), units: pick(g.units, 'infantry ranged scout'),
       navigation: { ...pick(g.navigation, 'index length reachable reason retryAt replanAfter'), goal: point(g.navigation?.goal),
         waypointCount: g.navigation?.waypoints?.length || 0, nextWaypoint: point(g.navigation?.waypoints?.[g.navigation?.index || 0]) },
@@ -142,9 +145,9 @@ export function createDebugRecorder({ now = () => performance.now() } = {}) {
       resourceLedger: Object.fromEntries(['food', 'water', 'energy', 'materials'].map(k => [k, pick(state.resourceLedger?.[k], 'initial regenerated extracted delivered produced consumed construction research training tradeNet lost')])),
       outcome: pick(state.outcome, 'status winnerId wonAt tick'), totals: { factions: state.factions?.length || 0, settlements: state.settlements?.length || 0,
         groups: state.groups?.length || 0, nodes: state.nodes?.length || 0, soldiersInIncludedHomes: homes.reduce((n, h) => n + (h.soldierRoster?.length || 0), 0) } };
-    const report = { format: 'littleworld-diagnostic', schemaVersion: 1, purpose: 'Diagnostic snapshot and sampled history; not a save or deterministic replay.',
+    const report = { format: 'littleworld-diagnostic', schemaVersion: 1, matchSettingsSchema: { version: MATCH_SETTINGS_VERSION, controls: MATCH_SETTINGS }, purpose: 'Diagnostic snapshot and sampled history; not a save or deterministic replay.',
       containsHiddenWorldInformation: true, build: pick(build, 'version commit'), capturedAt: new Date().toISOString(),
-      world: { ...stamp(state), ...pick(state, 'seed terrainSeed'), generation, config: pick(state.config, 'civCount biome') },
+      world: { ...stamp(state), ...pick(state, 'seed terrainSeed'), generation, config: normalizeConfig(state.config) },
       settings: settings(view), performance: perf(view), limits, snapshot,
       history: history.map(h => JSON.parse(h.entry)), truncation: { omitted, historyDropped: dropped, eventGaps, stringsMayBeClippedAt: limits.string },
       recorder: { sampleCount, totalMs, maximumMs, retainedEvents: history.length, retainedBytes: bytes, captureMs: now() - captureStart } };

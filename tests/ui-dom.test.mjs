@@ -1,5 +1,6 @@
 import { setMilitary, bindArmy } from './roster-fixtures.mjs';
 import test from 'node:test';
+import { DEFAULT_CONFIG, MATCH_SETTINGS } from '../src/config.js';
 import assert from 'node:assert/strict';
 import { parseHTML } from 'linkedom';
 import { createUI } from '../src/ui.js';
@@ -44,7 +45,7 @@ test('observer settings show four starts and edited seed/count survive refresh a
     const seed=t.root.querySelector('#atlas-seed'),civs=t.root.querySelector('#atlas-civs');assert.equal(civs.value,'4');assert.equal(t.root.querySelectorAll('.faction-entry').length,4);
     seed.value='a-new-world';t.fire('#atlas-seed','input');civs.value='5';t.fire('#atlas-civs','input');t.update();
     assert.equal(seed.value,'a-new-world');assert.equal(civs.value,'5');assert.equal(t.root.querySelector('[data-slot="civ-count"]').textContent,'5');
-    t.fire('.seed-form','submit');assert.deepEqual(t.calls.at(-1),{action:'reset',seed:'a-new-world',config:{civCount:5,biome:'random'}});assert.equal(t.state.factions.length,5);assert.equal(t.root.querySelectorAll('.faction-entry').length,5);
+    t.fire('.seed-form','submit');assert.deepEqual(t.calls.at(-1),{action:'reset',seed:'a-new-world',config:{...DEFAULT_CONFIG,civCount:5,biome:'random'}});assert.equal(t.state.factions.length,5);assert.equal(t.root.querySelectorAll('.faction-entry').length,5);
   }finally{t.dispose();}
 });
 
@@ -117,7 +118,7 @@ test('mobile panel controls start collapsed and toggle one reachable panel at a 
 });
 
 test('victory is shown only for a real outcome and reports neutral2x pacing without deleting survivors',()=>{
-  let continued=0;const t=setup({actions:{continueWatching(){continued++;}}});try{assert.equal(t.root.querySelector('.world-outcome').hidden,true);t.view.outcome={status:'victory',winnerId:'f0',wonAt:720,tick:720};t.view.victorySummary={captures:3,battles:8};t.update();const result=t.root.querySelector('.world-outcome');assert.equal(result.hidden,false);assert.match(result.textContent,/6m 0s/);assert.match(result.textContent,/Surviving inhabitants stay/);t.fire('[data-action="keep-watching"]');assert.equal(continued,1);t.view.outcomeDismissed=true;t.update();assert.equal(result.hidden,true);}finally{t.dispose();}
+  let continued=0;const t=setup({actions:{continueWatching(){continued++;}}});try{assert.equal(t.root.querySelector('.world-outcome').hidden,true);t.view.outcome={status:'victory',winnerId:'f0',wonAt:720,tick:720};t.view.victorySummary={captures:3,battles:8};t.update();const result=t.root.querySelector('.world-outcome');assert.equal(result.hidden,false);assert.match(result.textContent,/6m 0s/);assert.match(result.textContent,/Displaced survivors keep their native identity/);t.fire('[data-action="keep-watching"]');assert.equal(continued,1);t.view.outcomeDismissed=true;t.update();assert.equal(result.hidden,true);}finally{t.dispose();}
 });
 
 test('seeded strengths display real numerical bonuses and tradeoffs',()=>{
@@ -194,4 +195,21 @@ test('military inspection distinguishes fit attackers, recovery, threat reserve 
  const t=setup();try{const h=t.state.settlements[0];h.defensePlan={ready:40,recovering:20,reserve:0,reason:'No reported home harassment.'};h.lastMobilization={requested:40,dispatched:32,reason:'Paid route supplies limit this departure.'};h.productionRally={kind:'frontline',reason:'Recruits assemble for the moving frontline.'};t.update();
  assert.match(t.root.querySelector('.military-availability').textContent,/40 fit at home.*20 recovering.*0 reserved/);assert.match(t.root.querySelector('.production-rally').textContent,/Frontline reinforcements/);assert.match(t.root.querySelector('.military-reading').textContent,/32 of 40 available attackers/);assert.match(t.root.querySelector('.strength-definition').textContent,/not the number ready to attack/);
  }finally{t.dispose();}
+});
+
+
+test('balance edits remain pending, apply at cycle zero, and restore bounded defaults',()=>{
+  const t=setup();try{
+    const original=structuredClone(t.state.config);
+    for(const [key,spec] of Object.entries(MATCH_SETTINGS)){
+      const input=t.root.querySelector(`[data-match-setting="${key}"]`);
+      assert.equal(+input.value,spec.default);assert.equal(+input.getAttribute('min'),spec.min);assert.equal(+input.getAttribute('max'),spec.max);
+      input.value=String(spec.max);t.fire(`[data-match-setting="${key}"]`,'input');
+    }
+    t.update();assert.deepEqual(t.state.config,original);
+    t.fire('.seed-form','submit');assert.equal(t.state.tick,0);
+    for(const [key,spec] of Object.entries(MATCH_SETTINGS))assert.equal(t.state.config[key],spec.max);
+    t.fire('[data-action="balance-defaults"]');assert.notDeepEqual(t.state.config,original);
+    t.fire('.seed-form','submit');assert.deepEqual(t.state.config,original);
+  }finally{t.dispose();}
 });

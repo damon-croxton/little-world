@@ -1,333 +1,99 @@
 # LittleWorld
 
-**Debugging a world:** open Settings → Download debug report. It saves a bounded,
-local diagnostic file containing recent decisions and a full-world snapshot;
-nothing is uploaded automatically. See [report fields, limits and privacy](DEBUG-REPORT.md).
+[Play LittleWorld](https://damon-croxton.github.io/little-world/) — an observer-first civilisation simulation built with JavaScript and Three.js. Humans, aliens and robots gather resources, found settlements, research, trade, train armies and compete for control. All terrain, buildings and characters use original procedural geometry; no artwork download is required.
 
-An observer-first domination simulation of human settlers, scavenger machines and alien hives. Civilisations gather physical resources, grow settlements, train infantry and ranged forces, build defenses, scout through fog of war, and compete to control the world. Each resource crew appears as one worker with its actual count, such as 11×. Soldiers remain individual bodies; housing and census totals represent home inhabitants; temporary falling markers depict recorded deaths.
+## Watch and inspect
 
-All architecture, terrain, characters and effects are original procedural geometry. Built with vanilla JavaScript and Three.js 0.160.1; no downloaded artwork is required.
+- Select a civilisation in the list to focus its home and view its intelligence. The whole-world observer view does not give the AI hidden knowledge.
+- Click a settlement, building, resource, party or individual soldier to inspect it. Follow keeps the camera with a moving selection.
+- Drag to pan, use the wheel to zoom, or use the camera controls. **Space** pauses; **1–5** choose 1×, 2×, 4×, 16× or 32× speed; **F** focuses the selection; **C** toggles cinematic view; **H** hides the interface; **Escape** returns to overview.
+- On mobile, use the civilisation, inspector and settings drawers, one-finger pan and pinch zoom. Panel gestures stay inside the interface. Browser touch emulation is checked in CI; this is not a physical-device performance claim.
+- The population chart, record and inspector explain changes. A separate [battle sandbox](https://damon-croxton.github.io/little-world/battle.html) provides a small individual-soldier test scene.
 
-## Individual-soldier battle sandbox
+Worker crews show one small representative and a **grey count**, such as `11×`. The full crew still consumes, harvests, carries cargo, suffers casualties and appears in the census. Soldiers remain individual bodies. A party with at least three living visible soldiers has a somewhat larger **red count**. These semantic badges do not replace faction ownership colours.
 
-Open **Battle sandbox · 24 vs 24** in the civilisation view, or visit
-`battle.html`. This separate prototype lets two AIs fight with infantry, ranged
-soldiers and scouts. Select a soldier to inspect its own health, target and
-decision. Start/pause, seed replay and team perspectives make the fight observable.
-The sandbox remains a small regression fixture alongside the full civilisation simulation.
+Civilisations are named `Human1`, `Robot1`, `Alien1`, `Human2`, and so on, numbered independently per species in creation order. Every supported faction slot has a distinct colour. Species geometry stays distinct; current matches never transfer an enemy settlement or its inhabitants to an attacker.
 
-Battle soldiers have persistent identities, individual health and weapon clocks.
-Their physical positions determine reach and sight, hits damage the named target,
-and that individual dies when its health reaches zero. Squad objectives guide
-unit decisions; nearby threats, wounded withdrawal, ranged spacing and feasible
-pursuit affect each soldier. Team views hide unseen enemies. Whole-field viewing
-is an observer option and does not give the AI additional knowledge.
+## Start a match
 
-The main civilisation simulation now uses persistent infantry and ranged soldiers
-through paid training, home defense, expeditions, combat, retreat and return.
-A settlement retains each native citizen's identity; armies reference those same
-records. Wounds, weapon clocks and exact casualties survive transfers. Strategic
-objectives and home reserves guide the troops, while each soldier chooses reachable
-local engagements. Civilian crews retain their count badges and full economic
-accounting. Select an individual soldier to inspect its health and current action,
-then navigate to its army or home. Faction views expose only physically visible
-foreign soldiers and hide their health, clocks and orders.
+Open **Settings**, choose the seed, 3–6 civilisations (default 4), and a whole-world biome. Open **Match balance** for four bounded controls. Changes remain pending until **Start match**, which starts at cycle zero. **Restore balance defaults** changes the pending balance controls only. The same seed and complete settings reproduce the starting state and deterministic simulation decisions within the same application version.
 
-Wounded veterans can recover after physically returning to a quiet, supplied
-home. Treatment consumes real stores and preserves their identity and weapon
-clock; severely wounded soldiers resume duty at 75% health. The home inspector
-explains treatment and any safety or supply delay. Production rallies follow
-the leading supplied army on their selected objective, and a sufficiently
-strong assembled force can commit when its reinforcement wait expires.
+| Control | Default | Range | Effect |
+| --- | --- | --- | --- |
+| Resource reserves | 125% | 50–200% | Scales initial and maximum deposit amounts. Harvest speed and regeneration are unchanged. |
+| Upkeep & hardship | 85% | 50–150% | Scales daily needs, paid journey provisions and passive starvation losses. Weapons and combat casualties are unchanged. |
+| Aggression | 100% | 50–150% | Changes offensive dispatch/reinforcement cooldowns. Existing personality, intelligence, force and supply checks remain. |
+| Economic focus | 115% | 75–150% | Retains more civilian workers and lowers the population/cooldown thresholds for considering outposts. Colonies still need supplies, surveyed resources and safe routes. |
 
-Benchmark reports distinguish Node CPU timings from browser and GPU performance;
-a tested small battle does not establish thousand-unit capacity.
+Controls move in five-percentage-point increments. Seeded traits and advantages still differentiate factions; these settings do not replace them. Defaults ease scarcity and support funded expansion without making towns immune to shortages or military defeat. They are conservative tuning, not a guarantee that every faction survives or that a match ends at a particular time.
 
-Focused verification:
+## Physical systems and limits
 
-```sh
-node --test tests/battle-simulation.test.mjs tests/battle-micro.test.mjs
-node tests/battle-audit.mjs --output screenshots/battle-audit.json
-node tests/world-individual-audit.mjs first-light tidal-garden iron-valley
-node tests/world-individual-browser.mjs
-```
+Workers walk to reachable deposits, gather within range and deliver their actual cargo. Military training reserves existing citizens and pays construction/training costs. Soldiers retain identity, health, weapon clocks and casualties through deployment, recovery and return. Supplied quiet homes can treat wounded veterans using real stores.
 
-The ordinary seeded audit checks exact health/death ledgers and records AI
-decisions; its increasing-count benchmark is CPU-only. The shared built/public
-browser smoke also boots the sandbox, picks an actual soldier, checks team sight,
-uses play/pause and observes a natural targeted hit.
+Campaigns use delivered reports and current local sight. Armies concentrate at rallies, interrupt economic attacks for credible defenders, and compare local force with nearby support. Known exposed workers, housing and production can attract attacks. Before abandoning an exposed settlement, a fit force can budget a bounded finish using remaining integrity, physical siege pressure, morale, supply and the route home. There is no occupation timer or twelve-soldier capture threshold: actual contact applies damage until integrity reaches zero. Strong defenders, injuries, home threats and depleted supplies can force retreat. Inspectors and debug reports retain the decision reason and finishing budget.
 
-## Run
+Connected walls grow from funded gates around useful civic space, preserving friendly access where terrain permits. Towers need real crews and ammunition. Attackers compare a useful breach with a reachable detour. Fog separates current sight from stale reports; hidden stock, queues and enemy routes are unavailable to planners.
 
-Install Node.js 24 or later:
+Combat destroys enemy infrastructure instead of capturing territory. When settlement integrity reaches zero, its remaining buildings collapse and production/training stop. Civilians retain their native census and become displaced under the existing camp lifecycle; field soldiers and cargo are not converted or duplicated. Camp abandonment records real stock losses. Survivors can walk to a friendly refuge or later fund rebuilding where the plot is clear. Destroyed plots no longer block funded founding, and destroyed building plots can be reused. Domination requires defeating independent active settlements and viable armies; there is no victory timer. The observer pauses on a new victory and can continue watching or replay.
+
+This is a grouped economic simulation with individual military combat, not independent AI for every civilian. Home inhabitants are represented by housing and census totals. Worker badges deliberately represent several people. Long games can slow down; selected playback speed is a requested simulation rate, not guaranteed wall-clock throughput. Natural match length and late-game balance remain variable. Short fixtures and Node timings do not establish GPU, iPhone or large-world performance.
+
+## Run locally
+
+Use Node.js 24 and npm. The lockfile pins dependencies, including the release browser tooling.
 
 ```sh
 npm ci
 npm start
 ```
 
-Open http://127.0.0.1:4174 in a WebGL-capable browser. On Windows, `Start-LittleWorld.cmd` installs missing dependencies and opens the app. A browser with hardware acceleration is recommended.
+Open the URL printed by the server. No account, backend or secret is required. Development is owned by the saved cloud checkout; no desktop machine is needed.
 
-The default world has four civilisations and starts at 2x. Settings provide a seed and a 3-6 civilisation slider; 3-5 is the usual range. Reset applies both together. The same seed and settings reproduce the same simulation within the same JavaScript runtime; different engine versions can diverge through floating-point terrain and formation calculations. URL parameters also work: `?seed=first-light&civs=4`.
+## Build and test
 
-## Observe
-
-- Desktop: left-drag orbits, right-drag pans, scroll zooms; click a person, building, party or resource to inspect. Buildings show their own condition and purpose; people resolve to their real colony or party.
-- Click a civilisation in the left menu to focus its home and switch to its fog-of-war view. The menu remains available for switching between perspectives; private enemy census and stores stay hidden.
-- Touch: one finger pans; two fingers pinch to zoom and drag to orbit. The canvas contains its gestures; inspector panels scroll vertically.
-- On smaller screens, Societies, Inspect and Views are collapsed until requested. Map returns to the overview.
-- Space pauses; 1–5 select 1x, 2x, 4x, 16x, 32x. F follows, C toggles the cinematic camera, H hides/shows the interface, Escape returns to the overview.
-- Whole world is an observer perspective. A civilisation perspective shows its current sight and remembered places; switching perspective never changes what its AI knows.
-- The Developed world control runs the same simulation forward 1,200 cycles; it does not insert population, stocks or showcase structures.
-
-One neutral cycle is one simulation second at 1x. The simulation advances in fixed 0.1-second pulses, independently of rendering. Pausing preserves fractional time and animated poses.
-
-## Domination and variation
-
-A civilisation wins when no independent opposing settlements or viable field armies remain. Defeated settlements can be occupied: their native inhabitants and species remain, and captured stores stay at the physical location. Conquest does not delete civilians, transform species or teleport inventory to a capital. A surviving field army can still try to liberate its home before capitulation. If a sovereign loses all native bases but still holds a foreign town, one held producer can recruit paid native auxiliaries under its command. Their species and population identity do not change.
-
-Campaigns reserve troops for home defense and concentrate supplied parties at a shared forward rally before committing against a reported objective. Command decisions use delivered intelligence and local home sightings; a field force uses its own visible contacts. Supplied survivors can press an undefended objective and continue from a captured depot after paying for the next route's rations. Low supplies, strong defenders and home threats can still justify withdrawal. Nearby soldiers can engage different hostile formations at once, while scouts intercepted at physical contact retreat with their people and reports intact.
-
-Inspectors distinguish native identity from current control. Buildings retain their native architecture; military command colors identify their controller. Combat checks current allegiance again when a delayed strike lands, so capture or capitulation cannot turn an old attack into friendly damage.
-
-The observer pauses on a newly declared victory and can keep watching, replay the seed or generate another world. The pacing target is roughly 5–10 minutes of playback at 2x, corresponding to 600–1,200 simulation cycles. This is a calibration target, not a timer that chooses a winner; see the validation report for measured seed outcomes and limitations.
-
-Seeded advantages are independent of species. Examples include faster gathering and larger carried loads, quicker training, longer ranged reach, stronger weapons and tougher fortifications, with explicit tradeoffs. These modify actual production or combat calculations. There is no hidden victory deadline or fixed winning species.
-
-## Physical systems
-
-- Workers travel to finite or regenerating deposits, extract within reach, carry cargo and deliver it home. Dispatch tries affordable reachable alternatives and funds survival trips before discretionary spending. A starving town may risk a small nearby recovery crew with only its remaining rations; hunger, casualties and cargo conservation still apply.
-- Each species has distinct infantry and ranged producers. Buildings require funded construction, and finite training queues pay their costs and reserve existing civilians. A cancelled or destroyed course cannot complete later.
-- Defenses grow into a connected enclosing perimeter around the civic footprint. Funded sections extend from a gate, prioritize known threats, preserve friendly routes through multiple gates, repair destroyed spans and expand outward as the base grows. Infeasible terrain causes a bounded retry rather than an impassable wall. Staffed towers need two actual ranged operators and paid ammunition. Civilians can contest a paper resource claim until real troops or towers secure it.
-- Terrain includes deep water, rocky barriers, fords and mountain passes. Group routes and body formation offsets respect physical obstacles; friendly/occupier gates preserve access.
-- Infantry loosen into reachable contact positions; ranged soldiers seek firing distance. Local body separation and a shared squad route keep passage movement physical. Infantry strikes and ranged projectiles create real damage and casualty events; effects only read those events.
-- Squads prioritize locally observed defenders, compare their supported strength with observable enemy types, and retreat when heavily overmatched. They can seize an exposed crew's real cargo or damage economic buildings. A useful breach must beat the cost of a detour. The inspector explains decisions and target interruptions. Lost storage records excess supplies as spoilage in the ledger.
-- Scouts share live observations and surveyed terrain within their actual vision and line of sight. Other field parties carry observations home; memories remain stale after sight is lost. Hidden enemy stores, queues, future routes and fresh deposit quantities are unavailable to AI planners.
-- Healthy returning armies interrupt travel for hostile contact. Genuine withdrawals remain targetable. Scout pursuit ends promptly when it cannot close. Reinforcements rally to an existing front; physically nearby parties from one native settlement can merge without replacing identities, healing or creating supplies. Different settlements retain separate rosters on that front.
-- Funded colonies can depart from viable smaller towns, retaining home workers and real journey rations. Surveyed resource clusters, reported threats and accessible routes determine sites; hidden enemy positions do not enter the placement score.
-- Technology and trade require resources and people. A resource ledger accounts for production, extraction, cargo, deliveries, consumption, construction, research, training and losses.
-
-## Build and verify
+For a focused change, run its relevant `node --test tests/<name>.test.mjs` files. The full regression gate is:
 
 ```sh
 npm test
 npm run build
 node tools/verify-build.mjs
-node tests/domination.mjs
-node tests/balance.mjs
-node tests/render-performance.mjs
 ```
 
-The self-contained static output is `dist/`. Three.js modules and their license are copied there; application URLs are relative and support GitHub Pages project paths. The asset verifier follows the real application module graph and rejects missing or root-relative dependencies.
+The static `dist/` includes the application module graph, Three.js and its licence. The asset verifier checks both entry points and relative dependencies for project-path hosting.
 
-With `npm start` running separately, browser verification can run in an authorised WebGL-capable test environment:
-
-```sh
-npx playwright install --with-deps chromium
-node tests/controls-v2.mjs
-node tests/visual-v2.mjs
-node tests/tactical-browser.mjs
-node tests/interaction-campaign-browser.mjs
-node tests/ai-readability-browser.mjs
-```
-
-Browser tests default to bundled Chromium. `BASE_URL` accepts a local server or hosted project subpath; `QA_CIVS` selects the start count. `QA_TIER=full` includes the 3,000-cycle/high-quality tier. `QA_QUALITY=low` selects performance rendering, `BROWSER_CHANNEL=chrome` selects installed Chrome, and `QA_VIDEO=0` explicitly skips recording. Software-WebGL CI is labelled as such.
-
-Every push to `main` runs the Node regression suite, builds and verifies the assets, and runs a short browser smoke against that exact built artifact. The same smoke command verifies the public Pages artifact after deployment. Each smoke has a 180-second total budget and checks the commit marker, real WebGL boot, simulation progress/pause, faction selection and fog privacy, building picking, pointer/keyboard input, weighted census and runtime errors. Failed predeployment checks keep the previous deployment. This fast path does not claim long-term balance or hardware performance.
-
-Development and CI use the same built preview, URL prefix, 1280×800 viewport, software-rendering flags and locked Playwright browser:
+To exercise the exact built artifact with the same smoke used in CI:
 
 ```sh
-npm ci
 npx playwright install --with-deps chromium --only-shell
-npm run build
-npm run preview # keep running in a separate terminal
+npm run preview
+# In another terminal:
 QA_SOFTWARE_RENDERING=1 npm run test:smoke
 ```
 
-The preview serves only `dist/` at `http://127.0.0.1:4176/little-world/`, matching the Pages project prefix. `EXPECTED_COMMIT` defaults to the checkout SHA; `BASE_URL` selects another host. The smoke rejects a browser version that differs from Playwright's lockfile-selected browser. `BROWSER_EXECUTABLE_PATH` plus `QA_BROWSER_PARITY=diagnostic` can gather explicitly labelled diagnostic evidence when browser installation is blocked; a mismatched run is never reported as release acceptance. CPU, OS, GPU and scheduling can still differ between runners, and the report records the environment and timings.
+Preview serves `http://127.0.0.1:4176/little-world/`. `BASE_URL` chooses another host; `EXPECTED_COMMIT` defaults to the checkout SHA. The smoke verifies the exact `build.json`, actual WebGL boot, input, fog, accounting, mobile controls, debug downloads and controlled combat renders, with a 180-second budget. A browser version mismatch fails acceptance. An executable override plus `QA_BROWSER_PARITY=diagnostic` is explicitly diagnostic evidence only.
 
-Use **Actions → LittleWorld deep QA → Run workflow** for comprehensive checks. Choose `simulation` after economy, population, combat, campaign, navigation or victory changes; `browser` after substantial rendering, input, fog or inspection changes; `performance` after expensive simulation/rendering changes; or `all` before a substantial release. The retained suites include all 20 fixed domination/conservation seeds, both 3,000-cycle extensions, full observer/mobile controls, tactical scenarios, natural battle/harvesting videos, visual accounting and isolated advancing performance through cycle 5,000. Deep runs are manual and are not cancelled by routine main pushes. Their simulation job has a 60-minute execution budget; no seeds, invariants or audit intervals are removed. Reuse deep evidence only when its application source is unchanged, and run targeted regressions for every relevant correction.
+Long seed sweeps, videos and performance suites remain opt-in through **Actions → LittleWorld deep QA**. Select simulation, browser, performance or all when that evidence is needed. Do not treat old evidence as validation of changed source or weaken invariants to obtain a pass. Routine development does not require every expensive suite after every edit.
 
-Smoke and deep evidence are retained as Actions artifacts for 14 days. See `HANDOFF.md` for current cloud ownership and `DESKTOP-VALIDATION.md` for historical Windows browser verification and its limits.
+## Publish
 
-## Measurement and model boundaries
+An ordinary push to `main` runs `.github/workflows/pages.yml`: install, full Node suite, build, asset verification and pinned-browser smoke, then GitHub Pages deployment. A second smoke checks the exact public commit and boots the real public application. A release is complete only when build, deploy and public QA are all green. Failed predeployment checks leave the previous public deployment in place. Evidence artifacts are retained for 14 days.
 
-This is a simulation-first tech demo, not a historical prediction or a directly controlled multiplayer RTS. Strategic decisions and logistics operate through settlements and groups. Resource crews use one articulated model with a count badge, while their complete workforce and cargo remain in the simulation. Home residents and local jobs are represented by housing and census totals; decorative resident walkers are removed. Military bodies and single scouts follow physical state. Local congestion can queue soldiers; individual soldiers do not run global route planners.
+## Code map
 
-The live diagnostics distinguish actual/scoped population, people represented in the view, and actual drawn models. A visible 11-person crew contributes eleven people and one model. Count badges hide at the widest zoom and avoid overlap; selecting a visible crew keeps its badge available. In a civilisation perspective, the census includes owned and observable foreign people. Paused, active and advancing timing windows are separate.
+| Path | Responsibility |
+| --- | --- |
+| `src/config.js`, `src/world.js` | Normalized match settings, seeded world and terrain |
+| `src/sim/core.js`, `economy.js`, `progression.js` | Fixed-step lifecycle, resource accounting, expansion, research and trade |
+| `src/sim/strategy.js`, `planner.js`, `match-rules.js` | Reports, campaigns, rallies, reserves and bounded policy modifiers |
+| `src/sim/soldiers.js`, `military.js`, `combat.js` | Canonical military bodies, paid training, tactical damage and recovery |
+| `src/sim/knowledge.js`, `navigation.js`, `conquest.js` | Fog/intelligence, physical routes and ownership |
+| `src/render/`, `src/ui.js`, `src/main.js` | Procedural rendering, inspectors and observer integration |
+| `src/debug-report.js` | Bounded, local diagnostic export |
+| `tests/`, `tools/`, `.github/workflows/` | Regression fixtures, build verification and release gates |
 
-Node render benchmarks measure CPU simulation/crowd work and geometry only. They do not measure GPU, buildings, landscape, interface or screen refresh. Browser frame measurements describe their recorded runner, viewport and quality, not a guarantee for other hardware. DOM and synthetic pointer tests are not evidence of actual mobile layout or native gestures.
+## Debug a world
 
-New births stop at 900 people per settlement; each independent faction can maintain up to four active settlements. Limits stop new commitments rather than deleting existing people. Supplies, housing, geography, war and reserves constrain growth earlier. No save/load or direct faction orders are included.
+Open **Settings → Download debug report**. This saves a bounded JSON or compressed JSON file locally; nothing is uploaded automatically. It includes the build, seed, all active match settings and their versioned definitions, recent decisions, economic ledgers, real soldier state, observations and return/finish budgets. Pending settings are not the active match. The report contains hidden full-world information: share it deliberately. See [DEBUG-REPORT.md](DEBUG-REPORT.md) for fields and limits.
 
-## Source map
-
-- `src/sim/core.js`, `economy.js`: physical work, settlement growth, paid construction and conservation.
-- `src/sim/soldiers.js`, `military.js`: authoritative retained soldier records, paid recruitment, deployment and demographic accounting.
-- `src/sim/defenses.js`: funded defensive planning and real tower operator assignments.
-- `src/sim/strategy.js`, `combat.js`, `individual-combat.js`, `formations.js`, `conquest.js`, `control.js`: scouting, tactical decisions, physical contact, impacts, occupation and sovereignty.
-- `src/sim/knowledge.js`, `progression.js`: visibility, returned intelligence, technology and commerce.
-- `src/world.js`, `config.js`, `sim/navigation.js`: seeded geography, civilisation count and collision-aware routes.
-- `src/render/`: terrain, buildings, instanced bodies, count-badged workers, fog and combat effects.
-- `src/main.js`, `clock.js`, `input.js`, `ui.js`: observer integration, timing, gestures and interface.
-
-Three.js is MIT licensed. Playwright and Linkedom are development-only verification dependencies.
-
-### Scarcity and responsiveness pass
-
-World resources use 160 sites instead of 520, with one starter site per resource,
-smaller deposits, and 45% of the former regeneration rate. Housing provides 28
-places per completed house, plus 16 at a standing hub. Residents each need one
-place; serving soldiers and funded trainees need one additional quarters place.
-The AI builds housing ahead of demand. Destroyed houses lose capacity immediately,
-disappear from rendering, and their plots can be reused for funded construction.
-
-Scouts are individual citizens. They avoid locally visible defenders and can
-ambush only one- or two-person unprotected work parties. Hostile troops prioritize
-visible scouts; a lone scout caught at physical contact loses its undelivered
-observations. Small paid harassment parties use fresh delivered worker reports,
-keep a home reserve, and interrupt raids for defenders. Funded armies can continue
-to a suitable nearby reported objective with sufficient existing supplies.
-Some funded scouts revisit previously observed enemy worksites from the near side
-to refresh economic intelligence. Recent reported defenders, repeat visits and
-duplicate assignments rule out unsuitable surveys; visible defenders trigger a
-physical return with collected observations.
-
-Exposed worker crews are military targets even when empty. Every real soldier
-uses its own weapon clock, range, line of sight and damage; a count badge is not
-a single hit point and does not multiply incoming damage. Each represented
-worker has 32 health. Whole-person casualties reduce the native population,
-crew size, carrying capacity and proportional cargo once; damaged crews flee
-toward home or take a reachable sidestep around a visible attacker. Their badge
-and inspector show the survivors. Raiders interrupt for defenders, consider
-nearby support and towers, and stop unproductive or overlong worker pursuits.
-Surviving field parties can select a freshly reported larger civilian crew;
-reported escorts and garrisons determine protection rather than civilian count.
-The pursuit limit is ten simulation seconds, with an earlier stop after 3.5
-seconds without closing or causing damage. Futile harassment parties return home.
-Rallying forces keep their march and can fire at exposed crews already in weapon
-reach without starting a chase. Attacking a campaign rival's workers establishes
-hostility so its defenders can respond. Existing housing, paid replacement training, food needs
-and small emergency harvest fallback still govern recovery.
-
-Soldiers check their complete endpoint footprint near banks and cliffs. Group
-movement uses the same clearance as replanning, and shared route history retains
-turns and gates for lagging survivors without individual global path searches.
-Repeated footprint checks cache immutable terrain at exact coordinates; walls
-and gate permissions are still checked against current physical control.
-
-Enclosing perimeters supersede the former front-only screens. A cached terrain-checked
-blueprint surrounds the current civic footprint; construction remains staged and
-paid. Gates follow known extraction routes, and towers cover completed gates
-with actual ranged crews. Terrain can delay an enclosure; construction does not
-teleport bodies or close a scaffold through someone standing on its footprint.
-
-Interactive frames run at most four simulation pulses, stopping after an 8 ms
-CPU budget once the current pulse finishes. Requested backlog is bounded at half
-a simulation second; excess requested time is recorded, never credited as computed
-world progress. This prioritizes input responsiveness under load and does not
-guarantee the selected nominal speed. Actual simulated cycles per second remain
-available in performance diagnostics.
-
-
-### Bounded strategic planning and comparison
-
-Faction plans reconsider objectives every four cycles, retain valid objectives,
-and assign home reserves, worksite guards and recovering soldiers distinct jobs.
-Supplied campaign parties assemble at one forward rally and count actual arrived
-healthy soldiers before committing together. An unsupported rally times out; a
-stalled march receives one route retry before returning physically and placing
-that objective on a finite cooldown. Affordable smaller forces still respect the
-reported strength floor, paid route supplies and home defense reserve. Existing
-harvest, survey and expansion jobs retain their real targets and cargo.
-
-The Societies panel compares native civilians (all civilian jobs, trainees and
-travelers) with serving military (home and deployed). Faction-colored bars use a
-shared population scale in Whole world. Faction perspective shows only its own
-exact census; foreign counts and their contribution to the scale remain unknown.
-Mobile panels remain collapsed until opened.
-
-The design borrows persistent roles/target IDs, bounded work and route cache
-invalidation from [Screeps Memory](https://docs.screeps.com/global-objects.html),
-[CPU guidance](https://docs.screeps.com/cpu-limit.html), and its
-[community caching guide](https://docs.screeps.com/contributed/caching-overview.html).
-Those are programming principles; Screeps does not supply this game's strategy.
-
-
-### Balanced new-world districts
-
-New worlds have one biome throughout: Grassland, Desert or Alien meadow.
-World settings offer an explicit choice or a deterministic choice from the seed.
-The choice changes both scenery and terrain rules; it is also available through
-`?biome=meadow`, `?biome=desert` or `?biome=alien`. Seed, civilisation count and
-biome repeat the same world. Species and the scarce 160-site resource budget
-remain unchanged; changing the count rebuilds the balanced terrain clearings. Existing open browser sessions need a reload or
-new world to use this generator version.
-
-Each start and its designated first expansion have a 20-unit radius of level
-usable ground. Four local deposits sit 16 physical route units from each centre.
-The expansion is 48 physical route units inward, on an eight-unit-wide clear
-approach that continues toward the shared centre. These are real terrain changes
-used consistently by rendering, movement, sight and planning. Scouting still has
-to observe an expansion deposit before its site can enter faction planning; no
-unseen supplies, enemies or routes are injected into faction intelligence.
-
-Inside the districts and their approaches, fertility is 0.80, terrain movement
-is 1.0, farms use a 1.15 base factor, power uses its ordinary base output, and
-species-specific biome research/siege bonuses are neutral. Species upkeep,
-production type, technology, weapons, personalities and seeded faction strengths
-remain distinct. Outside these areas normal biome rules remain active. The
-inspector and field guide explain the local rule; scenery is not recolored into
-grassland.
-
-Starter deposits hold food/water/energy/materials of 1400/1400/1800/1200; first
-expansions hold 1800/1800/2200/1600. All have richness 0.70 and replenish at base
-rates 0.40/1.60/0.60/0.085 per cycle, capped by their deposit capacity; global
-water seasonality still applies. These opening stocks cover at least 350 cycles
-of the maximum 112-person starting upkeep for every species, before local
-production, regeneration or extra construction/research costs. They still need
-actual workers, safe routes and deliveries. Normal finite and renewable outer
-deposits, scarcity, competition and population accounting remain unchanged.
-
-Fairness guarantees cover opening districts and designated first expansion
-access, not equal total regional wealth, uninterrupted survival or equal win
-rates. Further expansion, neighbouring terrain and enemy decisions remain varied.
-
-
-### Remote protection and expansion
-
-Expansion sites and remote protection share an assessment of delivered threat
-reports, actual nearby soldiers and staffed towers, reinforcement travel, and
-route exposure. Routes are checked along each segment, not just at waypoints.
-Unseen enemy movement or stores cannot change these command decisions, and
-stale army reports expire so safe expansion can resume.
-
-When reserves and supplies permit, six to twelve existing soldiers can protect
-a remote worksite, escort settlers, or guard a young outpost. Their native
-census stays at their origin. The origin retains its home defence reserve and
-eighteen cycles of upkeep; the guard pays for its round trip and forty cycles
-on station before leaving. One or two rotations per civilisation are allowed
-within the existing army limit. Locally visible raiders can be intercepted;
-otherwise guards hold near their assigned asset and physically return when
-the work ends, their rotation expires, or their return supply is needed.
-Returning guards are not diverted into offensive campaigns.
-
-
-### Offensive commitment and production rallies
-
-Military totals include wounded, guards and deployed soldiers. The home inspector
-shows fit troops, recovery, a reserve justified by current reported/visible home
-threats, and the actual last departure versus its funded request. There is no
-fixed percentage or minimum military reserve. An unharassed campaign can send
-every fit soldier, including tower operators; injury, observed danger and paid
-logistics remain real constraints. Civilians are not converted to fill an army.
-
-New recruits assemble at a reachable local departure point facing the current
-frontline. Paid reinforcements leave in groups of at least eight, join the
-existing field force, and preserve their native IDs and census. The rally tracks
-the owned front or its reported objective and changes to home defence under
-credible harassment. Successful forces can exploit nearby known workers, locally
-visible production and weaker settlements while their actual supplies cover the
-leg and return. A healthy force can physically visit a funded held forward depot
-and resume its mission; this does not heal soldiers or remotely transfer stores.
+[HANDOFF.md](HANDOFF.md) describes current maintenance practice. Historical reports in `evidence/` and [DESKTOP-VALIDATION.md](DESKTOP-VALIDATION.md) are retained as dated evidence, not current release certification.

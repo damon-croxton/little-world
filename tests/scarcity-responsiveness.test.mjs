@@ -51,7 +51,7 @@ test('scarcer starts retain every survival resource and each dispatched scout is
   const s = createSimulation('first-light');
   assert.equal(s.nodes.length, 160);
   for (let i = 0; i < s.factions.length; i++) assert.deepEqual(new Set(s.nodes.slice(i * 4, i * 4 + 4).map(n => n.kind)), new Set(['food', 'water', 'energy', 'materials']));
-  assert.ok(s.nodes.every(n => n.maxAmount < 3200));
+  assert.ok(s.nodes.every(n => n.maxAmount < 3200 * s.config.resourceScale));
   stepSimulation(s, 220);
   const scouts = s.groups.filter(g => g.kind === 'scout'); assert.ok(scouts.length);
   assert.ok(scouts.every(g => g.size === 1 && g.initialSize === 1));

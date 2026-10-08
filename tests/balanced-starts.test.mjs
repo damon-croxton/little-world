@@ -1,4 +1,5 @@
 import test from 'node:test';
+import { DEFAULT_CONFIG } from '../src/config.js';
 import assert from 'node:assert/strict';
 import { generateWorld, terrainAt, heightAt, biomeAt, BALANCED_SUPPLIES, BALANCED_DISTRICT, worldTerrainSeed } from '../src/world.js';
 import { createSimulation, stepSimulation, planFounding } from '../src/sim/core.js';
@@ -14,7 +15,7 @@ for (const seed of ['first-light', 'river-fairness']) for (const civCount of [3,
   for (const district of world.districts) {
     const nodes=world.nodes.filter(n=>n.balancedDistrict===district.id); assert.equal(nodes.length,4);
     for(const node of nodes){
-      assert.equal(node.amount,BALANCED_SUPPLIES[district.kind][node.kind]);assert.equal(node.richness,.7);assert.equal(node.regeneration,BALANCED_SUPPLIES.regeneration[node.kind]);
+      assert.equal(node.amount,Math.round(BALANCED_SUPPLIES[district.kind][node.kind]*DEFAULT_CONFIG.resourceScale));assert.equal(node.richness,.7);assert.equal(node.regeneration,BALANCED_SUPPLIES.regeneration[node.kind]);
       const route=findPath(state,district,node,{radius:.35});assert.ok(route.reachable);assert.ok(Math.abs(route.length-16)<1e-6);
       assert.ok(isSegmentTraversable(state,district,node,{radius:.35}));
       for(let i=0;i<=16;i++){const t=i/16;assert.equal(terrainAt(district.x+(node.x-district.x)*t,district.z+(node.z-district.z)*t,world.terrainSeed).movement,1);}

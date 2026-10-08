@@ -459,3 +459,7 @@ button.world-label.selected::after { content: ''; position: absolute; bottom: -5
 .battle-mode-link { display:flex; justify-content:space-between; align-items:center; gap:6px; min-height:38px; margin-top:7px; padding:8px 10px; border:1px solid #92b8a84d; border-radius:4px; color:#eee0b7; background:#122b2bd9; font:10px system-ui,sans-serif; text-decoration:none; }
 .battle-mode-link:hover,.battle-mode-link:focus-visible { background:#294b46; outline:1px solid #d9c892; }
 .battle-mode-link > span { color:#bac8b3; font-size:9px; white-space:nowrap; }
+
+.match-settings { border-top: 1px solid var(--line); margin-top: 14px; padding-top: 12px; }
+.match-settings summary { cursor: pointer; font-size: 12px; color: var(--accent); }
+.match-settings > button { margin-top: 8px; font-size: 11px; }

@@ -68,3 +68,5 @@ ignored `screenshots/debug-report/benchmark.json`. Browser acceptance downloads
 and parses gzip and plain JSON, including a touch-emulated mobile save link,
 checks the exact build and unchanged simulation, and rejects export HTTP
 requests. These are cloud checks, not physical-device certification.
+
+Match settings use `world.config` (including `matchVersion`) and `matchSettingsSchema`, which records labels, defaults and bounds. Group snapshots include `finishPlan` and `returnSupplyPlan`; these describe the evaluated remaining-work and return budget, not a guarantee of capture.

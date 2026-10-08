@@ -176,10 +176,10 @@ test('a returned stronger-defender report can fund a separate reinforcement with
   assert.ok(countMilitary(availableMilitary(state, home)) >= home.defensePlan.reserve); conserved(state);
 });
 
-function captureFixture() {
+function destructionFixture() {
   const data = fixture(), { state, faction, home, target, other } = data;
   Object.assign(target, { x: -60, health: 5, population: 100, homePresent: 100 }); target.workers = 100;
-  Object.assign(other, { x: -20 }); report(faction, target, 0); report(faction, other, 10); faction.lastArmy = 400;
+  Object.assign(other, { x: -35 }); report(faction, target, 0); report(faction, other, 10); faction.lastArmy = 400;
   const army = party(state, home, 'campaign', 40, target);
   Object.assign(army, { targetId: target.id, targetX: target.x, targetZ: target.z, phase: 'engaging', speed: 2.9,
     supply: 60, siegeMode: true, siegeDays: 5, engagedDays: 5, initialGarrison: 0 });
@@ -187,20 +187,20 @@ function captureFixture() {
   return { ...data, army };
 }
 
-test('occupying an undefended settlement continues toward the next returned report with paid route supplies', () => {
-  const { state, faction, target, other, army } = captureFixture(), stock = { ...target.stock };
-  stepStrategy(state, .1);
-  assert.equal(target.occupiedBy, faction.id); assert.equal(army.phase, 'outbound'); assert.equal(army.targetId, other.id);
-  assert.ok(army.expectedTravelCycles > 0 && army.routeSupplyBudget > 18); assert.ok(army.supply >= 90);
-  assert.ok(RESOURCES.some(key => target.stock[key] < stock[key])); assert.equal(state.stats.campaignLegs, 1); conserved(state);
+test('destroying an exposed settlement preserves identities and follows a nearby report using existing supplies', () => {
+  const {state,faction,target,other,army}=destructionFixture(), stock={...target.stock}, population=target.population;
+  army.supply=100;stepStrategy(state,.1);
+  assert.equal(target.razed,true);assert.equal(target.health,0);assert.equal(target.occupiedBy,undefined);
+  assert.equal(target.factionId,state.factions[1].id);assert.equal(target.population,population);
+  assert.equal(army.phase,'outbound');assert.equal(army.targetId,other.id);assert.ok(army.supply<100);
+  assert.deepEqual(target.stock,stock,'destroyed stores secretly funded the attacker');conserved(state);
 });
 
-test('an exhausted captured depot cannot sustain another campaign leg', () => {
-  const { state, faction, target, army } = captureFixture();
-  for (const key of RESOURCES) target.stock[key] = 0; initializeLedger(state);
-  stepStrategy(state, .1);
-  assert.equal(target.occupiedBy, faction.id); assert.equal(army.phase, 'returning');
-  assert.ok(army.supply < 60); assert.equal(state.stats.campaignLegs || 0, 0); conserved(state);
+test('a force without spare follow-up supplies returns after destruction without refilling from enemy stores', () => {
+  const {state,target,army}=destructionFixture();
+  army.supply=35;stepStrategy(state,.1);
+  assert.equal(target.razed,true);assert.equal(target.occupiedBy,undefined);assert.equal(army.phase,'returning');
+  assert.ok(army.supply<35);assert.equal(state.stats.captures||0,0);conserved(state);
 });
 
 function advance(state, cycles = .1) {
@@ -209,7 +209,7 @@ function advance(state, cycles = .1) {
   stepStrategy(state, cycles);
 }
 
-test('a supplied campaign kills an incidental defender, resumes its march, and occupies the undefended objective', () => {
+test('a supplied campaign kills an incidental defender, resumes its march, and destroys the undefended objective', () => {
   const { state, faction, home, target } = fixture(); faction.lastArmy = 400;
   Object.assign(target, { x: -40, population: 100, homePresent: 100 }); initializeMilitary(target, { infantry: 1, ranged: 0 });
   const army = party(state, home, 'sustained-campaign', 60, { x: -68, z: -120 }, { infantry: 40, ranged: 20 });
@@ -227,14 +227,14 @@ test('a supplied campaign kills an incidental defender, resumes its march, and o
     projectile: true, rays: [{ from: { x: archer.x, z: archer.z, height: .6 }, to: { x: wounded.x, z: wounded.z, height: .45 }, targetSoldierId: wounded.id }],
     aim: { x: wounded.x, z: wounded.z }, impactTime: state.time + .1 }];
   initializeLedger(state); let resumedMarch = false, lostDefender = false;
-  for (let pulse = 0; pulse < 500 && target.occupiedBy !== faction.id; pulse++) {
+  for (let pulse = 0; pulse < 500 && !target.razed; pulse++) {
     advance(state);
     if (!defender.size || defender.finished) lostDefender = true;
     if (lostDefender && army.phase === 'outbound' && army.targetId === target.id) resumedMarch = true;
-    if (target.occupiedBy !== faction.id) assert.ok(!['returning', 'retreating'].includes(army.phase), `campaign abandoned its live objective: ${army.reason}`);
+    if (!target.razed) assert.ok(!['returning', 'retreating'].includes(army.phase), `campaign abandoned its live objective: ${army.reason}`);
   }
   assert.ok(lostDefender, 'fixture never killed its incidental defender'); assert.ok(resumedMarch, 'campaign never resumed its reported march');
-  assert.equal(target.occupiedBy, faction.id); assert.ok(army.siegeDays >= 6); conserved(state);
+  assert.equal(target.razed, true); assert.ok(target.health === 0); conserved(state);
 });
 
 test('a nearby supplied campaign continues below 45 percent while a depleted force preserves its real return reserve', () => {
@@ -332,8 +332,8 @@ test('a tactical engagement still preserves the paid supply needed for the physi
   conserved(state);
 });
 
-test('an empty settlement cannot be pressured or captured by a route centre whose soldiers are still elsewhere', () => {
-  const { state, faction, home, target, army } = captureFixture();
+test('an empty settlement cannot be pressured or destroyed by a route centre whose soldiers are still elsewhere', () => {
+  const { state, faction, home, target, army } = destructionFixture();
   placeSoldiers(state, army, home);
   const health = target.health, stock = { ...target.stock }; initializeLedger(state);
   stepStrategy(state, .1);
@@ -342,15 +342,15 @@ test('an empty settlement cannot be pressured or captured by a route centre whos
   conserved(state);
 });
 
-test('a second campaign cannot raid or damage a settlement captured earlier in the same pulse', () => {
-  const { state, faction, home, target, army } = captureFixture();
+test('a second campaign cannot raid or damage a settlement destroyed earlier in the same pulse', () => {
+  const { state, faction, home, target, army } = destructionFixture();
   const second = party(state, home, 'second-campaign', 40, target);
   Object.assign(second, { targetId: target.id, targetX: target.x, targetZ: target.z, phase: 'engaging', speed: 2.9,
     supply: 60, siegeMode: true, siegeDays: 5, engagedDays: 5, initialGarrison: 0 }); initializeLedger(state);
   stepStrategy(state, .1);
-  assert.equal(target.occupiedBy, faction.id); assert.equal(army.siegeDays, 0, 'first army did not continue its next leg');
-  assert.equal(second.siegeDays, 5, 'second army pressed its newly friendly target'); assert.equal(second.engagedDays, 5);
-  assert.equal(state.stats.captures, 1); conserved(state);
+  assert.equal(target.razed,true); assert.equal(target.health,0); assert.equal(target.occupiedBy,undefined);
+  assert.equal(second.siegeDays, 5, 'second army pressed a destroyed target'); assert.equal(second.engagedDays, 5);
+  assert.equal(state.stats.settlementsDestroyed, 1); conserved(state);
 });
 
 
@@ -394,4 +394,59 @@ test('new recruits stage at a purposeful rally and depart together as paid front
   const rest=add(4);Object.assign(state,{tick:432,step:4320,time:432});stepStrategy(state,0);
   const reinforcement=ownArmies(state,faction).find(g=>g.id!==main.id);assert.ok(reinforcement);assert.equal(reinforcement.size,8);assert.equal(reinforcement.reinforcement,true);
   assert.deepEqual(new Set(reinforcement.soldierIds),new Set([...first,...rest].map(body=>body.id)));assert.equal(home.population,400);conserved(state);
+});
+
+
+test('a supplied twelve-soldier force destroys an exposed base without an occupation timer; emergency supply still recalls it',()=>{
+  for(const supply of [100,18]){
+    const {state,faction,home,target}=fixture();faction.lastArmy=400;
+    Object.assign(home,{x:target.x-10,z:target.z});
+    Object.assign(target,{population:50,homePresent:50,health:30});
+    const army=party(state,home,'finish-exposed',12,target);
+    Object.assign(army,{targetId:target.id,targetX:target.x,targetZ:target.z,missionTargetX:target.x,missionTargetZ:target.z,phase:'engaging',speed:2.9,supply});
+    initializeLedger(state);
+    for(let pulse=0;pulse<240&&!target.razed&&!['returning','retreating'].includes(army.phase);pulse++)advance(state);
+    if(supply===100){assert.equal(army.finishPlan?.accepted,true);assert.equal(target.razed,true,JSON.stringify({health:target.health,phase:army.phase,reason:army.reason,plan:army.finishPlan}));assert.equal(target.occupiedBy,undefined);assert.ok(army.finishPlan.estimatedCycles>2);}
+    else {assert.equal(target.occupiedBy,undefined);assert.equal(army.phase,'retreating');assert.match(army.reason,/suppl|reserve/i);}
+    conserved(state);
+  }
+});
+
+test('destruction clears funded structures without converting surviving civilians or field soldiers',async()=>{
+  const {stepSimulation}=await import('../src/sim/core.js');
+  const {state,faction,target,army}=destructionFixture();
+  target.buildings=[{id:'doomed-farm',kind:'farm',x:target.x,z:target.z,progress:1,hp:160,maxHp:160}];
+  const native=target.factionId,population=target.population;
+  stepStrategy(state,.1);
+  assert.equal(target.razed,true);assert.equal(target.health,0);assert.equal(target.occupiedBy,undefined);
+  assert.equal(target.buildings[0].hp,0);assert.equal(target.buildings[0].destroyed,true);
+  assert.equal(target.population,population);assert.equal(target.factionId,native);assert.equal(state.stats.captures||0,0);
+  assert.equal(army.factionId,faction.id);assert.equal(target.trainingQueue.length,0);
+  stepSimulation(state,10);
+  assert.equal(target.status,'camp');assert.equal(target.factionId,native);assert.equal(target.occupiedBy,undefined);
+  assert.ok(target.population<=population);assert.equal(state.stats.settlementsDestroyed,1);conserved(state);
+});
+
+test('three supplied soldiers damage a nearly destroyed outpost immediately, without a capture wait',()=>{
+  const {state,faction,home,target}=fixture();faction.lastArmy=400;
+  Object.assign(home,{x:target.x-10,z:target.z});Object.assign(target,{population:5,homePresent:5,health:.1});
+  const army=party(state,home,'small-destruction',3,target);
+  Object.assign(army,{targetId:target.id,targetX:target.x,targetZ:target.z,phase:'engaging',speed:2.9});
+  initializeLedger(state);stepStrategy(state,.1);
+  assert.equal(target.razed,true);assert.equal(army.siegeDays,1);assert.equal(target.population,5);assert.equal(target.occupiedBy,undefined);conserved(state);
+});
+
+test('funded settlers can reuse a razed plot without inheriting its displaced native population',async()=>{
+  const {stepSimulation}=await import('../src/sim/core.js');
+  const {state,faction,home,target}=fixture();faction.lastArmy=400;
+  Object.assign(target,{status:'camp',health:12,razed:true});
+  const original=home.population,native=target.population,cargo={food:20,water:20,energy:40,materials:180};
+  for(const [key,value] of Object.entries(cargo))home.stock[key]-=value;
+  state.groups.push({id:'rebuilding-party',kind:'colonist',originId:home.id,factionId:faction.id,size:24,x:target.x,z:target.z,prevX:target.x,prevZ:target.z,
+    targetX:target.x,targetZ:target.z,targetId:target.id,phase:'outbound',speed:2.25,supply:100,morale:88,provisionCycles:100,createdTick:400,carrying:cargo,observations:[]});
+  initializeLedger(state);stepSimulation(state,1);
+  const founded=state.settlements.find(h=>h.id!==target.id&&h.x===target.x&&h.z===target.z);
+  assert.ok(founded);assert.equal(founded.factionId,faction.id);assert.equal(founded.population,24);
+  assert.equal(home.population,original-24);assert.equal(target.population,native);assert.equal(target.factionId,state.factions[1].id);
+  assert.equal(target.occupiedBy,undefined);assert.ok(!state.groups.some(g=>g.id==='rebuilding-party'));conserved(state);
 });

@@ -15,6 +15,8 @@ export async function debugDownloadSmoke({ page, check, config, expectedCommit }
     const bytes = await readFile(target), json = file.suggestedFilename().endsWith('.gz') ? gunzipSync(bytes) : bytes;
     const report = JSON.parse(json.toString());
     assert.equal(report.format, 'littleworld-diagnostic'); assert.equal(report.schemaVersion, 1);
+    assert.deepEqual(report.world.config, await current.evaluate(() => littleworld.state.config));
+    assert.equal(report.matchSettingsSchema.version, 1); assert.equal(Object.keys(report.matchSettingsSchema.controls).length, 4);
     assert.equal(report.build.commit, expectedCommit); assert.equal(report.containsHiddenWorldInformation, true);
     assert.ok(report.snapshot.soldiers.length > 0); assert.ok(json.length <= 4 * 1024 * 1024);
     assert.equal(await current.evaluate(() => JSON.stringify(littleworld.state)), before);
@@ -25,6 +27,21 @@ export async function debugDownloadSmoke({ page, check, config, expectedCommit }
   }
   await check('Desktop debug button downloads a bounded, exact-build diagnostic without altering the world or uploading data', async () => {
     await page.locator('[data-action="settings"]').click();
+    await page.locator('.match-settings summary').click();
+    const slider = page.locator('[data-match-setting="resourceScale"]');
+    const prior = await page.evaluate(() => littleworld.state.config.resourceScale);
+    await slider.focus(); await slider.press('Home');
+    for (let step=0;step<18;step++) await slider.press('ArrowRight');
+    assert.equal(await page.evaluate(() => littleworld.state.config.resourceScale), prior);
+    await page.locator('.seed-form button[type="submit"]').click();
+    assert.equal(await page.evaluate(() => littleworld.state.config.resourceScale), 1.4);
+    assert.equal(await page.evaluate(() => littleworld.state.tick), 0);
+    await page.locator('[data-action="settings"]').click();
+    if (!await page.locator('.match-settings').evaluate(el => el.open)) await page.locator('.match-settings summary').click();
+    await page.locator('[data-action="balance-defaults"]').click();
+    assert.equal(await slider.inputValue(), '1.25');
+    assert.equal(await page.evaluate(() => littleworld.state.config.resourceScale), 1.4);
+    await page.screenshot({ path: output(config, 'match-settings.png') });
     const requests = [], listen = request => { if (/^https?:/.test(request.url())) requests.push(request.url()); };
     page.on('request', listen);
     try { const result = await download(page, 'debug-desktop'); assert.deepEqual(requests, []); console.log(JSON.stringify({ debugDownload: { ...result, source: 'desktop', exportHttpRequests: 0 } })); return result; }

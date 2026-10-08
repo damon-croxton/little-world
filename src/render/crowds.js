@@ -22,6 +22,7 @@ function visibleSoldiers(state) { return Array.isArray(state.soldiers) ? state.s
 export function createCrowds(THREE, scene) {
   const root = new THREE.Group(); root.name = 'Population - individuals and counted worker crews'; scene.add(root);
   const workerBadges = createWorkerBadges(THREE, root);
+  const armyBadges = createWorkerBadges(THREE, root, { kind: 'army' });
   const templates = new Map(), pools = new Map(), homeLayouts = new Map(), groupViews = new Map(), heights = new Map();
   const soldierViews = new Map();
   const selectionGeometry = new THREE.RingGeometry(.43, .59, 24), selectionMaterial = new THREE.MeshBasicMaterial({ color: '#fff0b8', transparent: true, opacity: .8, depthWrite: false, side: THREE.DoubleSide });
@@ -381,6 +382,14 @@ export function createCrowds(THREE, scene) {
       // A broad party proxy would intercept the exact body's hit. The soldier
       // inspector retains navigation back to its party and civilisation.
       for (let i = 0; i < roster.length; i++) renderSoldier(roster[i], faction, camera, alpha, selectedId, i < 3 || g.id === selectedId && i < 6 || roster[i].role !== roster[i - 1]?.role);
+      if (roster.length >= 3) {
+        // Reuse this update's fog-filtered living roster; no second world scan.
+        let x = 0, z = 0;
+        for (const body of roster) { x += mix(finite(body.prevX, body.x), body.x, alpha); z += mix(finite(body.prevZ, body.z), body.z, alpha); }
+        x /= roster.length; z /= roster.length;
+        const y = ground(x, z) + 1.7;
+        if (!hasCamera || frustum.containsPoint(point.set(x, y, z))) armyBadges.add({ groupId: g.id, size: roster.length, x, y, z, lod: 'detailed', selected: g.id === selectedId || roster.some(body => body.id === selectedId) });
+      }
       return;
     }
     const size = countOf(g.size); if (!size) return;
@@ -436,7 +445,7 @@ export function createCrowds(THREE, scene) {
     let soldiers = 2166136261;
     for (const person of roster) {
       soldiers = Math.imul(soldiers ^ hash(`${person.id}:${person.groupId}:${person.originId}:${person.role}:${person.species}:${person.commandFactionId}:${person.status}:${person.alive}:${person.positioned}`), 16777619);
-      for (const value of [person.x, person.z, person.prevX, person.prevZ, person.yaw, person.prevYaw, person.elevation, person.lastAttackTime, person.lastHitTime]) soldiers = Math.imul(soldiers ^ Math.round(finite(value) * 1e6), 16777619);
+      for (const value of [person.hp, person.x, person.z, person.prevX, person.prevZ, person.yaw, person.prevYaw, person.elevation, person.lastAttackTime, person.lastHitTime]) soldiers = Math.imul(soldiers ^ Math.round(finite(value) * 1e6), 16777619);
     }
     return soldiers + ';' + state.factions.map(f => `${f.id}:${f.species}:${f.color}:${f.defeatedBy}`).join('|') + ';' +
       state.settlements.map(s => `${s.id}:${s.factionId}:${s.occupiedBy}:${s.controllerId}:${s.x}:${s.z}:${s.radius}:${s.population}:${s.soldiers}:${s.military?.infantry}:${s.military?.ranged}:${s.combat?.active}:${s.combat?.lastHitTime}:${s.assigned?.researchers}:${s.assigned?.construction}:${s.assigned?.infrastructure}:` + (s.buildings || []).map(b => `${b.id}:${b.kind}:${b.x}:${b.z}:${b.progress}`).join(',')).join('|') + ';' +
@@ -454,7 +463,7 @@ export function createCrowds(THREE, scene) {
     // interpolation or seed invalidates it; active motion is never throttled.
     if (lastFrame && lastState === state && lastWorld === world && seed === (state.terrainSeed || state.seed) && lastFrame.step === (state.step ?? state.tick) && lastFrame.time === time && lastFrame.alpha === alpha && lastFrame.selectedId === selectedId && lastFrame.camera === camera && lastFrame.digest === digest && lastFrame.quality === quality && lastFrame.badgeViewport === badgeViewport && (!camera || priorClip.equals(clip))) { diagnostics.reusedFrame = true; return; }
     lastFrame = { step: state.step ?? state.tick, time, alpha, selectedId, camera, digest, quality, badgeViewport }; priorClip.copy(clip);
-    timeUniform.value = time; samples = []; pickables = []; workerBadges.begin(camera); soldierSelection.visible = false; soldierFrame++;
+    timeUniform.value = time; samples = []; pickables = []; workerBadges.begin(camera); armyBadges.setViewport(scene.userData.crowdViewport); armyBadges.begin(camera); soldierSelection.visible = false; soldierFrame++;
     // Observer snapshots change every pulse, but their terrain and layouts
     // belong to the same world. The opaque token also distinguishes a new run
     // with the same seed; raw simulation callers retain object-identity resets.
@@ -467,7 +476,9 @@ export function createCrowds(THREE, scene) {
     factionIndex = factions;
     const soldiersByHome = new Map(), soldiersByGroup = new Map(), orphanSoldiers = [];
     const homeIds = new Set(state.settlements.map(home => home.id)), groupIds = new Set(state.groups.filter(group => !group.finished).map(group => group.id));
+    const uniqueSoldiers = new Set();
     for (const person of suppliedSoldiers) {
+      if (uniqueSoldiers.has(person.id)) continue; uniqueSoldiers.add(person.id);
       if (person.alive === false || person.status === 'dead' || person.status === 'demobilized' || person.hp <= 0) continue;
       const index = person.groupId ? soldiersByGroup : soldiersByHome, id = person.groupId || person.originId;
       if (person.groupId ? !groupIds.has(id) : !homeIds.has(id)) { orphanSoldiers.push(person); continue; }
@@ -491,7 +502,11 @@ export function createCrowds(THREE, scene) {
     for (const person of orphanSoldiers) { diagnostics.totalPopulation++; if(person.groupId){diagnostics.groupIndividuals++;diagnostics.armyIndividuals++;}else diagnostics.homePresentIndividuals++; renderSoldier(person, null, camera, alpha, selectedId, samples.length < 3); }
     for (const [id, body] of soldierViews) if (body.seenFrame !== soldierFrame) soldierViews.delete(id);
     for (const [id, view] of groupViews) if (!liveGroups.has(id)) { view.proxy.removeFromParent(); groupViews.delete(id); }
-    const badges = workerBadges.finish();
+    const occupiedLabels = new Map(), armyLabels = armyBadges.finish(occupiedLabels);
+    diagnostics.armyBadgeCount = armyLabels.count; diagnostics.armyBadgeDrawCalls = armyLabels.drawCalls;
+    diagnostics.drawCallsEstimate += armyLabels.drawCalls; diagnostics.triangleEstimate += armyLabels.count * 2;
+    if (armyLabels.count) pickables.push(armyBadges.mesh);
+    const badges = workerBadges.finish(occupiedLabels);
     diagnostics.workerBadgeCount = badges.count; diagnostics.workerBadgeCapacity = badges.capacity; diagnostics.workerBadgeDrawCalls = badges.drawCalls;
     diagnostics.workerBadgeLodCulled = badges.lodCulled; diagnostics.workerBadgeOverlapCulled = badges.overlapCulled;
     diagnostics.drawCallsEstimate += badges.drawCalls; diagnostics.triangleEstimate += badges.count * 2;
@@ -519,8 +534,8 @@ export function createCrowds(THREE, scene) {
   function dispose() {
     if (disposed) return; disposed = true;
     for (const pool of pools.values()) { pool.geometry.dispose(); pool.mesh.dispose(); }
-    for (const geometry of templates.values()) geometry.dispose(); material.dispose(); depthMaterial.dispose(); pickGeometry.dispose(); pickMaterial.dispose(); selectionGeometry.dispose(); selectionMaterial.dispose(); workerBadges.dispose(); root.removeFromParent();
+    for (const geometry of templates.values()) geometry.dispose(); material.dispose(); depthMaterial.dispose(); pickGeometry.dispose(); pickMaterial.dispose(); selectionGeometry.dispose(); selectionMaterial.dispose(); workerBadges.dispose(); armyBadges.dispose(); root.removeFromParent();
     pools.clear(); templates.clear(); groupViews.clear(); homeLayouts.clear(); soldierViews.clear(); heights.clear(); pickables = []; samples = [];
   }
-  return { update, getPickables: () => pickables, resolvePick: hit => workerBadges.resolvePick(hit) || (hit?.object?.visible && Number.isInteger(hit.instanceId) && hit.instanceId >= 0 && hit.instanceId < hit.object.count ? hit.object.userData.crowdSelectionIds?.[hit.instanceId] : null), dispose, diagnostics, getMotionSamples: () => samples.map(s => ({ ...s })) };
+  return { update, getPickables: () => pickables, getCountBadges: () => ({ workers: workerBadges.getRecords(), armies: armyBadges.getRecords() }), resolvePick: hit => workerBadges.resolvePick(hit) || armyBadges.resolvePick(hit) || (hit?.object?.visible && Number.isInteger(hit.instanceId) && hit.instanceId >= 0 && hit.instanceId < hit.object.count ? hit.object.userData.crowdSelectionIds?.[hit.instanceId] : null), dispose, diagnostics, getMotionSamples: () => samples.map(s => ({ ...s })) };
 }

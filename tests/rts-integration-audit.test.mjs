@@ -332,14 +332,15 @@ test('an attacking army progresses a siege against the effective occupier of a d
   // This isolated siege starts with extended field rations for its distant return.
   Object.assign(attacker, { targetId: hb.id, targetX: hb.x, targetZ: hb.z, phase: 'engaging', campaign: true, provisionFactor: 2 });
   initializeLedger(state);
-  for (let i = 0; i < 100 && settlementController(state, hb) !== third.id; i++) {
+  for (let i = 0; i < 220 && !hb.razed; i++) {
     state.step++; state.tick = Math.floor(state.step / 10); state.time = state.step / 10;
     for (const f of state.factions) { f.lastScout = state.tick; f.lastArmy = state.tick; }
     stepStrategy(state, .1);
   }
   assert.ok(attacker.engagedDays > 0, 'occupied target caused an endless return/reacquire loop');
-  assert.equal(settlementController(state, hb), third.id, 'undefended occupied settlement never changed controller after a real siege');
-  assert.equal(hb.factionId, b.id, 'second occupation changed native identity');
+  assert.equal(hb.razed, true, 'undefended legacy occupied settlement never reached destruction');
+  assert.equal(settlementController(state, hb), a.id, 'destruction transferred ownership');
+  assert.equal(hb.factionId, b.id, 'destruction changed native identity');
   conserved(state);
 });
 

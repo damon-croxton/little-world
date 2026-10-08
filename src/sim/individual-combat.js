@@ -212,9 +212,9 @@ export function stepIndividualCombat(s, contexts, dt, adapter) {
       if (adapter.attackStructure(p, context.objective)) { body.attackReadyAt = now(s) + spec.cooldown; body.lastAttackTime = now(s); metrics.attacks++; }
     } else if (!target && !body.withdrawing && !['retreating', 'returning'].includes(context.entity.phase) && context.objective?.kind === 'worker') {
       if (adapter.attackWorker?.(p, context.objective)) { body.attackReadyAt = now(s) + spec.cooldown; body.lastAttackTime = now(s); metrics.attacks++; }
-    } else if (!target && !body.withdrawing && context.entity.strategicHold && context.workerContacts?.length) {
-      const worker = context.workerContacts.filter(worker => distance(body, worker) <= spec.range).sort((a, b) => distance(body, a) - distance(body, b) || a.id.localeCompare(b.id))[0];
-      if (worker && adapter.attackWorker?.(p, worker)) { body.attackReadyAt = now(s) + spec.cooldown; body.lastAttackTime = now(s); metrics.attacks++; }
+    } else if (!target && !body.withdrawing && context.entity.strategicHold && context.economicContacts?.length) {
+      const contact = context.economicContacts.filter(target => distance(body, target.kind === 'structure' ? adapter.structureContact(target, body) : target) <= spec.range).sort((a, b) => distance(body, a) - distance(body, b) || a.id.localeCompare(b.id))[0];
+      if (contact && (contact.kind === 'structure' ? adapter.attackStructure?.(p, contact) : adapter.attackWorker?.(p, contact))) { body.attackReadyAt = now(s) + spec.cooldown; body.lastAttackTime = now(s); metrics.attacks++; }
     }
     body.cooldown = Math.max(0, (body.attackReadyAt ?? 0) - now(s));
   }

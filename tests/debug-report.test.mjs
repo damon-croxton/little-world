@@ -19,6 +19,7 @@ test('diagnostic snapshot is coherent, roundtrips gzip, includes native and actu
   const r = d.capture(s, view, build), encoded = await encodeDebugReport(r);
   const bytes = Buffer.from(await encoded.blob.arrayBuffer());
   const parsed = JSON.parse(encoded.encoding === 'gzip' ? gunzipSync(bytes) : bytes.toString());
+  assert.deepEqual(r.world.config, s.config); assert.equal(r.matchSettingsSchema.version, 1); assert.equal(Object.keys(r.matchSettingsSchema.controls).length, 4);
   assert.deepEqual(parsed, r); assert.equal(r.schemaVersion, 1); assert.equal(r.containsHiddenWorldInformation, true);
   assert.equal(r.snapshot.settlements[0].factionId, 'f0'); assert.equal(r.snapshot.settlements[0].controllerId, 'f1');
   assert.deepEqual(r.snapshot.settlements[0].assigned,home.assigned);assert.deepEqual(r.snapshot.settlements[0].missingResources,['water','food']);

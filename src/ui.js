@@ -1,6 +1,6 @@
 import { factionController, settlementController } from './sim/control.js';
 import { MILITARY_BUILDINGS, MILITARY_UNITS } from './sim/military.js';
-import { normalizeConfig, BIOME_LABELS, MIN_CIV_COUNT, MAX_CIV_COUNT } from './config.js';
+import { normalizeConfig, MATCH_SETTINGS, BIOME_LABELS, MIN_CIV_COUNT, MAX_CIV_COUNT } from './config.js';
 import { observedBuilding, observedGroupController, observedSoldier } from './selection.js';
 import { soldierInspectionMarkup, soldierLabel } from './soldier-inspection.js';
 import { strengthRows } from './strength-chart.js';
@@ -76,7 +76,7 @@ export function createUI(root, actions) {
       </section>
 
       <section id="atlas-settings" class="atlas-settings glass" hidden aria-label="World settings">
-        <form class="seed-form"><label class="eyebrow" for="atlas-seed">Grow a different world</label><div class="seed-input-row"><input id="atlas-seed" name="seed" type="text" value="littleworld" maxlength="64" autocomplete="off" spellcheck="false" aria-label="World seed"><button type="submit" title="Start a new world with this seed">${icon('seed')}<span>Reset</span></button></div><div class="civ-setting"><label for="atlas-civs">Starting civilisations <output for="atlas-civs" data-slot="civ-count">4</output></label><input id="atlas-civs" name="civs" type="range" min="${MIN_CIV_COUNT}" max="${MAX_CIV_COUNT}" step="1" value="4" aria-label="Starting civilisations"><p>3–5 is a good starting range. Four is the default.</p></div><div class="perspective-setting"><label for="atlas-biome">Whole-world biome</label><select id="atlas-biome" aria-label="Whole-world biome">${Object.entries(BIOME_LABELS).map(([value,label])=>`<option value="${value}">${label}</option>`).join('')}</select><p data-slot="world-biome"></p></div><p>Seed, civilisation count and biome repeat the same world. Reset applies all three at cycle zero.</p></form><div class="perspective-setting"><label for="atlas-perspective">Observer perspective</label><select id="atlas-perspective" aria-label="Observer perspective"><option value="omniscient">Whole world</option></select><p data-slot="perspective-note">All societies still act from their own limited knowledge.</p></div>
+        <form class="seed-form"><label class="eyebrow" for="atlas-seed">Grow a different world</label><div class="seed-input-row"><input id="atlas-seed" name="seed" type="text" value="littleworld" maxlength="64" autocomplete="off" spellcheck="false" aria-label="World seed"><button type="submit" title="Start a new world with this seed">${icon('seed')}<span>Start match</span></button></div><div class="civ-setting"><label for="atlas-civs">Starting civilisations <output for="atlas-civs" data-slot="civ-count">4</output></label><input id="atlas-civs" name="civs" type="range" min="${MIN_CIV_COUNT}" max="${MAX_CIV_COUNT}" step="1" value="4" aria-label="Starting civilisations"><p>3–5 is a good starting range. Four is the default.</p></div><div class="perspective-setting"><label for="atlas-biome">Whole-world biome</label><select id="atlas-biome" aria-label="Whole-world biome">${Object.entries(BIOME_LABELS).map(([value,label])=>`<option value="${value}">${label}</option>`).join('')}</select><p data-slot="world-biome"></p></div><details class="match-settings"><summary>Match balance</summary><p>Changes apply when you start a new match. The same seed and all settings repeat the world.</p>${Object.entries(MATCH_SETTINGS).map(([key, spec]) => `<div class="civ-setting"><label for="atlas-${key}">${spec.label}<output for="atlas-${key}" data-slot="setting-${key}">${num(spec.default * 100)}%</output></label><input id="atlas-${key}" data-match-setting="${key}" type="range" min="${spec.min}" max="${spec.max}" step="${spec.step}" value="${spec.default}" aria-describedby="help-${key}"><p id="help-${key}">${spec.help}</p></div>`).join('')}<button type="button" data-action="balance-defaults">Restore balance defaults</button></details><p>Start match applies the seed, civilisation count, biome and balance settings at cycle zero.</p></form><div class="perspective-setting"><label for="atlas-perspective">Observer perspective</label><select id="atlas-perspective" aria-label="Observer perspective"><option value="omniscient">Whole world</option></select><p data-slot="perspective-note">All societies still act from their own limited knowledge.</p></div>
         <div class="quality-setting"><label for="atlas-quality">Render quality</label><select id="atlas-quality" aria-label="Render quality"><option value="high">High</option><option value="low">Performance</option></select></div>
         <div class="debug-report-control"><button data-action="download-debug">Download debug report</button><p>Recent decisions and a full-world snapshot, including hidden game information. Kept in this tab; nothing is uploaded. This is not a saved game or replay.</p><p data-slot="debug-status" role="status" aria-live="polite"></p><a data-slot="debug-download" hidden>Save prepared report</a><button data-action="share-debug" hidden>Share or save report…</button></div>
         <div class="render-accounting" data-slot="render-accounting"></div>
@@ -133,6 +133,8 @@ export function createUI(root, actions) {
   const qualityInput = root.querySelector('#atlas-quality');
   const civInput = root.querySelector('#atlas-civs');
   const biomeInput = root.querySelector('#atlas-biome');
+  const matchInputs = Object.fromEntries([...root.querySelectorAll('[data-match-setting]')].map(input => [input.dataset.matchSetting, input]));
+  function showMatchValues() { for (const [key, input] of Object.entries(matchInputs)) slots[`setting-${key}`].textContent = `${num(Number(input.value) * 100)}%`; }
   const perspectiveInput = root.querySelector('#atlas-perspective');
   const followButton = slots['selection-actions'].querySelector('button');
   const followLabel = followButton.querySelector('span');
@@ -200,6 +202,7 @@ export function createUI(root, actions) {
       case 'inspect-faction': actions.inspectFaction?.(value); break;
       case 'select-resource': (actions.selectResource || actions.select)?.(value); break;
       case 'develop': developWorld(); break;
+      case 'balance-defaults': for (const [key, input] of Object.entries(matchInputs)) input.value = String(MATCH_SETTINGS[key].default); settingsDirty = true; showMatchValues(); break;
       case 'download-debug': actions.downloadDebugReport?.(); break;
       case 'share-debug': actions.shareDebugReport?.(); break;
       case 'diagnostics': settings.hidden = false; guide.hidden = true; setMobilePanel(null); root.querySelector('.settings-toggle').setAttribute('aria-expanded', 'true'); break;
@@ -257,7 +260,7 @@ export function createUI(root, actions) {
     if (!event.target.matches('.seed-form')) return;
     event.preventDefault();
     const seed = seedInput.value.trim() || 'littleworld';
-    const config = normalizeConfig({ civCount: civInput.value, biome: biomeInput.value });
+    const config = normalizeConfig({ civCount: civInput.value, biome: biomeInput.value, ...Object.fromEntries(Object.entries(matchInputs).map(([key, input]) => [key, input.value])) });
     settingsDirty = false;
     actions.reset?.(seed, config);
     activeTab = 'life';
@@ -268,12 +271,13 @@ export function createUI(root, actions) {
   }
 
   function onChange(event) {
-    if (event.target === biomeInput) settingsDirty = true;
+    if (event.target === biomeInput || event.target.dataset.matchSetting) { settingsDirty = true; showMatchValues(); }
     if (event.target === qualityInput) actions.setQuality?.(qualityInput.value);
     if (event.target === perspectiveInput) actions.setPerspective?.(perspectiveInput.value);
   }
   function onInput(event) {
-    if (event.target === seedInput || event.target === civInput || event.target === biomeInput) settingsDirty = true;
+    if (event.target === seedInput || event.target === civInput || event.target === biomeInput || event.target.dataset.matchSetting) settingsDirty = true;
+    if (event.target.dataset.matchSetting) showMatchValues();
     if (event.target === civInput) slots['civ-count'].textContent = normalizeConfig({ civCount: civInput.value }).civCount;
   }
   root.addEventListener('click', onClick);
@@ -619,13 +623,15 @@ export function createUI(root, actions) {
     renderSelection(current);
     renderEvents(current.faction);
     updateDiagnostics();
-    const identity = `${state.seed}:${state.config?.civCount ?? state.factions.length}:${state.config?.biome}`;
+    const identity = `${state.seed}:${JSON.stringify(state.config)}`;
     if (worldIdentity !== identity || newWorld) { worldIdentity = identity; settingsDirty = false; }
     if (!settingsDirty) {
       seedInput.value = String(state.seed || 'littleworld');
       civInput.value = String(normalizeConfig(state.config || { civCount: state.factions.length }).civCount);
       slots['civ-count'].textContent = civInput.value;
       biomeInput.value = normalizeConfig(state.config).biome;
+      for (const [key, input] of Object.entries(matchInputs)) input.value = String(normalizeConfig(state.config)[key]);
+      showMatchValues();
     }
     slots['world-biome'].textContent = `Current world: ${BIOME_LABELS[state.terrain?.biome] || 'Grassland'}. One biome throughout; starter districts retain equal fertility and supplies.`;
     const perspectiveOptions = view.perspectiveOptions || state.factions;
@@ -649,7 +655,7 @@ export function createUI(root, actions) {
     if (!result.hidden) {
       const winner = (view.perspectiveOptions || state.factions).find(f => f.id === outcome.winnerId);
       const cycles = n(outcome.wonAt ?? outcome.tick), seconds = Math.round(cycles / 2);
-      setHTML(result, `<span class="eyebrow">Domination achieved</span><h2>${esc(winner?.name || 'One civilisation')} prevails.</h2><p>The other societies have lost their sovereignty. Surviving inhabitants stay in their occupied settlements.</p><div class="outcome-metrics"><span>Cycle <strong>${num(cycles)}</strong></span><span>At 2x <strong>${Math.floor(seconds / 60)}m ${seconds % 60}s</strong></span>${view.victorySummary ? `<span>Captures <strong>${num(view.victorySummary.captures)}</strong></span>` : ''}</div><p class="muted-note">Seed: ${esc(state.seed)} · ${state.config?.civCount || (view.perspectiveOptions || state.factions).length} starting civilisations. Timing is simulation playback, not a device performance guarantee.</p><div class="outcome-actions"><button data-action="keep-watching">Keep watching</button><button data-action="replay">Replay seed</button><button data-action="new-world">New world</button></div>`);
+      setHTML(result, `<span class="eyebrow">Domination achieved</span><h2>${esc(winner?.name || 'One civilisation')} prevails.</h2><p>The other societies have lost their active settlements and viable armies. Displaced survivors keep their native identity.</p><div class="outcome-metrics"><span>Cycle <strong>${num(cycles)}</strong></span><span>At 2x <strong>${Math.floor(seconds / 60)}m ${seconds % 60}s</strong></span>${view.victorySummary ? `<span>Destroyed bases <strong>${num(view.victorySummary.settlementsDestroyed || 0)}</strong></span>` : ''}</div><p class="muted-note">Seed: ${esc(state.seed)} · ${state.config?.civCount || (view.perspectiveOptions || state.factions).length} starting civilisations. Timing is simulation playback, not a device performance guarantee.</p><div class="outcome-actions"><button data-action="keep-watching">Keep watching</button><button data-action="replay">Replay seed</button><button data-action="new-world">New world</button></div>`);
     }
     root.classList.toggle('cinematic-active', !!view.cinematic);
     root.classList.toggle('has-navigation', !!view.userNavigated);

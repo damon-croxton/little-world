@@ -208,3 +208,12 @@ test('hidden crew pursuit and attacker identities are withheld by faction projec
   const crewView = factionView(s, b.id).groups.find(g => g.id === worker.id);
   assert.equal(crewView.lastAttackerId, null);
 });
+
+
+test('a rally fires at a visible undefended production building already in reach without waiting for occupation',()=>{
+  const {s,army,hb,p}=fixture();
+  const building={id:'rally-farm',kind:'farm',...p(4),progress:1,hp:160,maxHp:160};hb.buildings.push(building);
+  const raider=army(2,'ranged',undefined,{strategicHold:'rally',targetId:'reported-capital',operationId:'rally-one'});
+  initializeLedger(s);pulse(s,8);assert.ok(building.hp<160);assert.equal(raider.phase,'outbound');assert.equal(raider.targetId,'reported-capital');
+  assert.equal(hb.occupiedBy,undefined);assert.equal(raider.combat.active,false);conserved(s);
+});

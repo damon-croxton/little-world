@@ -1,6 +1,6 @@
 import { random, clamp, distance, emit } from '../shared.js';
 import { terrainAt } from '../world.js';
-import { SURVIVAL_NEEDS } from './economy.js';
+import { survivalNeeds } from './economy.js';
 import { knownReports } from './knowledge.js';
 import { settlementController } from './control.js';
 
@@ -36,16 +36,9 @@ const ARCHETYPES = {
     ['Root Covenant', 'Patient gardeners who adapt to difficult ground', .40, .54, .84, .75],
   ],
 };
-const PREFIXES = {
-  human: ['Aster', 'Dawn', 'Hearth', 'Sol', 'Amber', 'Valley', 'Meridian', 'Orchard'],
-  machine: ['Copper', 'Echo', 'Cobalt', 'Helix', 'Arc', 'Relay', 'Lattice', 'Morrow'],
-  hive: ['Violet', 'Opal', 'Jade', 'Saffron', 'Moss', 'Pearl', 'Indigo', 'Umber'],
-};
-const PALETTES = {
-  human: ['#eebc75', '#e98669', '#dfce83', '#f2a96a'],
-  machine: ['#70d7e0', '#76aef0', '#75e3c0', '#a1cbee'],
-  hive: ['#c79bea', '#d993b7', '#b3d588', '#dbb5e3'],
-};
+const SPECIES_LABELS = { human: 'Human', machine: 'Robot', hive: 'Alien' };
+// Ownership is independent of species; geometry still identifies each species.
+const FACTION_COLORS = ['#f2b544', '#4abbe8', '#cc75e8', '#f16b73', '#76ce77', '#e6e4c5'];
 const TRACKS = {
   human: [
     { id: 'irrigation', name: 'Terraced irrigation', work: 62, cost: { food: 2, water: 1, energy: 1, materials: 3 }, effects: { waterEfficiency: 1.14, growth: 1.06 }, gate: 'local', detail: 'Field trials in the settlement biome' },
@@ -79,29 +72,20 @@ const IMPORTANCE = {
 
 export function createFactions(state, count = 6) {
   const factions = [];
-  const usedNames = new Set();
-  const usedPrefixes = { human: new Set(), machine: new Set(), hive: new Set() };
   const archetypeOffset = { human: Math.floor(random(state) * 4), machine: Math.floor(random(state) * 4), hive: Math.floor(random(state) * 4) };
   for (let i = 0; i < Math.max(0, Math.min(12, count)); i++) {
     const species = ['human', 'machine', 'hive'][i % 3];
     const ordinal = Math.floor(i / 3);
     const archetype = ARCHETYPES[species][(archetypeOffset[species] + ordinal * 2 + (ordinal > 1 ? 1 : 0)) % 4];
-    let prefixIndex = Math.floor(random(state) * PREFIXES[species].length);
-    // Resolve a collision without another random draw: population, traits, and
-    // other seeded outcomes keep their existing random sequence.
-    while (usedPrefixes[species].has(PREFIXES[species][prefixIndex])) prefixIndex = (prefixIndex + 1) % PREFIXES[species].length;
-    const prefix = PREFIXES[species][prefixIndex];
-    usedPrefixes[species].add(prefix);
-    let name = `${prefix} ${archetype[0]}`;
-    if (usedNames.has(name)) name += ` ${ordinal + 1}`;
-    usedNames.add(name);
+    random(state); // Preserve the historical naming draw and seeded personality sequence.
+    const name = `${SPECIES_LABELS[species]}${ordinal + 1}`;
     const traits = {};
     ['aggression', 'curiosity', 'industry', 'cooperation'].forEach((key, j) => {
       traits[key] = +clamp(archetype[j + 2] + (random(state) - .5) * .22, .10, .94).toFixed(3);
     });
     const focus = TRACKS[species][0];
     factions.push({
-      id: `f${i}`, name, species, color: PALETTES[species][ordinal % 4], traits,
+      id: `f${i}`, name, species, color: FACTION_COLORS[i % FACTION_COLORS.length], traits, matchSettings: { ...state.config },
       personality: archetype[1], knowledge: {}, relations: {},
       tech: { level: 0, progress: 0, focus: focus.name, nextId: focus.id, unlocked: [], requirement: focus.detail, requiredProgress: focus.work * RESEARCH_WORK_SCALE, invested: { food: 0, water: 0, energy: 0, materials: 0 }, status: 'Settling in; field trials begin after cycle 24', breakthroughs: [] },
       modifiers: { ...BASE_MODIFIERS }, intent: 'Establishing a secure home', history: [],
@@ -315,7 +299,7 @@ function travelCycles(faction, routeLength) {
 }
 
 function travelRations(faction, crewSize, routeLength) {
-  const cycles = travelCycles(faction, routeLength), daily = SURVIVAL_NEEDS[faction.species];
+  const cycles = travelCycles(faction, routeLength), daily = survivalNeeds(faction);
   const efficiency = { water: faction.modifiers.waterEfficiency || 1, energy: faction.modifiers.energyEfficiency || 1, materials: faction.modifiers.materialEfficiency || 1 };
   return Object.fromEntries(Object.entries(daily).filter(([, amount]) => amount > 0).map(([kind, amount]) => [kind, +(amount * crewSize * cycles / (efficiency[kind] || 1)).toFixed(4)]));
 }

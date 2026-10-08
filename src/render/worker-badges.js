@@ -1,7 +1,8 @@
 // One shared glyph atlas and one instanced draw for every visible worker label.
 // Counts are uniforms per instance, so changing crews never creates textures,
 // materials, canvas elements or DOM labels. This layer represents no extra people.
-export function createWorkerBadges(THREE, root) {
+export function createWorkerBadges(THREE, root, { kind = 'worker' } = {}) {
+  const army = kind === 'army', badgeColor = new THREE.Color(army ? '#ff6b64' : '#b8bebb');
   const glyphs = '0123456789×', cell = 64;
   let texture;
   const canvas = globalThis.document?.createElement?.('canvas');
@@ -70,13 +71,13 @@ export function createWorkerBadges(THREE, root) {
         vec3 background = mix(vec3(0.028, 0.048, 0.055), labelColor * 0.19, 0.28);
         float border = smoothstep(-1.8, -0.7, distance);
         vec3 color = mix(background, mix(labelColor, vec3(1.0), labelLayout.w * 0.55), border * 0.9);
-        gl_FragColor = vec4(mix(color, vec3(1.0, 0.99, 0.94), ink), alpha * 0.97);
+        gl_FragColor = vec4(mix(color, labelColor, ink), alpha * 0.97);
       }`
   });
   const quad = new THREE.PlaneGeometry(1, 1), geometry = new THREE.InstancedBufferGeometry();
   geometry.index = quad.index; geometry.attributes.position = quad.attributes.position; geometry.attributes.uv = quad.attributes.uv;
-  const mesh = new THREE.Mesh(geometry, material); mesh.name = 'Worker crew count badges'; mesh.frustumCulled = false; mesh.renderOrder = 9; mesh.visible = false;
-  mesh.userData.workerBadges = true; root.add(mesh);
+  const mesh = new THREE.Mesh(geometry, material); mesh.name = army ? 'Army count badges' : 'Worker crew count badges'; mesh.frustumCulled = false; mesh.renderOrder = 9; mesh.visible = false;
+  mesh.userData[army ? 'armyBadges' : 'workerBadges'] = true; root.add(mesh);
   let capacity = 0, count = 0, records = [], candidates = [], camera = null;
   const attributes = ['badgeAnchor', 'badgeLayout', 'badgeColor'];
   const projected = new THREE.Vector3(), pointer = new THREE.Vector3();
@@ -122,17 +123,19 @@ export function createWorkerBadges(THREE, root) {
     },
     begin(nextCamera) { count = 0; candidates.length = 0; camera = nextCamera; },
     add({ groupId, size, x, y, z, color, lod, selected }) {
-      const digits = String(size).length, height = lod === 'detailed' ? 21 : 18;
+      if (army && size < 3) return;
+      color = badgeColor;
+      const digits = String(size).length, height = army ? (lod === 'detailed' ? 20 : 18) : (lod === 'detailed' ? 14 : 12);
       candidates.push({ groupId, text: `${size}×`, size, digits, x, y, z, color, selected: !!selected, width: (digits + 1) * height * .52 + 8, height });
     },
-    finish() {
+    finish(occupied = new Map()) {
       let lodCulled = 0, overlapCulled = 0;
       // Measure a reference worker in pixels, independent of its enlarged
       // overview LOD, so switching model detail cannot toggle count labels.
       // Stable IDs break ties; selection takes precedence over ordinary labels
       // regardless of the simulation group's iteration order.
       candidates.sort((a, b) => Number(b.selected) - Number(a.selected) || (a.groupId < b.groupId ? -1 : a.groupId > b.groupId ? 1 : 0));
-      const occupied = new Map(), cellSize = 64, gap = 3;
+      const cellSize = 64, gap = 3;
       for (const record of candidates) {
         if (camera) {
           projected.set(record.x, record.y, record.z).applyMatrix4(camera.matrixWorldInverse);
@@ -157,6 +160,7 @@ export function createWorkerBadges(THREE, root) {
       if (count) for (const name of attributes) { const attribute = geometry.getAttribute(name); attribute.clearUpdateRanges(); attribute.addUpdateRange(0, count * attribute.itemSize); attribute.needsUpdate = true; }
       return { count, capacity, drawCalls: Number(count > 0), lodCulled, overlapCulled };
     },
+    getRecords() { return records.map(({ groupId, size, text, height }) => ({ groupId, size, text, height, color: army ? 'red' : 'grey' })); },
     isVisible(groupId) { return records.some(record => record.groupId === groupId); },
     resolvePick(hit) { return hit.object === mesh ? records[hit.instanceId]?.groupId : null; },
     dispose() { mesh.removeFromParent(); geometry.dispose(); material.dispose(); texture.dispose(); records = []; candidates = []; }

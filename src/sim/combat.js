@@ -5,7 +5,7 @@ import { clamp, distance, emit } from '../shared.js';
 import { MILITARY_ROLES, availableMilitary, countMilitary, unitStats } from './military.js';
 import { lineOfSight, localGroupController } from './knowledge.js';
 import { moveAlongRoute, isSegmentTraversable, invalidateNavigation, assessBreachRoute } from './navigation.js';
-import { ledgerAdd, SURVIVAL_NEEDS } from './economy.js';
+import { ledgerAdd, survivalNeeds } from './economy.js';
 import { factionController, settlementController, groupController } from './control.js';
 import { DEFENSE_STATS, defenseAmmoCost, assignDefenses } from './defenses.js';
 import { getSoldiers, getSoldier, applySoldierDamage } from './soldiers.js';
@@ -24,7 +24,7 @@ const hostile = (s, a, b) => { a = factionController(s, a); b = factionControlle
 const clock = s => Number.isFinite(s.time) ? s.time : s.tick;
 const amount = x => Math.max(0, Math.floor(Number.isFinite(x) ? x : 0));
 const liveStructure = b => b && b.progress >= 1 && !b.destroyed && (b.hp ?? b.health ?? 1) > 0;
-const ECONOMIC_TARGETS = new Set(['housing', 'farm', 'power', 'storage', 'workshop', 'barracks', 'range', 'fabricator', 'launcher', 'brooder', 'spitter']);
+const ECONOMIC_TARGETS = new Set(['hub', 'housing', 'farm', 'power', 'storage', 'workshop', 'barracks', 'range', 'fabricator', 'launcher', 'brooder', 'spitter']);
 const CARGO_KEYS = ['food', 'water', 'energy', 'materials'];
 const observationCaches = new WeakMap();
 
@@ -358,7 +358,7 @@ function acquire(s, g, hooks) {
   if (broken(g)) { withdraw(s, g, hooks); return null; }
   const cs = status(g), now = clock(s), local = localSituation(s, g);
   if (!local.source) return null;
-  Object.assign(cs, { localStrength: +local.own.toFixed(1), supportStrength: +local.support.toFixed(1), enemyStrength: +local.enemy.toFixed(1), strengthRatio: local.ratio == null ? null : +local.ratio.toFixed(2) });
+  Object.assign(cs, { assessedAt: now, localStrength: +local.own.toFixed(1), supportStrength: +local.support.toFixed(1), enemyStrength: +local.enemy.toFixed(1), strengthRatio: local.ratio == null ? null : +local.ratio.toFixed(2) });
   if (local.ratio != null && local.ratio < .43 && local.threats.some(t => t.urgent)) {
     withdraw(s, g, hooks, `Visible defenders outweigh this force and nearby support (${cs.strengthRatio}× local strength).`); return null;
   }
@@ -579,7 +579,7 @@ function fireTowers(s, field) {
       const candidates = field.index.near(tower, range).filter(record => record.body.alive && hostile(s, faction.id, record.context.faction.id) && lineOfSight(s, tower, record.body, { maxRange: range, fromHeight: 4, toHeight: .65, factionId: faction.id, blockWater: true }));
       candidates.sort((a, b) => distance(tower, a.body) - distance(tower, b.body) || a.body.id.localeCompare(b.body.id));
       const target = candidates[0]; if (!target) continue;
-      const costs = defenseAmmoCost(species), needs = SURVIVAL_NEEDS[species];
+      const costs = defenseAmmoCost(species), needs = survivalNeeds(factionOf(s, home.factionId));
       if (Object.entries(costs).some(([key, value]) => (home.stock[key] || 0) < value + (key === 'materials' ? 0 : (needs?.[key] || 0) * home.population * 2))) { tower.fireBlocked = 'Ammunition would consume the survival reserve'; continue; }
       const operator = crew[0], source = { id: tower.id, entity: tower, home, faction, species };
       const shots = [{ from: { x: tower.x, z: tower.z, height: species === 'human' ? 3.73 : 4.03 }, to: { x: target.body.x, z: target.body.z, height: .45 }, sourceIndex: 0, targetIndex: target.ordinal, sourceSoldierId: operator.id, shooterSoldierId: operator.id, targetSoldierId: target.body.id }];
@@ -648,7 +648,11 @@ export function stepCombat(s, dt = .1, hooks = {}) {
     // A rally order preserves the march, but does not make an exposed crew
     // already inside a soldier's weapon reach untouchable. These contacts never
     // become pursuit goals and cannot bypass the normal individual weapon clock.
-    if (entity.strategicHold && canFight(entity)) context.workerContacts = s.groups.filter(worker => worker.kind === 'worker' && !worker.finished && worker.size > 0 && permittedTarget(s, entity, worker) && sees(s, entity, worker, 16));
+    if (entity.strategicHold && canFight(entity)) context.economicContacts = s.groups.filter(worker => worker.kind === 'worker' && !worker.finished && worker.size > 0 && permittedTarget(s, entity, worker) && sees(s, entity, worker, 16));
+    if (context.economicContacts && !(entity.combat?.enemyStrength > 0)) for (const home of s.settlements) {
+      if (!permittedTarget(s, entity, home)) continue;
+      for (const b of home.buildings || []) if (ECONOMIC_TARGETS.has(b.kind) && liveStructure(b) && sees(s, entity, b, 16)) context.economicContacts.push(structureTarget(s, home, b));
+    }
     contexts.push(context);
   }
   const field = stepIndividualCombat(s, contexts, dt, {

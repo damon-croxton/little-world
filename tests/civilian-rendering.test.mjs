@@ -182,3 +182,22 @@ test('pixel LOD re-evaluates on a paused viewport resize even when labels were h
   crowds.update(state, 10, null, 1); assert.ok(crowds.diagnostics.workerBadgeCount > 0);
   crowds.dispose();
 });
+
+
+test('army badges use deduplicated living visible bodies, a red label at three, and smaller grey crews',()=>{
+  const {state,scene,crowds}=setup();
+  try {
+    const roster=state.settlements[0].soldierRoster;
+    state.soldiers=[...roster,roster[0]];
+    crowds.update(state,10,null,1);
+    let badges=crowds.getCountBadges();
+    assert.equal(badges.armies[0].size,5);assert.equal(badges.armies[0].color,'red');
+    assert.ok(badges.workers.every(b=>b.color==='grey'&&b.height<badges.armies[0].height));
+    roster[0].hp=0;roster[1].alive=false;crowds.update(state,10,null,1);
+    assert.equal(crowds.getCountBadges().armies[0].size,3);
+    state.soldiers=roster.slice(3);crowds.update(state,10,null,1);
+    assert.equal(crowds.getCountBadges().armies.length,0);
+    state.soldiers=[];crowds.update(state,10,null,1);
+    assert.equal(crowds.getCountBadges().armies.length,0);
+  } finally {crowds.dispose();}
+});

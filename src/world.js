@@ -302,5 +302,8 @@ export function generateWorld(seed = 'littleworld', options = {}) {
     if (nodes.some(n => Math.hypot(n.x - x, n.z - z) < 5.3)) continue;
     add(kinds[Math.floor(rand() * kinds.length)], x, z);
   }
+  // Scale finite reserves after placement so sliders never consume RNG draws
+  // or change terrain, resource kinds, scenery, yields or balanced approaches.
+  for (const node of nodes) node.amount = node.maxAmount = Math.round(node.maxAmount * config.resourceScale);
   return { nodes, starts, config, biome: worldBiome(seed, config), terrainSeed, ...terrainFeatures(terrainSeed), bounds: { minX: -WORLD_RADIUS, maxX: WORLD_RADIUS, minZ: -WORLD_RADIUS, maxZ: WORLD_RADIUS } };
 }

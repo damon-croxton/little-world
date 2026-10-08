@@ -1,4 +1,5 @@
 import { hashSeed } from '../shared.js';
+import { matchValue } from '../config.js';
 
 export const RESOURCES = ['food', 'water', 'energy', 'materials'];
 
@@ -9,6 +10,17 @@ export const SURVIVAL_NEEDS = {
   hive: { food: .026, water: .015, energy: .002, materials: .001 },
 };
 export const emptyResources = () => ({ food: 0, water: 0, energy: 0, materials: 0 });
+
+const needsCache = new Map();
+export function survivalNeeds(faction) {
+  const species = faction?.species || 'human', scale = matchValue(faction, 'upkeepScale'), key = `${species}:${scale}`;
+  if (!needsCache.has(key)) {
+    if (needsCache.size >= 128) needsCache.clear();
+    const base = SURVIVAL_NEEDS[species] || SURVIVAL_NEEDS.human;
+    needsCache.set(key, Object.freeze(Object.fromEntries(RESOURCES.map(kind => [kind, base[kind] * scale]))));
+  }
+  return needsCache.get(key);
+}
 
 // Conservation is global: deposits + settlement stores + travelling cargo +
 // reserved trade offers = initial + regenerated + produced - consumed -

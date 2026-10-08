@@ -1,5 +1,6 @@
 import { housingDemand, refreshHousing } from './housing.js';
-import { normalizeConfig } from '../config.js';
+import { expansionRequirements } from './match-rules.js';
+import { normalizeConfig, matchValue } from '../config.js';
 import { hashSeed, random, clamp, distance, emit } from '../shared.js';
 import { generateWorld, terrainAt } from '../world.js';
 import { createFactions, stepProgression } from './progression.js';
@@ -12,7 +13,7 @@ import { getSoldiers } from './soldiers.js';
 import { initializeKnowledge, stepKnowledge, visibleToGroup, observationFor, reportObservations, knownReports, knownResourceNodes } from './knowledge.js';
 import { DEFENSE_STATS, defenseCost, defenseBuildingPlan, assignDefenses, canCompleteDefense } from './defenses.js';
 import { initializeMilitary, syncMilitary, refreshExileBases, militaryContext, trainingCount, advanceTraining, planTraining, recoverMilitary, militaryBuildingPlan, MILITARY_BUILDINGS, applyHomeCasualties, demobilizeMilitary, cancelTraining } from './military.js';
-import { RESOURCES, SURVIVAL_NEEDS, emptyResources, initializeLedger, initializeFactionAdvantages, ledgerAdd, canAfford, spend, depositCargo, discardCargo, ledgerResidual } from './economy.js';
+import { RESOURCES, survivalNeeds, emptyResources, initializeLedger, initializeFactionAdvantages, ledgerAdd, canAfford, spend, depositCargo, discardCargo, ledgerResidual } from './economy.js';
 
 export const SIM_DT = .1;
 const PULSES = 10;
@@ -21,9 +22,9 @@ const PULSES = 10;
 export const SIM_LIMITS = Object.freeze({ settlements: 48, groups: 480, populationPerSettlement: 900, activeSettlementsPerFaction: 4 });
 const { settlements: MAX_SETTLEMENTS, groups: MAX_GROUPS, populationPerSettlement: MAX_POPULATION } = SIM_LIMITS;
 const PROFILES = {
-  human: { needs: SURVIVAL_NEEDS.human, birth: { food: 1.5, water: .5, energy: .3, materials: 1.2 }, growth: .005, staple: 'food' },
-  machine: { needs: SURVIVAL_NEEDS.machine, birth: { food: 0, water: .4, energy: 4, materials: 3.5 }, growth: .0032, staple: 'energy' },
-  hive: { needs: SURVIVAL_NEEDS.hive, birth: { food: 2.5, water: .6, energy: .2, materials: .6 }, growth: .0065, staple: 'food' },
+  human: { birth: { food: 1.5, water: .5, energy: .3, materials: 1.2 }, growth: .005, staple: 'food' },
+  machine: { birth: { food: 0, water: .4, energy: 4, materials: 3.5 }, growth: .0032, staple: 'energy' },
+  hive: { birth: { food: 2.5, water: .6, energy: .2, materials: .6 }, growth: .0065, staple: 'food' },
 };
 const BUILDING_COST = {
   housing: { materials: 40, energy: 8 }, storage: { materials: 70, energy: 14 }, workshop: { materials: 80, energy: 30 },
@@ -37,7 +38,7 @@ const profile = f => PROFILES[f.species] || PROFILES.human;
 const modifier = (f, key) => clamp(f.modifiers?.[key] ?? 1, .25, 4);
 const buildingCount = (s, kind) => s.buildings.filter(b => b.kind === kind && b.progress >= 1 && !b.destroyed && (b.hp == null || b.hp > 0)).length;
 const needsFor = (s, f, present = s.homePresent ?? s.population) => {
-  const n = profile(f).needs;
+  const n = survivalNeeds(f);
   return { food: n.food * present, water: n.water * present / modifier(f, 'waterEfficiency'), energy: n.energy * present / modifier(f, 'energyEfficiency'), materials: n.materials * present / modifier(f, 'materialEfficiency') };
 };
 
@@ -45,7 +46,7 @@ function buildingRecord(state, home, kind, progress = 0, placement = null) {
   const index = home.buildings.length, angle = index * 2.399963229728653 + (hashSeed(home.id + state.seed) % 100) / 100;
   const radius = index === 0 ? 0 : 2.85 * Math.sqrt(index);
   let x = home.x + Math.cos(angle) * radius, z = home.z + Math.sin(angle) * radius;
-  const freePlot = kind === 'housing' && home.buildings.find(b => b.kind === 'housing' && (b.destroyed || b.hp <= 0) && !home.buildings.some(other => !other.destroyed && other.hp > 0 && distance(b, other) < 2));
+  const freePlot = home.buildings.find(b => b.kind === kind && (b.destroyed || b.hp <= 0) && !home.buildings.some(other => !other.destroyed && other.hp > 0 && distance(b, other) < 2));
   if (!placement && freePlot) { x = freePlot.x; z = freePlot.z; }
   if (!placement && !isPointTraversable(state, { x, z }, { factionId: home.factionId })) {
     let found = false;
@@ -154,7 +155,7 @@ function updateAssignments(state) {
     if (f && active(home)) {
       refreshBuildings(state, home, f); a.infrastructure = Math.min(available, home.infrastructureWorkers || 0); available -= a.infrastructure;
       const researchHere = !home.occupiedBy && (!f.researchHomeId || f.researchHomeId === home.id);
-      const distressed = home.shortageDays > 0 || RESOURCES.some(k => profile(f).needs[k] > 0 && home.stock[k] < profile(f).needs[k] * home.population * 8);
+      const distressed = home.shortageDays > 0 || RESOURCES.some(k => survivalNeeds(f)[k] > 0 && home.stock[k] < survivalNeeds(f)[k] * home.population * 8);
       a.researchers = researchHere && !distressed ? Math.min(researchers[f.id] || 0, 6 + buildingCount(home, 'lab') * 8, Math.max(0, available - 8)) : 0;
       researchers[f.id] -= a.researchers; available -= a.researchers;
       a.construction = home.construction ? Math.min(home.construction.workers || 12, Math.max(0, available - (distressed ? 16 : 8))) : 0; available -= a.construction;
@@ -252,7 +253,7 @@ function processWorkers(state, indexes) {
     // A failed return route cannot make an off-site workforce immortal. Supplies
     // were paid on departure; exhausted teams lose people and unsupported cargo.
     if (g.supply <= 0 && state.step % PULSES === 0) {
-      g.starvation = (g.starvation || 0) + Math.max(.025, g.size * .006);
+      g.starvation = (g.starvation || 0) + Math.max(.025, g.size * .006) * matchValue(state, 'upkeepScale');
       const deaths = Math.min(g.size, Math.floor(g.starvation));
       if (deaths) {
         const fraction = deaths / g.size;
@@ -426,7 +427,7 @@ function consume(state, home, f) {
     if (needs[k] > .00001) { const ratio = amount / needs[k]; fulfillment = Math.min(fulfillment, ratio); if (ratio < .95) missing.push(k); }
   }
   home.wellbeing = fulfillment; home.shortageDays = fulfillment < .85 ? home.shortageDays + 1 : Math.max(0, home.shortageDays - 2);
-  if (fulfillment < .98) home.health -= (1 - fulfillment) * .35;
+  if (fulfillment < .98) home.health -= (1 - fulfillment) * .35 * matchValue(state, 'upkeepScale');
   else if (active(home) && home.health < 100 && (home.contestedUntil || 0) < state.tick && home.availableWorkers >= 4) {
     const repair = Math.min(100 - home.health, .08 + home.availableWorkers * .001), cost = { materials: repair * 2, energy: repair * .5 };
     if (canAfford(home, cost, { food: needs.food * 8, water: needs.water * 8, energy: needs.energy * 8 })) { spend(state, home, cost, 'construction'); home.health += repair; }
@@ -434,7 +435,7 @@ function consume(state, home, f) {
   home.health = clamp(home.health, home.population > 0 ? .1 : 0, 100);
   if (home.shortageDays >= 18) {
     const deployed = home.assigned.civilianAway + home.assigned.military, present = Math.max(0, home.population - deployed);
-    home.starvation += (1 - fulfillment) * Math.max(.08, present * .004);
+    home.starvation += (1 - fulfillment) * Math.max(.08, present * .004) * matchValue(state, 'upkeepScale');
     const deaths = Math.min(present, Math.floor(home.starvation));
     if (deaths > 0) {
       const lost = applyHomeCasualties(state, home, deaths); home.starvation -= lost; state.stats.homeScarcityDeaths = (state.stats.homeScarcityDeaths || 0) + lost;
@@ -495,7 +496,8 @@ function construction(state, home, f) {
 }
 
 export function planFounding(state, home, f) {
-  if (!active(home) || home.occupiedBy || f.defeatedBy || state.settlements.length >= MAX_SETTLEMENTS || state.groups.length >= MAX_GROUPS - 6 || home.population < 120 || state.tick - home.lastExpansion < 120 || home.health < 75 || home.shortageDays > 0) return;
+  const requirements = expansionRequirements(state);
+  if (!active(home) || home.occupiedBy || f.defeatedBy || state.settlements.length >= MAX_SETTLEMENTS || state.groups.length >= MAX_GROUPS - 6 || home.population < requirements.population || state.tick - home.lastExpansion < requirements.cooldown || home.health < 75 || home.shortageDays > 0) return;
   if (state.settlements.filter(s => s.factionId === f.id && active(s)).length >= SIM_LIMITS.activeSettlementsPerFaction || state.groups.some(g => g.kind === 'colonist' && g.factionId === f.id)) return;
   const size = clamp(Math.floor(home.population * .18), 24, 48);
   if (home.workers - size < 40) return;
@@ -506,7 +508,7 @@ export function planFounding(state, home, f) {
   for (const report of reports) {
     const k = report.foundingSite ? { ...report, x: report.foundingSite.x, z: report.foundingSite.z } : report;
     if (k.kind !== 'resource' || k.reportedTick == null || k.reportedTick > state.tick) continue;
-    const d = distance(home, k); if (d < 35 || d > 95 || state.settlements.some(s => s.factionId === f.id && alive(s) && distance(s, k) < Math.max(32, s.radius + 15)) || knownHomes.some(s => s.ownerId !== f.id && s.status !== 'ruin' && distance(s, k) < Math.max(32, (s.radius || 8) + 15))) continue;
+    const d = distance(home, k); if (d < 35 || d > 95 || state.settlements.some(s => s.factionId === f.id && alive(s) && !s.razed && distance(s, k) < Math.max(32, s.radius + 15)) || knownHomes.some(s => s.ownerId !== f.id && !['camp', 'ruin'].includes(s.status) && distance(s, k) < Math.max(32, (s.radius || 8) + 15))) continue;
     const safety = assessFrontier(frontier, k);
     if (safety.siteBlocked) continue;
     if (state.groups.some(g => g.kind === 'colonist' && g.factionId === f.id && Math.hypot(g.targetX - k.x, g.targetZ - k.z) < 32)) continue;
@@ -546,7 +548,7 @@ export function planFounding(state, home, f) {
 }
 
 function foundOutpost(state, g, origin, f, remove) {
-  if (state.settlements.length >= MAX_SETTLEMENTS || state.settlements.some(s => alive(s) && Math.hypot(s.x - g.targetX, s.z - g.targetZ) < 25)) { g.phase = 'returning'; g.reason = 'The proposed site is occupied; settlers are returning.'; return; }
+  if (state.settlements.length >= MAX_SETTLEMENTS || state.settlements.some(s => alive(s) && !s.razed && Math.hypot(s.x - g.targetX, s.z - g.targetZ) < 25)) { g.phase = 'returning'; g.reason = 'The proposed site is occupied; settlers are returning.'; return; }
   const cost = { materials: 110, energy: 30 }; if (g.carrying.materials < cost.materials || g.carrying.energy < cost.energy) { g.phase = 'returning'; return; }
   const home = makeSettlement(state, f, { x: g.targetX, z: g.targetZ }, g.size, true); origin.population -= g.size;
   for (const k of RESOURCES) { const paid = cost[k] || 0; ledgerAdd(state, k, 'construction', paid); home.stock[k] = g.carrying[k] - paid; g.carrying[k] = 0; }
@@ -565,7 +567,7 @@ function campLifecycle(state, home, f) {
       }
       home.construction = null; cancelTraining(state, home, null, 'Settlement abandoned');
       for (const k of RESOURCES) { const lost = home.stock[k] * .72; home.stock[k] -= lost; ledgerAdd(state, k, 'lost', lost); }
-      for (const g of state.groups) if (g.originId === home.id) { g.phase = 'returning'; g.targetX = home.x; g.targetZ = home.z; g.reason = 'The permanent settlement was lost; returning to the survivors.'; }
+      for (const g of state.groups) if (g.originId === home.id && !(home.razed && g.kind === 'army')) { g.phase = 'returning'; g.targetX = home.x; g.targetZ = home.z; g.reason = 'The permanent settlement was lost; returning to the survivors.'; }
       state.stats.abandonments++; emit(state, 'abandonment', `${home.name} is lost; ${home.population} survivors are displaced among its ruined buildings.`, f.id, { settlementId: home.id });
     }
     delete home.defeat;
@@ -583,7 +585,7 @@ function campLifecycle(state, home, f) {
       }
     }
     const costs = { materials: 180, energy: 50, water: 40, [profile(f).staple]: 80 };
-    if (state.tick - home.ruinedTick > 100 && home.population >= 24 && home.wellbeing > .98 && canAfford(home, costs)) { spend(state, home, costs, 'construction'); home.status = 'active'; home.active = true; home.health = 45; home.shortageDays = 0; home.starvation = 0; state.stats.rebuilt++; emit(state, 'rebuilding', `${home.name} uses returned supplies to rebuild permanent shelter.`, f.id, { settlementId: home.id }); }
+    if (state.tick - home.ruinedTick > 100 && home.population >= 24 && home.wellbeing > .98 && !state.settlements.some(other => other.id !== home.id && active(other) && distance(home, other) < 25) && !(home.contestedUntil >= state.tick) && canAfford(home, costs)) { spend(state, home, costs, 'construction'); home.status = 'active'; home.active = true; home.razed = false; home.health = 45; home.shortageDays = 0; home.starvation = 0; state.stats.rebuilt++; emit(state, 'rebuilding', `${home.name} uses returned supplies to rebuild permanent shelter.`, f.id, { settlementId: home.id }); }
   }
   if (home.population <= 0 && home.status !== 'ruin') { home.status = 'ruin'; home.active = false; home.health = 0; demobilizeMilitary(state, home, home.soldiers); cancelTraining(state, home, null, 'Settlement empty'); home.ruinedTick ??= state.tick; home.ruinReason ||= 'The last inhabitants died or sought refuge.'; emit(state, 'ruin', `${home.name} stands empty.`, f.id, { settlementId: home.id }); }
 }

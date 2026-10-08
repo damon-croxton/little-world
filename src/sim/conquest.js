@@ -4,9 +4,9 @@ import { getSoldiers, touchSoldiers } from './soldiers.js';
 import { isSegmentTraversable, invalidateNavigation } from './navigation.js';
 import { observationFor, reportObservations, sightRadius, visibleToGroup } from './knowledge.js';
 
-// Control and biological identity are separate. Conquest changes sovereignty
-// over actual places and stores; it never deletes civilians, changes species,
-// creates soldiers, or teleports captured inventory to a distant capital.
+// Native identity remains separate from control in legacy imported states.
+// Current combat destroys infrastructure and displaces native survivors; the
+// occupation helper below is retained only for legacy compatibility fixtures.
 export { factionController, settlementController, groupController } from './control.js';
 import { factionController, settlementController, groupController } from './control.js';
 export const viableArmy = group => group.kind === 'army' && !group.finished && !group.disabled && group.size >= 8 && (group.morale ?? 85) >= 30 && (group.supply ?? 100) >= 12 && group.phase !== 'retreating' && !group.surrendered;
@@ -14,6 +14,32 @@ export function sovereignHomes(state, factionId) {
   return state.settlements.filter(p => p.population > 0 && p.health > 0 && !['camp', 'ruin'].includes(p.status) && settlementController(state, p) === factionId);
 }
 
+// Authoritative combat outcome for current matches: no ownership transfer.
+// Infrastructure is lost; surviving native people and field cargo remain real.
+export function destroySettlement(state, home, army) {
+  if (!home || home.razed || home.health > 0 || !army || army.finished || !home.population) return false;
+  const attackerId = groupController(state, army);
+  if (attackerId === settlementController(state, home) || !getSoldiers(state, army).some(body => body.positioned &&
+      distance(body, home) <= Math.max(5, home.radius || 8) && isSegmentTraversable(state, body, home, { factionId: attackerId, radius: .16 }))) return false;
+  home.razed = true; home.destroyedTick = state.tick;
+  home.defeat = { attackerId, reason: 'Hostile troops destroyed the settlement; native survivors are displaced.' };
+  home.ruinReason = home.defeat.reason; home.construction = null;
+  cancelTraining(state, home, null, 'The settlement was destroyed; surviving trainees remain native civilians');
+  for (const b of home.buildings || []) if (!b.destroyed && (b.hp ?? 1) > 0) {
+    b.hp = 0; b.destroyed = true; b.destroyedTick = state.tick; b.active = false; b.operational = false; b.crewAssigned = 0;
+    state.stats.structuresDestroyed = (state.stats.structuresDestroyed || 0) + 1;
+  }
+  home.housingCapacity = home.carryingCapacity = 0;
+  if (home.siege) Object.assign(home.siege, { active: false, endedTick: state.tick, outcome: 'destroyed' });
+  if (home.combat) home.combat.active = false;
+  invalidateNavigation(state); touchSoldiers(state);
+  state.stats.settlementsDestroyed = (state.stats.settlementsDestroyed || 0) + 1;
+  emit(state, 'destruction', `${state.factions.find(f => f.id === attackerId)?.name} destroyed ${home.name}. Native survivors remain displaced; no territory or allegiance transfers.`, attackerId,
+    { settlementId: home.id, groupId: army.id, nativeFactionId: home.factionId, survivingPopulation: home.population });
+  return true;
+}
+
+// Legacy occupation fixtures/imported state only; the live strategy never calls this.
 export function occupySettlement(state, home, army) {
   if (!home || !army || army.finished || army.size <= 0 || !home.population || distance(home, army) > Math.max(24, (home.radius || 8) + 8)) return false;
   const victorId = groupController(state, army), previous = settlementController(state, home);
@@ -88,7 +114,7 @@ export function updateConquest(state) {
   if (sovereigns.length === 1 && state.factions.length > 1 && state.settlements.every(p => p.population <= 0 || ['camp', 'ruin'].includes(p.status) || settlementController(state, p) === sovereigns[0].id)) {
     const winner = sovereigns[0];
     state.outcome = { status: 'victory', winnerId: winner.id, wonAt: state.time ?? state.tick, tick: state.tick, reason: 'All remaining independent settlements and viable opposing armies have been defeated.' };
-    emit(state, 'victory', `${winner.name} controls the world. Military conquest ended the last independent opposition; surviving inhabitants and held stores remain in their actual settlements.`, winner.id, { winnerId: winner.id, wonAt: state.outcome.wonAt });
+    emit(state, 'victory', `${winner.name} controls the world. The last independent military opposition has ended; displaced survivors retain their native identity.`, winner.id, { winnerId: winner.id, wonAt: state.outcome.wonAt });
   }
   return state.outcome;
 }

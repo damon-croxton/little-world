@@ -1,7 +1,8 @@
+import { matchValue } from '../config.js';
 import { housingDemand } from './housing.js';
 import { settlementController } from './control.js';
 import { clamp, emit } from '../shared.js';
-import { RESOURCES, SURVIVAL_NEEDS, canAfford, spend } from './economy.js';
+import { RESOURCES, survivalNeeds, canAfford, spend } from './economy.js';
 import { SOLDIER_ROLES, createSoldierRecords, getSoldiers, soldierCounts, syncSoldierCounts, syncGroupSoldiers, killSoldier, touchSoldiers } from './soldiers.js';
 export { getSoldiers, getSoldier, applySoldierDamage, militaryAtHome } from './soldiers.js';
 
@@ -161,7 +162,7 @@ export function trainingCost(faction, role, size = 1) {
 }
 
 export function trainingReserves(home, faction, cycles = 12) {
-  const needs = SURVIVAL_NEEDS[speciesOf(faction)] || SURVIVAL_NEEDS.human;
+  const needs = survivalNeeds(faction);
   return Object.fromEntries(RESOURCES.map(kind => [kind, kind === 'materials' ? 12 : needs[kind] * home.population * cycles]));
 }
 
@@ -320,7 +321,7 @@ export function advanceTraining(state, home, faction) {
 }
 
 export function militaryTarget(home, faction) {
-  const share = clamp(home.militaryTarget ?? (.28 + (faction.traits?.aggression || 0) * .10), .12, .40);
+  const share = clamp((home.militaryTarget ?? (.28 + (faction.traits?.aggression || 0) * .10)) / matchValue(faction, 'economyFocus'), .12, .40);
   return Math.min(Math.floor(home.population * share), Math.max(0, home.population - 24));
 }
 
