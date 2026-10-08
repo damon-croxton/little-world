@@ -72,7 +72,30 @@ export async function workerSmoke({ page, check, screenshotBefore, screenshotAft
     assert.equal(rendered.military, 6); assert.equal(rendered.workerCrewCount, 1); assert.equal(rendered.populationAccountingDelta, 0);
     assert.match(await page.locator('.crew-health').innerText(), new RegExp(`${after.size} surviving workers`));
     await page.screenshot({ path: screenshotAfter });
-    await page.evaluate(() => { delete window.workerCombatFixture; });
     return { before, after, rendered };
   });
+  await check('Colliding hostile armies keep both visible red count tags with distinct ownership markers', async () => {
+    await page.evaluate(async () => {
+      const root = new URL('./src/', location.href).href;
+      const military = await import(`${root}sim/military.js`), soldiers = await import(`${root}sim/soldiers.js`);
+      const w = littleworld, s = w.state, q = window.workerCombatFixture, home = q.home, faction = s.factions.find(f => f.id === home.factionId);
+      const units = { infantry: 4, ranged: 2 };
+      soldiers.createSoldierRecords(home, units, { state: s, faction, source: 'controlled-overlap-fixture', statsByRole: Object.fromEntries(['infantry', 'ranged'].map(role => [role, military.unitStats(faction, role)])) });
+      soldiers.syncSoldierCounts(s, home);
+      const opponent = { ...q.raider, id: 'qa-overlap-opponent', factionId: faction.id, originId: home.id, soldierIds: undefined, units, size: 6, initialSize: 6, combat: undefined };
+      military.deployMilitary(s, home, opponent); s.groups.push(opponent);
+      const positions = soldiers.getSoldiers(s, q.raider);
+      for (const [i, body] of soldiers.getSoldiers(s, opponent).entries()) { body.x = body.prevX = positions[i].x; body.z = body.prevZ = positions[i].z; body.positioned = true; }
+      q.refreshCensus(); s.step++; s.time = s.step / 10; w.select(q.raider.id);
+    });
+    await waitForRenderedFrames(page, { minimumFrames: 3 });
+    const labels = await page.evaluate(() => littleworld.renderers.crowds.getCountBadges().armies.filter(b => ['qa-worker-raider', 'qa-overlap-opponent'].includes(b.groupId)));
+    assert.equal(labels.length, 2); assert.ok(labels.every(b => b.size === 6 && b.color === 'red'));
+    assert.notEqual(labels[0].ownerColor, labels[1].ownerColor);
+    assert.ok(labels[0].bounds.bottom < labels[1].bounds.top || labels[1].bounds.bottom < labels[0].bounds.top);
+    await page.screenshot({ path: screenshotAfter.replace(/\.png$/, '-overlapping-armies.png') });
+    await page.evaluate(() => { delete window.workerCombatFixture; });
+    return { labels, scope: 'Controlled physically overlapping hostile rosters; real rendered count labels.' };
+  });
+
 }

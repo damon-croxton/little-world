@@ -3,6 +3,7 @@ import { returnMilitary } from '../src/sim/military.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
+import { createWorkerBadges } from '../src/render/worker-badges.js';
 import { createCrowds } from '../src/render/crowds.js';
 import { overviewFrame } from '../src/render/overview.js';
 
@@ -200,4 +201,26 @@ test('army badges use deduplicated living visible bodies, a red label at three, 
     state.soldiers=[];crowds.update(state,10,null,1);
     assert.equal(crowds.getCountBadges().armies.length,0);
   } finally {crowds.dispose();}
+});
+
+
+test('colliding army badges retain both real counts, ownership markers and independent picking', () => {
+  const scene = new THREE.Scene(), camera = new THREE.PerspectiveCamera(40, 1.6, .2, 1800);
+  camera.position.set(0, 20, 30); camera.lookAt(0, 0, 0); camera.updateMatrixWorld();
+  const badges = createWorkerBadges(THREE, scene, { kind: 'army' });
+  badges.setViewport({ width: 1280, height: 800 }); badges.begin(camera);
+  for (const [id, size, color] of [['b', 12, '#00aaff'], ['a', 9, '#ffaa00']]) badges.add({ groupId: id, size, color, x: 0, y: 1.7, z: 0, lod: 'detailed' });
+  const result = badges.finish(), records = badges.getRecords();
+  assert.equal(result.count, 2); assert.equal(result.overlapCulled, 0); assert.equal(result.drawCalls, 1);
+  assert.deepEqual(records.map(r => r.size), [9, 12]);
+  assert.notEqual(records[0].ownerColor, records[1].ownerColor);
+  assert.ok(records[1].bounds.bottom < records[0].bounds.top);
+  const raycaster = new THREE.Raycaster();
+  for (const record of records) {
+    const { left, right, top, bottom } = record.bounds;
+    raycaster.setFromCamera(new THREE.Vector2((left + right) / 1280 - 1, 1 - (top + bottom) / 800), camera);
+    const hits = raycaster.intersectObject(badges.mesh);
+    assert.equal(hits.length, 1); assert.equal(badges.resolvePick(hits[0]), record.groupId);
+  }
+  badges.dispose();
 });

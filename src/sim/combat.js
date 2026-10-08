@@ -371,7 +371,13 @@ function acquire(s, g, hooks) {
     const economic = local.workers.map(worker => ({ target: worker, score: 27 + Math.min(12, worker.size) * .7 + Math.min(8, CARGO_KEYS.reduce((n, key) => n + (worker.carrying?.[key] || 0), 0) * .12) - distance(g, worker) }));
     if (!local.objective || distance(g, local.objective) > 4 || cs.targetKind === 'structure') for (const building of local.structures) if (distance(g, building) < 10) economic.push({ target: building, score: (building.structureKind === 'housing' ? 29 : 17) - distance(g, building) });
     for (const scout of local.scouts) economic.push({ target: scout, score: 48 - distance(g, scout) });
-    target = chooseStable(economic, cs, now)?.target || local.objective;
+    // Once fit bodies reach their commanded, undefended civic centre, finish
+    // the objective instead of abandoning it for an incidental crew or scout.
+    // Threat selection above and the strategic supply/retreat budgets still win.
+    const civicContact = local.objective && local.enemy === 0 && getSoldiers(s, g).some(body =>
+      !body.withdrawing && body.hp / body.maxHp > .4 && distance(body, local.objective) <= 5 &&
+      isSegmentTraversable(s, body, local.objective, { factionId: ownerOf(s, g), radius: .16 }));
+    target = civicContact ? local.objective : chooseStable(economic, cs, now)?.target || local.objective;
     if (target?.kind === 'worker') { intent = 'raid'; reason = 'Attacking exposed labor and supplies while no visible defender threatens contact.'; }
     else if (target?.kind === 'scout') { intent = 'intercept'; reason = 'Intercepting a locally visible hostile scouting party before it can continue its survey.'; }
     else if (target?.kind === 'structure') { intent = 'raid'; reason = `Disabling the exposed ${target.structureKind} while local defenders are absent.`; }

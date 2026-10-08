@@ -187,6 +187,24 @@ function destructionFixture() {
   return { ...data, army };
 }
 
+test('troops finish a contacted undefended town before chasing an incidental third-party worker', () => {
+  const { state, faction, home, target, other } = fixture(); faction.lastArmy = 400;
+  Object.assign(target, { health: 10, population: 100, homePresent: 100, workers: 100 });
+  const army = party(state, home, 'focus-finish', 24, target);
+  Object.assign(army, { targetId: target.id, targetX: target.x, targetZ: target.z, missionTargetX: target.x, missionTargetZ: target.z, phase: 'engaging', speed: 2.9 });
+  state.groups.push({ id: 'incidental-worker', kind: 'worker', factionId: other.factionId, originId: other.id, size: 12, initialSize: 12,
+    x: target.x + 12, z: target.z, prevX: target.x + 12, prevZ: target.z, phase: 'working', supply: 100, morale: 90, capacity: 72, carrying: { food: 0, water: 0, energy: 0, materials: 0 } });
+  initializeLedger(state);
+  for (let i = 0; i < 30; i++) {
+    state.step++; state.time = state.step / 10; state.tick = Math.floor(state.time);
+    for (const f of state.factions) { f.lastScout = state.tick; f.lastArmy = state.tick; }
+    stepStrategy(state, .1);
+  }
+  assert.equal(target.razed, true); assert.equal(target.health, 0);
+  assert.equal(state.stats.settlementDamage, 10); assert.equal(army.size, 24);
+  assert.ok(army.supply < 100 && army.supply > 85); conserved(state);
+});
+
 test('destroying an exposed settlement preserves identities and follows a nearby report using existing supplies', () => {
   const {state,faction,target,other,army}=destructionFixture(), stock={...target.stock}, population=target.population;
   army.supply=100;stepStrategy(state,.1);

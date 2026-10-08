@@ -388,7 +388,7 @@ export function createCrowds(THREE, scene) {
         for (const body of roster) { x += mix(finite(body.prevX, body.x), body.x, alpha); z += mix(finite(body.prevZ, body.z), body.z, alpha); }
         x /= roster.length; z /= roster.length;
         const y = ground(x, z) + 1.7;
-        if (!hasCamera || frustum.containsPoint(point.set(x, y, z))) armyBadges.add({ groupId: g.id, size: roster.length, x, y, z, lod: 'detailed', selected: g.id === selectedId || roster.some(body => body.id === selectedId) });
+        if (!hasCamera || frustum.containsPoint(point.set(x, y, z))) armyBadges.add({ groupId: g.id, color: faction.color, size: roster.length, x, y, z, lod: 'detailed', selected: g.id === selectedId || roster.some(body => body.id === selectedId) });
       }
       return;
     }

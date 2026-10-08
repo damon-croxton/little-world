@@ -3,7 +3,7 @@
 // materials, canvas elements or DOM labels. This layer represents no extra people.
 export function createWorkerBadges(THREE, root, { kind = 'worker' } = {}) {
   const army = kind === 'army', badgeColor = new THREE.Color(army ? '#ff6b64' : '#b8bebb');
-  const glyphs = '0123456789×', cell = 64;
+  const glyphs = '0123456789×', cell = 64, ownerColors = new Map();
   let texture;
   const canvas = globalThis.document?.createElement?.('canvas');
   const context = canvas?.getContext?.('2d');
@@ -36,16 +36,19 @@ export function createWorkerBadges(THREE, root, { kind = 'worker' } = {}) {
       attribute vec3 badgeAnchor;
       attribute vec4 badgeLayout;
       attribute vec3 badgeColor;
+      attribute vec3 badgeOwner;
+      attribute vec2 badgeOffset;
       uniform vec2 viewport;
       varying vec2 labelUv;
       varying vec4 labelLayout;
       varying vec3 labelColor;
+      varying vec3 labelOwner;
       void main() {
-        labelUv = uv; labelLayout = badgeLayout; labelColor = badgeColor;
+        labelUv = uv; labelLayout = badgeLayout; labelColor = badgeColor; labelOwner = badgeOwner;
         vec4 anchor = projectionMatrix * modelViewMatrix * vec4(badgeAnchor, 1.0);
         float width = (badgeLayout.y + 1.0) * badgeLayout.z * 0.52 + 8.0;
         vec2 pixels = vec2(position.x * width, (position.y + 0.5) * badgeLayout.z + 3.0);
-        anchor.xy += pixels * 2.0 / viewport * anchor.w;
+        anchor.xy += (pixels + badgeOffset) * 2.0 / viewport * anchor.w;
         gl_Position = anchor;
       }`,
     fragmentShader: `
@@ -53,6 +56,7 @@ export function createWorkerBadges(THREE, root, { kind = 'worker' } = {}) {
       varying vec2 labelUv;
       varying vec4 labelLayout;
       varying vec3 labelColor;
+      varying vec3 labelOwner;
       void main() {
         float digits = labelLayout.y, height = labelLayout.z;
         float width = (digits + 1.0) * height * 0.52 + 8.0;
@@ -71,6 +75,7 @@ export function createWorkerBadges(THREE, root, { kind = 'worker' } = {}) {
         vec3 background = mix(vec3(0.028, 0.048, 0.055), labelColor * 0.19, 0.28);
         float border = smoothstep(-1.8, -0.7, distance);
         vec3 color = mix(background, mix(labelColor, vec3(1.0), labelLayout.w * 0.55), border * 0.9);
+        color = mix(color, labelOwner, step(labelUv.x, 0.065));
         gl_FragColor = vec4(mix(color, labelColor, ink), alpha * 0.97);
       }`
   });
@@ -79,7 +84,7 @@ export function createWorkerBadges(THREE, root, { kind = 'worker' } = {}) {
   const mesh = new THREE.Mesh(geometry, material); mesh.name = army ? 'Army count badges' : 'Worker crew count badges'; mesh.frustumCulled = false; mesh.renderOrder = 9; mesh.visible = false;
   mesh.userData[army ? 'armyBadges' : 'workerBadges'] = true; root.add(mesh);
   let capacity = 0, count = 0, records = [], candidates = [], camera = null;
-  const attributes = ['badgeAnchor', 'badgeLayout', 'badgeColor'];
+  const attributes = ['badgeAnchor', 'badgeLayout', 'badgeColor', 'badgeOwner', 'badgeOffset'];
   const projected = new THREE.Vector3(), pointer = new THREE.Vector3();
   mesh.onBeforeRender = renderer => renderer.getSize(viewport);
   mesh.raycast = (raycaster, hits) => {
@@ -90,7 +95,7 @@ export function createWorkerBadges(THREE, root, { kind = 'worker' } = {}) {
     for (let i = 0; i < count; i++) {
       const record = records[i]; projected.set(record.x, record.y, record.z).project(raycaster.camera);
       if (projected.z < -1 || projected.z > 1) continue;
-      const dx = (pointer.x - projected.x) * viewport.x / 2, dy = (pointer.y - projected.y) * viewport.y / 2;
+      const dx = (pointer.x - projected.x) * viewport.x / 2 - record.offsetX, dy = (pointer.y - projected.y) * viewport.y / 2 - record.offsetY;
       if (Math.abs(dx) > record.width / 2 || dy < 3 || dy > record.height + 3) continue;
       const hitPoint = new THREE.Vector3(record.x, record.y, record.z), distance = raycaster.ray.origin.distanceTo(hitPoint);
       if (distance >= raycaster.near && distance <= raycaster.far) hits.push({ distance, point: hitPoint, object: mesh, instanceId: i });
@@ -99,7 +104,7 @@ export function createWorkerBadges(THREE, root, { kind = 'worker' } = {}) {
   function reserve(requested) {
     if (requested <= capacity) return;
     let next = Math.max(16, capacity); while (next < requested) next *= 2;
-    for (const [name, size] of [['badgeAnchor', 3], ['badgeLayout', 4], ['badgeColor', 3]]) {
+    for (const [name, size] of [['badgeAnchor', 3], ['badgeLayout', 4], ['badgeColor', 3], ['badgeOwner', 3], ['badgeOffset', 2]]) {
       const values = new Float32Array(next * size), previous = geometry.getAttribute(name);
       if (previous) values.set(previous.array);
       geometry.setAttribute(name, new THREE.InstancedBufferAttribute(values, size).setUsage(THREE.DynamicDrawUsage));
@@ -112,6 +117,8 @@ export function createWorkerBadges(THREE, root, { kind = 'worker' } = {}) {
     geometry.attributes.badgeAnchor.setXYZ(count, x, y, z);
     geometry.attributes.badgeLayout.setXYZW(count, size, digits, height, Number(selected));
     geometry.attributes.badgeColor.setXYZ(count, color.r, color.g, color.b);
+    geometry.attributes.badgeOwner.setXYZ(count, record.ownerColor.r, record.ownerColor.g, record.ownerColor.b);
+    geometry.attributes.badgeOffset.setXY(count, record.offsetX, record.offsetY);
     records[count++] = record;
   }
   return {
@@ -124,9 +131,11 @@ export function createWorkerBadges(THREE, root, { kind = 'worker' } = {}) {
     begin(nextCamera) { count = 0; candidates.length = 0; camera = nextCamera; },
     add({ groupId, size, x, y, z, color, lod, selected }) {
       if (army && size < 3) return;
+      if (army && !ownerColors.has(color)) ownerColors.set(color, new THREE.Color(color || badgeColor));
+      const ownerColor = army ? ownerColors.get(color) : badgeColor;
       color = badgeColor;
       const digits = String(size).length, height = army ? (lod === 'detailed' ? 20 : 18) : (lod === 'detailed' ? 14 : 12);
-      candidates.push({ groupId, text: `${size}×`, size, digits, x, y, z, color, selected: !!selected, width: (digits + 1) * height * .52 + 8, height });
+      candidates.push({ groupId, text: `${size}×`, size, digits, x, y, z, color, ownerColor, offsetX: 0, offsetY: 0, selected: !!selected, width: (digits + 1) * height * .52 + 8, height });
     },
     finish(occupied = new Map()) {
       let lodCulled = 0, overlapCulled = 0;
@@ -144,12 +153,25 @@ export function createWorkerBadges(THREE, root, { kind = 'worker' } = {}) {
           projected.set(record.x, record.y, record.z).project(camera);
           const centerX = (projected.x + 1) * viewport.x / 2, bottom = (1 - projected.y) * viewport.y / 2 - 3;
           const bounds = { left: centerX - record.width / 2 - gap, right: centerX + record.width / 2 + gap, top: bottom - record.height - gap, bottom: bottom + gap };
+          const collision = box => {
+            let hit = null;
+            for (let x = Math.floor(box.left / cellSize); x <= Math.floor(box.right / cellSize); x++) for (let y = Math.floor(box.top / cellSize); y <= Math.floor(box.bottom / cellSize); y++) {
+              for (const other of occupied.get(`${x}:${y}`) || []) if (box.left < other.right && box.right > other.left && box.top < other.bottom && box.bottom > other.top && (!hit || other.top < hit.top)) hit = other;
+            }
+            return hit;
+          };
+          let overlap = collision(bounds);
+          if (army) {
+            // Keep every visible army count during contact. Stable stacking and
+            // a faction stripe distinguish parties without another draw/DOM node.
+            for (let attempt = 0; overlap && attempt < candidates.length; attempt++) {
+              const shift = bounds.bottom - overlap.top + 1;
+              bounds.top -= shift; bounds.bottom -= shift; record.offsetY += shift;
+              overlap = collision(bounds);
+            }
+          } else if (!record.selected && overlap) { overlapCulled++; continue; }
+          record.bounds = { ...bounds };
           const fromX = Math.floor(bounds.left / cellSize), toX = Math.floor(bounds.right / cellSize), fromY = Math.floor(bounds.top / cellSize), toY = Math.floor(bounds.bottom / cellSize);
-          let overlaps = false;
-          for (let x = fromX; x <= toX && !overlaps; x++) for (let y = fromY; y <= toY && !overlaps; y++) {
-            overlaps = (occupied.get(`${x}:${y}`) || []).some(other => bounds.left < other.right && bounds.right > other.left && bounds.top < other.bottom && bounds.bottom > other.top);
-          }
-          if (!record.selected && overlaps) { overlapCulled++; continue; }
           for (let x = fromX; x <= toX; x++) for (let y = fromY; y <= toY; y++) {
             const key = `${x}:${y}`, bucket = occupied.get(key) || []; bucket.push(bounds); occupied.set(key, bucket);
           }
@@ -160,7 +182,7 @@ export function createWorkerBadges(THREE, root, { kind = 'worker' } = {}) {
       if (count) for (const name of attributes) { const attribute = geometry.getAttribute(name); attribute.clearUpdateRanges(); attribute.addUpdateRange(0, count * attribute.itemSize); attribute.needsUpdate = true; }
       return { count, capacity, drawCalls: Number(count > 0), lodCulled, overlapCulled };
     },
-    getRecords() { return records.map(({ groupId, size, text, height }) => ({ groupId, size, text, height, color: army ? 'red' : 'grey' })); },
+    getRecords() { return records.map(({ groupId, size, text, height, ownerColor, offsetX, offsetY, bounds }) => ({ groupId, size, text, height, ownerColor: ownerColor.getHexString(), offsetX, offsetY, bounds: bounds && { ...bounds }, color: army ? 'red' : 'grey' })); },
     isVisible(groupId) { return records.some(record => record.groupId === groupId); },
     resolvePick(hit) { return hit.object === mesh ? records[hit.instanceId]?.groupId : null; },
     dispose() { mesh.removeFromParent(); geometry.dispose(); material.dispose(); texture.dispose(); records = []; candidates = []; }
