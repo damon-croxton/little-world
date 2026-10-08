@@ -11,7 +11,7 @@ import { moveAlongRoute, findPath, isPointTraversable, isSegmentTraversable } fr
 import { getSoldiers } from './soldiers.js';
 import { initializeKnowledge, stepKnowledge, visibleToGroup, observationFor, reportObservations, knownReports, knownResourceNodes } from './knowledge.js';
 import { DEFENSE_STATS, defenseCost, defenseBuildingPlan, assignDefenses, canCompleteDefense } from './defenses.js';
-import { initializeMilitary, syncMilitary, refreshExileBases, militaryContext, trainingCount, advanceTraining, planTraining, militaryBuildingPlan, MILITARY_BUILDINGS, applyHomeCasualties, demobilizeMilitary, cancelTraining } from './military.js';
+import { initializeMilitary, syncMilitary, refreshExileBases, militaryContext, trainingCount, advanceTraining, planTraining, recoverMilitary, militaryBuildingPlan, MILITARY_BUILDINGS, applyHomeCasualties, demobilizeMilitary, cancelTraining } from './military.js';
 import { RESOURCES, SURVIVAL_NEEDS, emptyResources, initializeLedger, initializeFactionAdvantages, ledgerAdd, canAfford, spend, depositCargo, discardCargo, ledgerResidual } from './economy.js';
 
 export const SIM_DT = .1;
@@ -603,7 +603,7 @@ function cycleEconomy(state) {
   // A busy mature capital must not monopolize the global group budget.
   for (let pass = 0; pass < 4; pass++) for (const home of order) { const f = factionOf(state, home); if (f) launchWorkers(state, home, f, dispatch); }
   // Fund survival journeys before discretionary growth, construction or courses.
-  for (const home of order) { const f = factionOf(state, home); if (!f) continue; grow(state, home, f); construction(state, home, f); advanceTraining(state, home, f); planTraining(state, home, f); }
+  for (const home of order) { const f = factionOf(state, home); if (!f) continue; recoverMilitary(state, home); grow(state, home, f); construction(state, home, f); advanceTraining(state, home, f); planTraining(state, home, f); }
 }
 
 function updateSummaries(state) {

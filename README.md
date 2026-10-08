@@ -33,6 +33,13 @@ accounting. Select an individual soldier to inspect its health and current actio
 then navigate to its army or home. Faction views expose only physically visible
 foreign soldiers and hide their health, clocks and orders.
 
+Wounded veterans can recover after physically returning to a quiet, supplied
+home. Treatment consumes real stores and preserves their identity and weapon
+clock; severely wounded soldiers resume duty at 75% health. The home inspector
+explains treatment and any safety or supply delay. Production rallies follow
+the leading supplied army on their selected objective, and a sufficiently
+strong assembled force can commit when its reinforcement wait expires.
+
 Benchmark reports distinguish Node CPU timings from browser and GPU performance;
 a tested small battle does not establish thousand-unit capacity.
 

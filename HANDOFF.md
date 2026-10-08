@@ -1,3 +1,51 @@
+# Veteran recovery and focused frontline coordination — 2026-10-08
+
+One cloud lead; authorized discretionary window 03:46:41–04:46:41 UTC, with
+publication reserved before its end. Started from verified live main
+1a7fa4271c3d792453b5ac9997e8037a8ccd0f95. No agents, video, long sweeps or
+external debug file; this does not reproduce a particular user save.
+
+Inspection found withdrawing soldiers were permanently excluded from expeditions:
+there was no healing or withdrawal-clear path. Safe home treatment now restores
+2% of maximum health per cycle, at most six patients per home, with fair rotation.
+Treatment requires physical arrival, eight cycles since that soldier's last hit
+or attack, a functioning uncontested home, ordinary needs met, and supplies above
+the existing training reserve. It charges the consumed resource ledger using
+native unit costs; one full health bar costs 40% of new-unit supplies. Severely
+wounded soldiers resume duty at 75% health. Identity, population, position,
+weapon clocks, and deployed cargo remain unchanged. Neither field resupply nor
+return itself heals anyone. The home inspector and downloaded debug report
+explain treatment or its current block.
+
+Production rallies now follow the leading supplied army for their selected
+objective, excluding unrelated fronts, returning parties and depot visits.
+A sufficient physically assembled force can commit at its existing deadline
+when distant reinforcements would otherwise prolong the wait indefinitely.
+The reported-defender strength floor remains mandatory; unsupported rallies
+still retreat. No hidden enemy data or extra scouting knowledge is introduced.
+
+Prepublication evidence in screenshots/recovery-frontline/:
+- 89 focused tests passed in 5.003 seconds, including all species, exact costs,
+  supply/combat blocks, no resurrection/teleportation, redeployment, foreign
+  privacy, debug export, command accounting and the two coordination regressions.
+- One natural first-light observation completed 500 cycles in 62.539 seconds,
+  with resource and retained-soldier audits every 25 cycles. There were 22
+  treatment returns to duty across 21 distinct veterans, seven coordinated
+  assaults, eight protection parties, 486 deliveries, and zero captures.
+  Median/p95 ten-pulse Node batch costs were 129.31/229.66 ms. These are not
+  browser frame timings, victory pacing, or a long balance sweep.
+- Built asset graph verified: 53 modules. Local real WebGL shared smoke passed
+  all 26 checks in 68.195 seconds with no runtime/module/HTTP errors, including
+  touch-emulated mobile controls and debug saves. System Chromium 151 is
+  diagnostic; the locked Chromium 153 CI run is authoritative. The recovery
+  screenshot was subsequently corrected to scroll the explanation into view.
+
+CI retains the full Node suite, exact built-browser gate, deployment, and exact
+public-build/browser gate with existing limits. The final SHA, gate results,
+public screenshot artifact ID and file ID belong in the ignored release receipt
+under screenshots/recovery-frontline/ after publication completes. Prior evidence
+and instructions below are retained.
+
 # Local debug report — 2026-10-07
 
 User approved a narrow cloud-only Download debug report feature at 22:07 UTC.

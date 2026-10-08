@@ -62,6 +62,32 @@ test('unsupported rally withdraws at its finite deadline instead of attacking in
   assert.equal(s.stats.coordinatedAssaults || 0, 0);
 });
 
+test('a sufficient arrived force commits at the rally deadline despite distant reinforcements', () => {
+  const { s, plan, advance, army } = fixture();
+  const lead = army('lead', 35), late = army('late', 25), op = plan().operation;
+  Object.assign(lead, { x: op.x, z: op.z });
+  for (const body of getSoldiers(s, lead)) Object.assign(body, { x: op.x, z: op.z });
+  advance(4); assert.equal(plan().operation.phase, 'assemble', 'cohesion wait ended before the deadline');
+  assert.ok(op.assembled >= op.required); assert.ok(op.assembled < (lead.size + late.size) * .8);
+  const latePositions = getSoldiers(s, late).map(body => [body.id, body.x, body.z, body.hp]);
+  advance(op.assembleDeadline - s.tick); assert.equal(plan().operation.phase, 'assault');
+  assert.equal(lead.strategicHold, null); assert.equal(s.stats.coordinatedAssaults, 1);
+  assert.deepEqual(getSoldiers(s, late).map(body => [body.id, body.x, body.z, body.hp]), latePositions, 'deadline moved or healed the late reinforcements');
+});
+
+test('production rally follows the furthest supplied army on the selected objective', () => {
+  const { h, target, plan, army } = fixture();
+  const unrelated = army('unrelated', 10, { x: h.x - 25, z: h.z }); unrelated.targetId = 'other-front';
+  army('rear', 10, { x: h.x + 18, z: h.z });
+  const lead = army('lead', 10, { x: h.x + 32, z: h.z });
+  const depot = army('resupplying', 10, { x: target.x - 2, z: h.z }); depot.stagingTargetId = 'depot';
+  const empty = army('depleted', 10, { x: target.x - 1, z: h.z }); empty.supply = 30;
+  plan();
+  assert.equal(h.productionRally.frontGroupId, lead.id);
+  assert.equal(h.productionRally.targetId, target.id);
+  assert.ok(h.productionRally.destinationX > h.x && h.productionRally.destinationX < lead.x);
+});
+
 test('a stalled objective gets one route retry then a physical retreat and finite target cooldown', () => {
   const { s, f, target, plan, advance, army } = fixture(); const g = army('stuck', 10);
   g.campaign = false; g.navigation = { stale: true }; plan();

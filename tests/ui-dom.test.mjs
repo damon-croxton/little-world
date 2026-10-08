@@ -71,6 +71,19 @@ test('paid production inspector shows actual queue and role counts without creat
   const t=setup();try{const home=t.state.settlements[0];setMilitary(t.state,home,{infantry:9,ranged:5});home.trainingQueue=[{id:'qa-order',role:'ranged',size:3,buildingId:'qa-range',progress:.5,remaining:9}];home.assigned.training=3;home.buildings.push({id:'qa-range',kind:'range',x:home.x+5,z:home.z,progress:1,hp:160,maxHp:160});t.update();const text=t.root.querySelector('.military-reading').textContent;assert.match(text,/Field Range/);assert.match(text,/3 Trail archer/);assert.match(text,/50%/);assert.match(text,/costs already paid/);assert.equal(home.trainingQueue.length,1);}finally{t.dispose();}
 });
 
+test('home inspector explains treatment and supply blocks without modifying the roster',()=>{
+  const t=setup();try{
+    const home=t.state.settlements[0], roster=JSON.stringify(home.soldierRoster);
+    home.militaryRecovery={patients:3,treated:2,reason:'2 home patients received paid treatment; wounded veterans resume duty at 75% health.'};t.update();
+    assert.match(t.root.querySelector('.military-recovery').textContent,/3 awaiting recovery.*paid treatment.*75% health/);
+    home.militaryRecovery.reason='Treatment waits for supplies above the survival reserve.';t.update();
+    assert.match(t.root.querySelector('.military-recovery').textContent,/survival reserve/);
+    assert.equal(JSON.stringify(home.soldierRoster),roster);
+    t.view.perspective='f1';t.update({...t.state,viewer:{mode:'faction',factionId:'f1'},knownPlaces:[]});
+    assert.equal(t.root.querySelector('.military-recovery'),null,'foreign treatment disclosed');
+  }finally{t.dispose();}
+});
+
 test('foreign and remembered inspectors withhold stores, production queues and live hidden state',()=>{
   const t=setup();try{
     t.view.perspective='f0';t.view.selectedId='s1';const foreign=t.state.settlements[1];foreign.stock.materials=543210;foreign.trainingQueue=[{role:'secret-military-order',size:987654,progress:.5}];const scoped={...t.state,viewer:{mode:'faction',factionId:'f0'},knownPlaces:[]};t.update(scoped);

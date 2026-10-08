@@ -165,6 +165,56 @@ export function trainingReserves(home, faction, cycles = 12) {
   return Object.fromEntries(RESOURCES.map(kind => [kind, kind === 'materials' ? 12 : needs[kind] * home.population * cycles]));
 }
 
+// Recovery is a paid home activity, separate from return/deployment. It edits
+// the retained citizen record without resetting position or weapon readiness.
+// Six patients per cycle keeps treatment bounded even after a large retreat.
+export function recoverMilitary(state, home) {
+  if (home.militaryRecovery?.tick === state.tick) return home.militaryRecovery;
+  const patients = getSoldiers(state, home).filter(body => body.hp < body.maxHp || body.withdrawing);
+  const report = home.militaryRecovery = { tick: state.tick, patients: patients.length, treated: 0, readyAgain: 0, healedHp: 0, reason: 'No wounded soldiers awaiting home treatment.' };
+  if (!patients.length) return report;
+  const faction = militaryContext(state, home);
+  if (!faction || home.health < 45 || home.combat?.active || (home.contestedUntil ?? -1) >= state.tick) {
+    report.reason = 'Treatment waits for a secure, functioning home.'; return report;
+  }
+  if (home.shortageDays > 0 || home.wellbeing < .98) {
+    report.reason = 'Treatment pauses until ordinary survival needs are met.'; return report;
+  }
+  const time = state.time ?? state.tick, radius = Math.max(4, Math.min(8, home.radius || 4));
+  const eligible = patients.filter(body => body.positioned && Math.hypot(body.x - home.x, body.z - home.z) <= radius
+    && time - (body.lastHitTime ?? -100) >= 8 && time - (body.lastAttackTime ?? -100) >= 8
+    && (body.commandFactionId || body.factionId) === faction.id);
+  // Rotate access among equally urgent patients instead of starving later IDs.
+  eligible.sort((a, b) => Number(!!b.withdrawing) - Number(!!a.withdrawing)
+    || (a.lastRecoveryTick ?? -1) - (b.lastRecoveryTick ?? -1)
+    || a.hp / a.maxHp - b.hp / b.maxHp || a.id.localeCompare(b.id));
+  const reserves = trainingReserves(home, faction, 12);
+  const prices = Object.fromEntries(MILITARY_ROLES.map(role => [role, trainingCost(faction, role)]));
+  for (const body of eligible) {
+    if (report.treated >= 6) break;
+    const amount = Math.min(body.maxHp - body.hp, body.maxHp * .02);
+    // A full health bar costs 40% of a new soldier's supplies. Native biology
+    // prices auxiliaries too; recovery never consumes the survival reserve.
+    const costs = Object.fromEntries(RESOURCES.map(kind => [kind, (prices[body.role][kind] || 0) * .4 * amount / body.maxHp]));
+    if (!canAfford(home, costs, reserves)) continue;
+    spend(state, home, costs);
+    if (body.hp / body.maxHp <= .4) body.withdrawing = true;
+    body.hp = Math.min(body.maxHp, body.hp + amount);
+    body.lastRecoveryTick = state.tick; body.recoveredHp = (body.recoveredHp || 0) + amount;
+    report.treated++; report.healedHp += amount;
+    if (body.withdrawing && body.hp >= body.maxHp * .75) {
+      body.withdrawing = false; body.recoveredTick = state.tick; report.readyAgain++;
+    }
+  }
+  if (report.treated) {
+    touchSoldiers(state);
+    state.stats.militaryRecoveryHp = (state.stats.militaryRecoveryHp || 0) + report.healedHp;
+    state.stats.recoveredSoldiers = (state.stats.recoveredSoldiers || 0) + report.readyAgain;
+    report.reason = `${report.treated} home patient${report.treated === 1 ? '' : 's'} received paid treatment; wounded veterans resume duty at 75% health.`;
+  } else report.reason = eligible.length ? 'Treatment waits for supplies above the survival reserve.' : 'Treatment requires arrival at home and eight quiet cycles without fighting.';
+  return report;
+}
+
 // A sovereign whose native capitals are all occupied may retain one physical
 // command base in a held foreign settlement. Citizenship/species never change;
 // only the political command of paid local auxiliaries is explicit.

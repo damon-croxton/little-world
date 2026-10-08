@@ -34,6 +34,7 @@ function groupDecision(state, g) {
 }
 function homeDecision(state, h) {
   return { id: h.id, controllerId: settlementController(state, h), defense: defense(h.defensePlan), rally: rally(h.productionRally),
+    recovery: pick(h.militaryRecovery, 'tick patients treated readyAgain healedHp reason'),
     mobilization: pick(h.lastMobilization, 'tick ready reserved requested dispatched reason'),
     economyReasons: (h.economyReasons || []).slice(0, 8).map(scalar) };
 }
@@ -135,7 +136,7 @@ export function createDebugRecorder({ now = () => performance.now() } = {}) {
       visibleIds: Object.keys(f.visibility?.visibleIds || {}).slice(0, 512), visibleIdsOmitted: Math.max(0, Object.keys(f.visibility?.visibleIds || {}).length - 512),
       visibilityUpdatedStep: f.visibility?.updatedStep ?? null }));
     const soldiers = rows('soldiers', homes.flatMap(h => h.soldierRoster || []), limits.soldiers, b => ({
-      ...pick(b, 'id originId factionId nativeFactionId commandFactionId species role status alive groupId hp maxHp x z targetId towerId withdrawing action reasonCode targetReason reason cooldown attackReadyAt lastAttackTime'),
+      ...pick(b, 'id originId factionId nativeFactionId commandFactionId species role status alive groupId hp maxHp x z targetId towerId withdrawing action reasonCode targetReason reason cooldown attackReadyAt lastAttackTime lastRecoveryTick recoveredTick recoveredHp'),
       controllerId: factionController(state, b.commandFactionId || b.nativeFactionId || b.factionId), order: order(b.order) }));
     const snapshot = { factions, settlements, groups, nodes, buildings, knowledge, soldiers,
       resourceLedger: Object.fromEntries(['food', 'water', 'energy', 'materials'].map(k => [k, pick(state.resourceLedger?.[k], 'initial regenerated extracted delivered produced consumed construction research training tradeNet lost')])),

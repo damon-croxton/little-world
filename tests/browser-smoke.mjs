@@ -11,6 +11,7 @@ import { configuration, launch, boot, environment, observeErrors, waitForRendere
 import { battleSmoke } from './battle-smoke.mjs';
 import { workerSmoke } from './worker-smoke.mjs';
 import { debugDownloadSmoke } from './debug-download-smoke.mjs';
+import { recoverySmoke } from './recovery-smoke.mjs';
 
 const require = createRequire(import.meta.url);
 const browserRegistry = JSON.parse(await readFile(path.join(path.dirname(require.resolve('playwright-core/package.json')), 'browsers.json'), 'utf8'));
@@ -222,6 +223,7 @@ async function accept() {
     await page.setViewportSize({ width: 1280, height: 800 }); await rendered(); return bounds;
   });
   await debugDownloadSmoke({ page, check, config, expectedCommit });
+  await recoverySmoke({ page, check, screenshotPath: output(config, 'recovery-home.png') });
   await workerSmoke({ page, check, screenshotBefore: output(config, 'worker-raid-before.png'), screenshotAfter: output(config, 'worker-raid-after.png') });
   await battleSmoke({ page, check, screenshotPath: output(config, 'battle-smoke.png') });
   await check('No runtime, module or HTTP errors', async () => assert.deepEqual(report.errors, []));

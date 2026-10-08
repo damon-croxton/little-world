@@ -71,7 +71,10 @@ export function planStrategy(s, f, homes, hooks) {
     operation: old?.operation ?? null, reviews: (old?.reviews || 0) + 1,
     reason: recovering ? 'Restore reliable supplies before new offensives.' : target ? 'Concentrate a supplied force against the selected reported rival.' : resource ? 'Protect harvesting and reserve a viable workforce for surveyed expansion.' : 'Guard the home while scouts find resources and rivals.' };
   for (const home of homes) {
-    const defend = home.defensePlan?.reserve > 0, front = armies.find(g => g.campaign && g.missionKind !== 'protection' && !['returning', 'retreating'].includes(g.phase));
+    const defend = home.defensePlan?.reserve > 0;
+    const front = target && armies.filter(g => g.campaign && g.targetId === target.id && g.missionKind !== 'protection'
+      && !g.stagingTargetId && g.supply > 40 && !['returning', 'retreating'].includes(g.phase))
+      .sort((a, b) => distance(a, target) - distance(b, target) || a.id.localeCompare(b.id))[0];
     if (mode !== 'campaign' || !target || defend) {
       home.productionRally = { kind: 'defence', x: home.x, z: home.z, targetId: home.id, reason: defend ? home.defensePlan.reason : 'No supported offensive destination is known.' };
       continue;
@@ -121,7 +124,9 @@ export function planStrategy(s, f, homes, hooks) {
     }
     op.assembled = assembled;
     const committedStrength = members.reduce((sum, g) => sum + getSoldiers(s, g).filter(ready).length, 0);
-    if (op.phase === 'assemble' && assembled >= op.required && assembled >= committedStrength * .8) {
+    // Do not let distant reinforcements postpone an already sufficient force
+    // forever. The deadline relaxes cohesion, never the reported strength floor.
+    if (op.phase === 'assemble' && assembled >= op.required && (assembled >= committedStrength * .8 || s.tick >= op.assembleDeadline)) {
       op.phase = 'assault'; op.committedTick = s.tick; s.stats.coordinatedAssaults = (s.stats.coordinatedAssaults || 0) + 1;
     }
     if (op.phase === 'assemble' && s.tick >= op.assembleDeadline && assembled < op.required) {
